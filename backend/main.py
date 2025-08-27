@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
 app = FastAPI(title="CoolChat")
 
@@ -11,6 +13,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+frontend_build = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if frontend_build.exists():
+    app.mount("/", StaticFiles(directory=frontend_build, html=True), name="frontend")
+else:
+    @app.get("/")
+    async def root():
+        """Root endpoint with a friendly message."""
+        return {"message": "Welcome to CoolChat API. Visit /docs for API documentation."}
+
 
 @app.get("/health")
 async def health_check():
