@@ -12,6 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List
 
+from .routers.chat import router as chat_router
+
 app = FastAPI(title="CoolChat")
 
 # Allow CORS for frontend development
@@ -23,7 +25,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
+app.include_router(chat_router)
 
 # ---------------------------------------------------------------------------
 # Models and in-memory storage
@@ -165,3 +167,6 @@ async def delete_lore(entry_id: int) -> None:
         raise HTTPException(status_code=404, detail="Lore entry not found")
     del _lore[entry_id]
     return None
+
+
+app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
