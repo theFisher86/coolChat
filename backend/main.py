@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List
+import os
 
 app = FastAPI(title="CoolChat")
 
@@ -23,7 +24,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
+if os.path.isdir("frontend/dist"):
+    app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
 
 # ---------------------------------------------------------------------------
 # Models and in-memory storage
@@ -165,3 +167,20 @@ async def delete_lore(entry_id: int) -> None:
         raise HTTPException(status_code=404, detail="Lore entry not found")
     del _lore[entry_id]
     return None
+
+# ---------------------------------------------------------------------------
+# Chat endpoint
+# ---------------------------------------------------------------------------
+
+
+class ChatMessage(BaseModel):
+    """Payload for a basic chat message."""
+
+    message: str
+
+
+@app.post("/chat")
+async def chat(payload: ChatMessage) -> Dict[str, str]:
+    """Return a trivial response echoing the user's message."""
+
+    return {"reply": f"You said: {payload.message}"}
