@@ -7,6 +7,7 @@ character definitions.
 """
 
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List
@@ -21,6 +22,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
 
 # ---------------------------------------------------------------------------
 # Models and in-memory storage
