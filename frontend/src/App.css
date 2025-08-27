@@ -1,0 +1,17 @@
+.status-badge {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  font-weight: bold;
+  color: #fff;
+}
+
+.status-online {
+  background-color: #28a745;
+}
+
+.status-offline {
+  background-color: #dc3545;
+}
