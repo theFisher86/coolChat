@@ -2,26 +2,34 @@ from fastapi.testclient import TestClient
 
 from backend.main import app
 
-
 client = TestClient(app)
 
 
-def test_create_and_read_character():
-    payload = {
-        "name": "Alice",
-        "description": "Adventurer",
-        "avatar_url": "http://example.com/avatar.png",
-    }
-    response = client.post("/characters/", json=payload)
-    assert response.status_code == 200
-    data = response.json()
+def test_character_crud_cycle():
+    # ensure initially empty
+    resp = client.get("/characters")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+    # create a character
+    payload = {"name": "Alice", "description": "A curious adventurer"}
+    resp = client.post("/characters", json=payload)
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["id"] == 1
     assert data["name"] == payload["name"]
+
     char_id = data["id"]
 
-    list_resp = client.get("/characters/")
-    assert list_resp.status_code == 200
-    assert any(item["id"] == char_id for item in list_resp.json())
+    # fetch it individually
+    resp = client.get(f"/characters/{char_id}")
+    assert resp.status_code == 200
+    assert resp.json()["name"] == payload["name"]
 
-    get_resp = client.get(f"/characters/{char_id}")
-    assert get_resp.status_code == 200
-    assert get_resp.json()["id"] == char_id
+    # delete it
+    resp = client.delete(f"/characters/{char_id}")
+    assert resp.status_code == 204
+
+    # ensure gone
+    resp = client.get(f"/characters/{char_id}")
+    assert resp.status_code == 404

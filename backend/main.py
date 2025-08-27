@@ -1,5 +1,15 @@
-from fastapi import FastAPI
+"""Primary FastAPI application for the CoolChat backend.
+
+This module currently exposes a couple of utility endpoints as well as a very
+small in-memory implementation of "character cards".  The goal is to mimic a
+subset of SillyTavern's functionality so the front-end can store and retrieve
+character definitions.
+"""
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Dict, List
 
 app = FastAPI(title="CoolChat")
 
@@ -12,6 +22,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---------------------------------------------------------------------------
+# Models and in-memory storage
+# ---------------------------------------------------------------------------
+
+
+class Character(BaseModel):
+    """Representation of a character card.
+
+    For now we only keep a few basic fields.  The ``id`` is assigned by the
+    server when the character is created.
+    """
+
+    id: int
+    name: str
+    description: str = ""
+    avatar_url: str | None = None
+
+
+class CharacterCreate(BaseModel):
+    """Payload used when creating a new character."""
+
+    name: str
+    description: str = ""
+    avatar_url: str | None = None
+
+
+# simple in-memory store
+_characters: Dict[int, Character] = {}
+_next_id: int = 1
 
 @app.get("/")
 async def root():
@@ -23,3 +62,44 @@ async def health_check():
     """Simple endpoint to confirm the service is running."""
     return {"status": "ok"}
 
+# ---------------------------------------------------------------------------
+# Character endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/characters", response_model=List[Character])
+async def list_characters() -> List[Character]:
+    """Return all stored character cards."""
+
+    return list(_characters.values())
+
+
+@app.post("/characters", response_model=Character, status_code=201)
+async def create_character(payload: CharacterCreate) -> Character:
+    """Create a new character and return the resulting record."""
+
+    global _next_id
+    char = Character(id=_next_id, **payload.model_dump())
+    _characters[_next_id] = char
+    _next_id += 1
+    return char
+
+
+@app.get("/characters/{char_id}", response_model=Character)
+async def get_character(char_id: int) -> Character:
+    """Fetch a single character by its identifier."""
+
+    char = _characters.get(char_id)
+    if char is None:
+        raise HTTPException(status_code=404, detail="Character not found")
+    return char
+
+
+@app.delete("/characters/{char_id}", status_code=204)
+async def delete_character(char_id: int) -> None:
+    """Remove a character from the store."""
+
+    if char_id not in _characters:
+        raise HTTPException(status_code=404, detail="Character not found")
+    del _characters[char_id]
+    return None
