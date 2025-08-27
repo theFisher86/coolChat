@@ -6,13 +6,11 @@ subset of SillyTavern's functionality so the front-end can store and retrieve
 character definitions.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List
-import os
-
 app = FastAPI(title="CoolChat")
 
 # Allow CORS for frontend development
@@ -24,8 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-if os.path.isdir("frontend/dist"):
-    app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
+api_router = APIRouter(prefix="/api")
 
 # ---------------------------------------------------------------------------
 # Models and in-memory storage
@@ -57,12 +54,12 @@ class CharacterCreate(BaseModel):
 _characters: Dict[int, Character] = {}
 _next_id: int = 1
 
-@app.get("/")
+@api_router.get("/")
 async def root():
     """Basic sanity check endpoint for the API root."""
     return {"message": "CoolChat backend running"}
 
-@app.get("/health")
+@api_router.get("/health")
 async def health_check():
     """Simple endpoint to confirm the service is running."""
     return {"status": "ok"}
@@ -72,14 +69,14 @@ async def health_check():
 # ---------------------------------------------------------------------------
 
 
-@app.get("/characters", response_model=List[Character])
+@api_router.get("/characters", response_model=List[Character])
 async def list_characters() -> List[Character]:
     """Return all stored character cards."""
 
     return list(_characters.values())
 
 
-@app.post("/characters", response_model=Character, status_code=201)
+@api_router.post("/characters", response_model=Character, status_code=201)
 async def create_character(payload: CharacterCreate) -> Character:
     """Create a new character and return the resulting record."""
 
@@ -90,7 +87,7 @@ async def create_character(payload: CharacterCreate) -> Character:
     return char
 
 
-@app.get("/characters/{char_id}", response_model=Character)
+@api_router.get("/characters/{char_id}", response_model=Character)
 async def get_character(char_id: int) -> Character:
     """Fetch a single character by its identifier."""
 
@@ -100,7 +97,7 @@ async def get_character(char_id: int) -> Character:
     return char
 
 
-@app.delete("/characters/{char_id}", status_code=204)
+@api_router.delete("/characters/{char_id}", status_code=204)
 async def delete_character(char_id: int) -> None:
     """Remove a character from the store."""
 
@@ -131,14 +128,14 @@ _lore: Dict[int, LoreEntry] = {}
 _next_lore_id: int = 1
 
 
-@app.get("/lore", response_model=List[LoreEntry])
+@api_router.get("/lore", response_model=List[LoreEntry])
 async def list_lore() -> List[LoreEntry]:
     """Return all lore entries."""
 
     return list(_lore.values())
 
 
-@app.post("/lore", response_model=LoreEntry, status_code=201)
+@api_router.post("/lore", response_model=LoreEntry, status_code=201)
 async def create_lore(payload: LoreEntryCreate) -> LoreEntry:
     """Create a new lore entry."""
 
@@ -149,7 +146,7 @@ async def create_lore(payload: LoreEntryCreate) -> LoreEntry:
     return entry
 
 
-@app.get("/lore/{entry_id}", response_model=LoreEntry)
+@api_router.get("/lore/{entry_id}", response_model=LoreEntry)
 async def get_lore(entry_id: int) -> LoreEntry:
     """Retrieve a single lore entry."""
 
@@ -159,7 +156,7 @@ async def get_lore(entry_id: int) -> LoreEntry:
     return entry
 
 
-@app.delete("/lore/{entry_id}", status_code=204)
+@api_router.delete("/lore/{entry_id}", status_code=204)
 async def delete_lore(entry_id: int) -> None:
     """Delete a lore entry."""
 
@@ -179,8 +176,13 @@ class ChatMessage(BaseModel):
     message: str
 
 
-@app.post("/chat")
+@api_router.post("/chat")
 async def chat(payload: ChatMessage) -> Dict[str, str]:
     """Return a trivial response echoing the user's message."""
 
     return {"reply": f"You said: {payload.message}"}
+
+
+app.include_router(api_router)
+
+app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
