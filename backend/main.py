@@ -22,7 +22,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-api_router = APIRouter(prefix="/api")
+app.mount("/app", StaticFiles(directory="frontend/dist", html=True), name="static")
+
 
 # ---------------------------------------------------------------------------
 # Models and in-memory storage
@@ -63,6 +64,29 @@ async def root():
 async def health_check():
     """Simple endpoint to confirm the service is running."""
     return {"status": "ok"}
+
+# ---------------------------------------------------------------------------
+# Chat endpoints
+# ---------------------------------------------------------------------------
+
+
+class ChatRequest(BaseModel):
+    """Payload for the chat endpoint."""
+
+    message: str
+
+
+class ChatResponse(BaseModel):
+    """Response returned after processing a chat message."""
+
+    reply: str
+
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat(payload: ChatRequest) -> ChatResponse:
+    """Very small demo chat endpoint that simply echoes the message."""
+
+    return ChatResponse(reply=f"You said: {payload.message}")
 
 # ---------------------------------------------------------------------------
 # Character endpoints
