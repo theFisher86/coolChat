@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List
+import os
 
 from .routers.chat import router as chat_router
 
@@ -26,6 +27,7 @@ app.add_middleware(
 )
 
 app.include_router(chat_router)
+
 
 # ---------------------------------------------------------------------------
 # Models and in-memory storage
@@ -167,6 +169,5 @@ async def delete_lore(entry_id: int) -> None:
         raise HTTPException(status_code=404, detail="Lore entry not found")
     del _lore[entry_id]
     return None
-
 
 app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
