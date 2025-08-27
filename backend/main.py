@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
-from .database import Base, engine
+from backend.database import Base, engine
 from .routers import characters
 
 app = FastAPI(title="CoolChat")
