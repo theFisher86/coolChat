@@ -1,17 +1,32 @@
-.status-badge {
-  display: inline-block;
-  margin-top: 1rem;
+.chat-container {
+  max-width: 600px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+@media (max-width: 600px) {
+  .chat-container {
+    padding: 0.5rem;
+  }
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem 0;
+}
+
+form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+input[type='text'] {
+  flex: 1;
+  padding: 0.5rem;
+}
+
+button {
   padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  font-weight: bold;
-  color: #fff;
-}
-
-.status-online {
-  background-color: #28a745;
-}
-
-.status-offline {
-  background-color: #dc3545;
 }

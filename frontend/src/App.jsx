@@ -1,29 +1,34 @@
-import React, { useEffect, useState } from 'react';
-import { checkHealth } from './api';
+import React, { useState } from 'react';
 import './App.css';
 
 function App() {
-  const [apiOnline, setApiOnline] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [currentInput, setCurrentInput] = useState('');
 
-  useEffect(() => {
-    async function fetchHealth() {
-      const ok = await checkHealth();
-      setApiOnline(ok);
-    }
-    fetchHealth();
-  }, []);
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!currentInput.trim()) return;
+    setMessages([...messages, currentInput]);
+    setCurrentInput('');
+  };
 
   return (
-    <div>
+    <div className="chat-container">
       <h1>CoolChat</h1>
-      <p>Welcome to CoolChat, a Python/React re-imagination of SillyTavern.</p>
-      {apiOnline !== null && (
-        <span
-          className={`status-badge ${apiOnline ? 'status-online' : 'status-offline'}`}
-        >
-          API {apiOnline ? 'online' : 'offline'}
-        </span>
-      )}
+      <ul>
+        {messages.map((msg, idx) => (
+          <li key={idx}>{msg}</li>
+        ))}
+      </ul>
+      <form onSubmit={handleSubmit}>
+        <input
+          type="text"
+          value={currentInput}
+          onChange={(e) => setCurrentInput(e.target.value)}
+          placeholder="Type a message..."
+        />
+        <button type="submit">Send</button>
+      </form>
     </div>
   );
 }
