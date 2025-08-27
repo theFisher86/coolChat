@@ -23,4 +23,3 @@ async def health_check():
     """Simple endpoint to confirm the service is running."""
     return {"status": "ok"}
 
-
