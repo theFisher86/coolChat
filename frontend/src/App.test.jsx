@@ -1,16 +1,23 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import App from './App';
 
-describe('App', () => {
-  it('renders heading and shows offline when fetch fails', async () => {
-    vi.spyOn(global, 'fetch').mockRejectedValueOnce(new Error('fail'));
+describe('App chat', () => {
+  it('shows user and bot messages after sending', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ reply: 'Hi there' }),
+    });
 
     render(<App />);
 
-    expect(screen.getByRole('heading', { name: /coolchat/i })).toBeInTheDocument();
-    expect(await screen.findByText(/offline/i)).toBeInTheDocument();
+    const input = screen.getByPlaceholderText(/type your message/i);
+    fireEvent.change(input, { target: { value: 'Hello' } });
+    fireEvent.submit(input.closest('form'));
+
+    expect(await screen.findByText('Hello')).toBeInTheDocument();
+    expect(await screen.findByText('Hi there')).toBeInTheDocument();
 
     global.fetch.mockRestore();
   });
