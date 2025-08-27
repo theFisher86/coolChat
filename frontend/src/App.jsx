@@ -1,34 +1,19 @@
-import React, { useState } from 'react';
-import './App.css';
+import React, { useEffect, useState } from 'react';
 
 function App() {
-  const [messages, setMessages] = useState([]);
-  const [currentInput, setCurrentInput] = useState('');
+  const [health, setHealth] = useState('unknown');
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!currentInput.trim()) return;
-    setMessages([...messages, currentInput]);
-    setCurrentInput('');
-  };
+  useEffect(() => {
+    fetch('/health')
+      .then(() => setHealth('online'))
+      .catch(() => setHealth('offline'));
+  }, []);
 
   return (
     <div className="chat-container">
       <h1>CoolChat</h1>
-      <ul>
-        {messages.map((msg, idx) => (
-          <li key={idx}>{msg}</li>
-        ))}
-      </ul>
-      <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          value={currentInput}
-          onChange={(e) => setCurrentInput(e.target.value)}
-          placeholder="Type a message..."
-        />
-        <button type="submit">Send</button>
-      </form>
+      <p>Welcome to CoolChat, a Python/React re-imagination of SillyTavern.</p>
+      <span>{health}</span>
     </div>
   );
 }
