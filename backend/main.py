@@ -22,7 +22,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # ---------------------------------------------------------------------------
 # Models and in-memory storage
 # ---------------------------------------------------------------------------
@@ -53,7 +52,6 @@ class CharacterCreate(BaseModel):
 _characters: Dict[int, Character] = {}
 _next_id: int = 1
 
-
 @app.get("/")
 async def root():
     """Basic sanity check endpoint for the API root."""
@@ -63,7 +61,6 @@ async def root():
 async def health_check():
     """Simple endpoint to confirm the service is running."""
     return {"status": "ok"}
-
 
 # ---------------------------------------------------------------------------
 # Character endpoints
@@ -106,7 +103,6 @@ async def delete_character(char_id: int) -> None:
         raise HTTPException(status_code=404, detail="Character not found")
     del _characters[char_id]
     return None
-
 
 # ---------------------------------------------------------------------------
 # Lorebook endpoints
@@ -166,5 +162,3 @@ async def delete_lore(entry_id: int) -> None:
         raise HTTPException(status_code=404, detail="Lore entry not found")
     del _lore[entry_id]
     return None
-
-
