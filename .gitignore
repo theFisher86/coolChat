@@ -1,0 +1,12 @@
+# Node modules
+frontend/node_modules/
+
+# Python cache
+debug/
+__pycache__/
+*/__pycache__/
+*.pyc
+
+# Pytest cache
+.pytest_cache/
+
