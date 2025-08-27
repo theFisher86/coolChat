@@ -11,6 +11,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List
+
+import os
+
+from .routers.chat import router as chat_router
+
 app = FastAPI(title="CoolChat")
 
 # Allow CORS for frontend development
@@ -22,7 +27,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/app", StaticFiles(directory="frontend/dist", html=True), name="static")
+app.include_router(chat_router)
 
 
 # ---------------------------------------------------------------------------
@@ -188,25 +193,5 @@ async def delete_lore(entry_id: int) -> None:
         raise HTTPException(status_code=404, detail="Lore entry not found")
     del _lore[entry_id]
     return None
-
-# ---------------------------------------------------------------------------
-# Chat endpoint
-# ---------------------------------------------------------------------------
-
-
-class ChatMessage(BaseModel):
-    """Payload for a basic chat message."""
-
-    message: str
-
-
-@api_router.post("/chat")
-async def chat(payload: ChatMessage) -> Dict[str, str]:
-    """Return a trivial response echoing the user's message."""
-
-    return {"reply": f"You said: {payload.message}"}
-
-
-app.include_router(api_router)
 
 app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
