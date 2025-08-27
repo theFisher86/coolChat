@@ -103,3 +103,62 @@ async def delete_character(char_id: int) -> None:
         raise HTTPException(status_code=404, detail="Character not found")
     del _characters[char_id]
     return None
+
+# ---------------------------------------------------------------------------
+# Lorebook endpoints
+# ---------------------------------------------------------------------------
+
+
+class LoreEntry(BaseModel):
+    """Simple world info entry used for context injection."""
+
+    id: int
+    keyword: str
+    content: str
+
+
+class LoreEntryCreate(BaseModel):
+    keyword: str
+    content: str
+
+
+_lore: Dict[int, LoreEntry] = {}
+_next_lore_id: int = 1
+
+
+@app.get("/lore", response_model=List[LoreEntry])
+async def list_lore() -> List[LoreEntry]:
+    """Return all lore entries."""
+
+    return list(_lore.values())
+
+
+@app.post("/lore", response_model=LoreEntry, status_code=201)
+async def create_lore(payload: LoreEntryCreate) -> LoreEntry:
+    """Create a new lore entry."""
+
+    global _next_lore_id
+    entry = LoreEntry(id=_next_lore_id, **payload.model_dump())
+    _lore[_next_lore_id] = entry
+    _next_lore_id += 1
+    return entry
+
+
+@app.get("/lore/{entry_id}", response_model=LoreEntry)
+async def get_lore(entry_id: int) -> LoreEntry:
+    """Retrieve a single lore entry."""
+
+    entry = _lore.get(entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Lore entry not found")
+    return entry
+
+
+@app.delete("/lore/{entry_id}", status_code=204)
+async def delete_lore(entry_id: int) -> None:
+    """Delete a lore entry."""
+
+    if entry_id not in _lore:
+        raise HTTPException(status_code=404, detail="Lore entry not found")
+    del _lore[entry_id]
+    return None
