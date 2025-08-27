@@ -22,17 +22,10 @@ app.include_router(characters.router)
 
 frontend_build = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 if frontend_build.exists():
-    app.mount("/", StaticFiles(directory=frontend_build, html=True), name="frontend")
-else:
-    @app.get("/")
-    async def root():
-        """Root endpoint with a friendly message."""
-        return {"message": "Welcome to CoolChat API. Visit /docs for API documentation."}
+    app.mount("/app", StaticFiles(directory=frontend_build, html=True), name="frontend")
 
 
 @app.get("/health")
 async def health_check():
     """Simple endpoint to confirm the service is running."""
     return {"status": "ok"}
-
-
