@@ -10,7 +10,7 @@ function App() {
   }, []);
 
   return (
-    <div>
+    <div className="chat-container">
       <h1>CoolChat</h1>
       <p>Welcome to CoolChat, a Python/React re-imagination of SillyTavern.</p>
       <span>{health}</span>
