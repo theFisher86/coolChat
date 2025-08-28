@@ -10,6 +10,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List
+import asyncio
+import httpx
+from .config import AppConfig, load_config, save_config, mask_secret, Provider
 
 app = FastAPI(title="CoolChat")
 
@@ -258,13 +261,117 @@ class ChatResponse(BaseModel):
     reply: str
 
 
+async def _llm_reply(message: str, cfg: AppConfig) -> str:
+    # Provider: echo (default)
+    if cfg.provider == Provider.ECHO:
+        return f"Echo: {message}"
+
+    # Provider: openai (or compatible)
+    if cfg.provider == Provider.OPENAI:
+        if not cfg.api_key:
+            raise HTTPException(status_code=400, detail="Missing API key for provider 'openai'")
+
+        url = cfg.api_base.rstrip("/") + "/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {cfg.api_key}",
+            "Content-Type": "application/json",
+        }
+        body = {
+            "model": cfg.model,
+            "messages": [
+                {"role": "user", "content": message},
+            ],
+            "temperature": cfg.temperature,
+        }
+        timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(url, headers=headers, json=body)
+            if resp.status_code >= 400:
+                # Pass through error details where possible
+                try:
+                    detail = resp.json()
+                except Exception:
+                    detail = resp.text
+                raise HTTPException(status_code=502, detail={"provider_error": detail})
+            data = resp.json()
+            # Standard OpenAI response shape
+            try:
+                return data["choices"][0]["message"]["content"].strip()
+            except Exception:
+                raise HTTPException(status_code=502, detail={"provider_error": "Unexpected response schema"})
+
+    # Unknown provider
+    raise HTTPException(status_code=400, detail=f"Unsupported provider: {cfg.provider}")
+
+
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(payload: ChatRequest) -> ChatResponse:
-    """Echo the provided message back to the client.
+    """Return a chat reply using configured provider (echo by default)."""
 
-    This placeholder endpoint lets the front-end exercise a basic chat
-    workflow while more sophisticated LLM integrations are developed.
-    """
+    cfg = load_config()
+    try:
+        reply = await _llm_reply(payload.message, cfg)
+    except HTTPException:
+        raise
+    except Exception as exc:  # pragma: no cover - safety net
+        raise HTTPException(status_code=500, detail=str(exc))
 
-    return ChatResponse(reply=f"Echo: {payload.message}")
+    return ChatResponse(reply=reply)
+
+
+# ---------------------------------------------------------------------------
+# Config endpoints
+# ---------------------------------------------------------------------------
+
+
+class ConfigResponse(BaseModel):
+    provider: str
+    api_key_masked: str | None = None
+    api_base: str
+    model: str
+    temperature: float
+
+
+class ConfigUpdate(BaseModel):
+    provider: str | None = None
+    api_key: str | None = None
+    api_base: str | None = None
+    model: str | None = None
+    temperature: float | None = None
+
+
+@app.get("/config", response_model=ConfigResponse)
+async def get_config() -> ConfigResponse:
+    cfg = load_config()
+    return ConfigResponse(
+        provider=cfg.provider,
+        api_key_masked=mask_secret(cfg.api_key),
+        api_base=cfg.api_base,
+        model=cfg.model,
+        temperature=cfg.temperature,
+    )
+
+
+@app.put("/config", response_model=ConfigResponse)
+async def update_config(payload: ConfigUpdate) -> ConfigResponse:
+    cfg = load_config()
+    if payload.provider is not None:
+        cfg.provider = payload.provider
+    if payload.api_key is not None:
+        cfg.api_key = payload.api_key
+    if payload.api_base is not None:
+        cfg.api_base = payload.api_base
+    if payload.model is not None:
+        cfg.model = payload.model
+    if payload.temperature is not None:
+        cfg.temperature = payload.temperature
+
+    save_config(cfg)
+    return ConfigResponse(
+        provider=cfg.provider,
+        api_key_masked=mask_secret(cfg.api_key),
+        api_base=cfg.api_base,
+        model=cfg.model,
+        temperature=cfg.temperature,
+    )
 

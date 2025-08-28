@@ -8,4 +8,18 @@ export async function checkHealth() {
   }
 }
 
+export async function sendChat(message) {
+  const res = await fetch('/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Chat request failed: ${res.status} ${text}`);
+  }
+  const data = await res.json();
+  return data.reply;
+}
+
 export default { checkHealth };
