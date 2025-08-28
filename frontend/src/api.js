@@ -22,6 +22,28 @@ export async function sendChat(message) {
   return data.reply;
 }
 
+// Characters API
+export async function listCharacters() {
+  const res = await fetch('/characters');
+  if (!res.ok) throw new Error(`List characters failed: ${res.status}`);
+  return res.json();
+}
+
+export async function createCharacter({ name, description = '', avatar_url = null }) {
+  const res = await fetch('/characters', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, description, avatar_url }),
+  });
+  if (!res.ok) throw new Error(`Create character failed: ${res.status}`);
+  return res.json();
+}
+
+export async function deleteCharacter(id) {
+  const res = await fetch(`/characters/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`Delete character failed: ${res.status}`);
+}
+
 export async function getConfig() {
   const res = await fetch('/config');
   if (!res.ok) {
@@ -31,6 +53,7 @@ export async function getConfig() {
   return res.json();
 }
 
+// partial can include { active_provider, providers: { [provider]: { api_base, api_key, model, temperature } } }
 export async function updateConfig(partial) {
   const res = await fetch('/config', {
     method: 'PUT',
@@ -66,4 +89,4 @@ export async function getModels(provider) {
   return res.json(); // { models: string[] }
 }
 
-export default { checkHealth, sendChat, getConfig, updateConfig, getModels };
+export default { checkHealth, sendChat, getConfig, updateConfig, getModels, listCharacters, createCharacter, deleteCharacter };

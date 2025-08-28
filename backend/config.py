@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 from pydantic import BaseModel
 import json
 import os
@@ -32,31 +32,62 @@ class Provider(str):
     GEMINI = "gemini"  # Google Generative Language API
 
 
-class AppConfig(BaseModel):
-    provider: str = Provider.ECHO
+class ProviderConfig(BaseModel):
     api_key: Optional[str] = None
-    api_base: str = "https://api.openai.com/v1"
-    model: str = DEFAULT_MODEL
+    api_base: Optional[str] = None
+    model: Optional[str] = None
     temperature: float = 0.7
+
+
+class AppConfig(BaseModel):
+    active_provider: str = Provider.ECHO
+    providers: Dict[str, ProviderConfig]
 
 
 def ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
+def _default_providers() -> Dict[str, ProviderConfig]:
+    return {
+        Provider.ECHO: ProviderConfig(),
+        Provider.OPENAI: ProviderConfig(api_base="https://api.openai.com/v1", model=DEFAULT_MODEL),
+        Provider.OPENROUTER: ProviderConfig(api_base="https://openrouter.ai/api/v1", model="openrouter/auto"),
+        Provider.GEMINI: ProviderConfig(api_base="https://generativelanguage.googleapis.com/v1beta/openai", model="gemini-1.5-flash"),
+    }
+
+
 def load_config(path: Optional[Path] = None) -> AppConfig:
     cfg_path = path or _default_config_path()
     if not cfg_path.exists():
         # Create with defaults
-        cfg = AppConfig()
+        cfg = AppConfig(active_provider=Provider.ECHO, providers=_default_providers())
         save_config(cfg, cfg_path)
         return cfg
     try:
         data = json.loads(cfg_path.read_text(encoding="utf-8"))
+        # Migrate from old flat schema if needed
+        if isinstance(data, dict) and "providers" not in data and "provider" in data:
+            old = data
+            active = old.get("provider", Provider.ECHO)
+            provs = _default_providers()
+            pc = provs.get(active, ProviderConfig())
+            # Copy fields where present
+            pc.api_key = old.get("api_key")
+            pc.api_base = old.get("api_base", pc.api_base)
+            pc.model = old.get("model", pc.model)
+            try:
+                pc.temperature = float(old.get("temperature", pc.temperature))
+            except Exception:
+                pass
+            migrated = AppConfig(active_provider=active, providers=provs)
+            # Save migration back
+            save_config(migrated, cfg_path)
+            return migrated
         return AppConfig(**data)
     except Exception:
         # On error, fallback to defaults but do not overwrite user's file
-        return AppConfig()
+        return AppConfig(active_provider=Provider.ECHO, providers=_default_providers())
 
 
 def save_config(cfg: AppConfig, path: Optional[Path] = None) -> None:

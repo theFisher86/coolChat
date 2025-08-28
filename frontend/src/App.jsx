@@ -1,30 +1,29 @@
 import React, { useEffect, useState } from 'react';
 import './App.css';
-import { sendChat, getConfig, updateConfig, getModels } from './api';
+import { sendChat, getConfig, updateConfig, getModels, listCharacters, createCharacter, deleteCharacter } from './api';
 
 function App() {
-  const [messages, setMessages] = useState([]); // {role: 'user'|'assistant', content}
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
   const [showConfig, setShowConfig] = useState(false);
-  const [config, setConfig] = useState({ provider: 'echo', api_key_masked: null, api_base: '', model: '', temperature: 0.7 });
-  const [configDraft, setConfigDraft] = useState({ provider: 'echo', api_key: '', api_base: '', model: '', temperature: 0.7 });
+  const [activeProvider, setActiveProvider] = useState('echo');
+  const [providers, setProviders] = useState({}); // provider -> masked config
+  const [configDraft, setConfigDraft] = useState({ api_key: '', api_base: '', model: '', temperature: 0.7 });
   const [modelList, setModelList] = useState([]);
   const [loadingModels, setLoadingModels] = useState(false);
+  const [characters, setCharacters] = useState([]);
+  const [newChar, setNewChar] = useState({ name: '', description: '', avatar_url: '' });
 
   useEffect(() => {
     (async () => {
       try {
         const cfg = await getConfig();
-        setConfig(cfg);
-        setConfigDraft({
-          provider: cfg.provider,
-          api_key: '',
-          api_base: cfg.api_base,
-          model: cfg.model,
-          temperature: cfg.temperature,
-        });
+        setActiveProvider(cfg.active_provider);
+        setProviders(cfg.providers || {});
+        const cur = cfg.providers?.[cfg.active_provider] || {};
+        setConfigDraft({ api_key: '', api_base: cur.api_base || '', model: cur.model || '', temperature: cur.temperature ?? 0.7 });
       } catch (e) {
         console.warn('Could not load config', e);
       }
@@ -32,7 +31,7 @@ function App() {
   }, []);
 
   const refreshModels = async (prov) => {
-    const p = prov ?? configDraft.provider;
+    const p = prov ?? activeProvider;
     if (p === 'echo') { setModelList([]); return; }
     try {
       setLoadingModels(true);
@@ -47,12 +46,11 @@ function App() {
   };
 
   useEffect(() => {
-    // Load models when provider changes and settings are shown
     if (showConfig) {
       refreshModels();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [configDraft.provider, showConfig]);
+  }, [activeProvider, showConfig]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -84,6 +82,42 @@ function App() {
       </header>
 
       <main className="chat">
+        <section className="characters">
+          <h2>Characters</h2>
+          <div className="row">
+            <input placeholder="Name" value={newChar.name} onChange={(e) => setNewChar({ ...newChar, name: e.target.value })} />
+            <input placeholder="Avatar URL (optional)" value={newChar.avatar_url} onChange={(e) => setNewChar({ ...newChar, avatar_url: e.target.value })} />
+          </div>
+          <div className="row">
+            <input placeholder="Description" value={newChar.description} onChange={(e) => setNewChar({ ...newChar, description: e.target.value })} />
+            <button onClick={async () => {
+              if (!newChar.name.trim()) return;
+              try { await createCharacter({ ...newChar, avatar_url: newChar.avatar_url || null }); setNewChar({ name: '', description: '', avatar_url: '' }); const list = await listCharacters(); setCharacters(list); } catch (e) { alert(e.message); }
+            }}>Create</button>
+            <label className="secondary" style={{ padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}>
+              Import JSON
+              <input type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={async (e) => {
+                const f = e.target.files?.[0]; if (!f) return;
+                try { const text = await f.text(); const data = JSON.parse(text); if (!data.name) throw new Error('JSON must include name'); await createCharacter({ name: data.name, description: data.description || '', avatar_url: data.avatar_url || null }); const list = await listCharacters(); setCharacters(list); } catch (err) { alert(err.message); }
+                e.target.value = '';
+              }} />
+            </label>
+            <button className="secondary" onClick={async () => { try { const list = await listCharacters(); setCharacters(list); } catch (e) { alert(e.message);} }}>Refresh</button>
+          </div>
+          <div className="char-list">
+            {characters.map(c => (
+              <div key={c.id} className="char-item">
+                <div>
+                  <h3>{c.name}</h3>
+                  <div className="muted">{c.description}</div>
+                </div>
+                <div className="char-actions">
+                  <button className="secondary" onClick={async () => { try { await deleteCharacter(c.id); const list = await listCharacters(); setCharacters(list);} catch (e) { alert(e.message);} }}>Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
         {showConfig && (
           <section className="panel">
             <h2>Configuration</h2>
@@ -93,8 +127,8 @@ function App() {
               onSubmit={async (e) => {
                 e.preventDefault();
                 try {
-                  const updated = await updateConfig(configDraft);
-                  setConfig(updated);
+                  const updated = await updateConfig({ active_provider: activeProvider, providers: { [activeProvider]: configDraft } });
+                  setProviders(updated.providers || {});
                 } catch (e) {
                   alert(e.message);
                 }
@@ -103,8 +137,14 @@ function App() {
               <label>
                 <span>Provider</span>
                 <select
-                  value={configDraft.provider}
-                  onChange={(e) => setConfigDraft((d) => ({ ...d, provider: e.target.value }))}
+                  value={activeProvider}
+                  onChange={async (e) => {
+                    const next = e.target.value;
+                    setActiveProvider(next);
+                    const cur = providers[next] || {};
+                    setConfigDraft({ api_key: '', api_base: cur.api_base || '', model: cur.model || '', temperature: cur.temperature ?? 0.7 });
+                    try { await updateConfig({ active_provider: next }); } catch {}
+                  }}
                 >
                   <option value="echo">Echo (no API key)</option>
                   <option value="openai">OpenAI-compatible</option>
@@ -117,7 +157,7 @@ function App() {
                 <span>API Key</span>
                 <input
                   type="password"
-                  placeholder={config.api_key_masked ? `Saved: ${config.api_key_masked}` : 'sk-...'}
+                  placeholder={providers[activeProvider]?.api_key_masked ? `Saved: ${providers[activeProvider].api_key_masked}` : 'sk-...'}
                   value={configDraft.api_key}
                   onChange={(e) => setConfigDraft((d) => ({ ...d, api_key: e.target.value }))}
                 />
@@ -128,9 +168,9 @@ function App() {
                 <input
                   type="text"
                   placeholder={
-                    configDraft.provider === 'openrouter'
+                    activeProvider === 'openrouter'
                       ? 'https://openrouter.ai/api/v1'
-                      : configDraft.provider === 'openai'
+                      : activeProvider === 'openai'
                       ? 'https://api.openai.com/v1'
                       : 'https://generativelanguage.googleapis.com/v1beta/openai'
                   }
@@ -154,7 +194,7 @@ function App() {
                 ) : (
                   <input
                     type="text"
-                    placeholder={configDraft.provider === 'gemini' ? 'gemini-1.5-flash' : 'gpt-4o-mini'}
+                    placeholder={activeProvider === 'gemini' ? 'gemini-1.5-flash' : 'gpt-4o-mini'}
                     value={configDraft.model}
                     onChange={(e) => setConfigDraft((d) => ({ ...d, model: e.target.value }))}
                   />
@@ -162,7 +202,14 @@ function App() {
               </label>
 
               <div className="row">
-                <button type="button" className="secondary" onClick={() => refreshModels()} disabled={loadingModels}>
+                <button type="button" className="secondary" onClick={async () => {
+                  try {
+                    await updateConfig({ providers: { [activeProvider]: configDraft } });
+                    const cfg = await getConfig();
+                    setProviders(cfg.providers || {});
+                  } catch {}
+                  refreshModels();
+                }} disabled={loadingModels}>
                   {loadingModels ? 'Refreshing…' : 'Refresh models'}
                 </button>
               </div>
@@ -185,11 +232,10 @@ function App() {
                   type="button"
                   className="secondary"
                   onClick={() => setConfigDraft({
-                    provider: config.provider,
                     api_key: '',
-                    api_base: config.api_base,
-                    model: config.model,
-                    temperature: config.temperature,
+                    api_base: providers[activeProvider]?.api_base || '',
+                    model: providers[activeProvider]?.model || '',
+                    temperature: providers[activeProvider]?.temperature ?? 0.7,
                   })}
                 >
                   Reset
@@ -199,7 +245,7 @@ function App() {
 
             <div className="hint">
               <p className="muted">
-                OpenRouter uses OpenAI-compatible endpoints. You can set API Base to https://openrouter.ai/api/v1. Gemini requires a model like gemini-1.5-flash and uses Google’s API.
+                OpenRouter uses OpenAI-compatible endpoints. You can set API Base to https://openrouter.ai/api/v1. Gemini uses the OpenAI-compatible base at https://generativelanguage.googleapis.com/v1beta/openai.
               </p>
             </div>
           </section>

@@ -77,3 +77,9 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, sans-s
 .config-form input, .config-form select { padding: 8px 10px; border-radius: 8px; border: 1px solid #374151; background: #0b1220; color: var(--text); }
 .row { display: flex; gap: 8px; align-items: center; }
 .hint { margin-top: 8px; }
+
+.characters { padding: 12px 16px; display: grid; gap: 12px; }
+.char-list { display: grid; gap: 8px; }
+.char-item { display: flex; align-items: center; justify-content: space-between; background: #0b1220; border: 1px solid #1f2937; border-radius: 8px; padding: 8px 10px; }
+.char-item h3 { margin: 0; font-size: 14px; }
+.char-actions { display: flex; gap: 8px; }
