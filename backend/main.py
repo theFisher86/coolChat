@@ -8,8 +8,9 @@ character definitions.
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import Dict, List
+from typing import Dict, List, Optional
 import asyncio
 import httpx
 from .config import AppConfig, ProviderConfig, load_config, save_config, mask_secret, Provider
@@ -25,6 +26,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static files (e.g., imported character images)
+try:
+    import os as _os
+    _static_dir = _os.path.join(_os.path.dirname(__file__), "static")
+    _os.makedirs(_static_dir, exist_ok=True)
+    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+except Exception:
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -43,6 +53,18 @@ class Character(BaseModel):
     name: str
     description: str = ""
     avatar_url: str | None = None
+    # Extended fields inspired by SillyTavern
+    first_message: str | None = None
+    alternate_greetings: List[str] = []
+    scenario: str | None = None
+    system_prompt: str | None = None
+    personality: str | None = None
+    mes_example: str | None = None
+    creator_notes: str | None = None
+    tags: List[str] = []
+    post_history_instructions: str | None = None
+    extensions: Dict[str, object] | None = None
+    lorebook_ids: List[int] = []
 
 
 class CharacterCreate(BaseModel):
@@ -51,6 +73,34 @@ class CharacterCreate(BaseModel):
     name: str
     description: str = ""
     avatar_url: str | None = None
+    first_message: Optional[str] = None
+    alternate_greetings: Optional[List[str]] = None
+    scenario: Optional[str] = None
+    system_prompt: Optional[str] = None
+    personality: Optional[str] = None
+    mes_example: Optional[str] = None
+    creator_notes: Optional[str] = None
+    tags: Optional[List[str]] = None
+    post_history_instructions: Optional[str] = None
+    extensions: Optional[Dict[str, object]] = None
+    lorebook_ids: Optional[List[int]] = None
+
+
+class CharacterUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    avatar_url: Optional[str] = None
+    first_message: Optional[str] = None
+    alternate_greetings: Optional[List[str]] = None
+    scenario: Optional[str] = None
+    system_prompt: Optional[str] = None
+    personality: Optional[str] = None
+    mes_example: Optional[str] = None
+    creator_notes: Optional[str] = None
+    tags: Optional[List[str]] = None
+    post_history_instructions: Optional[str] = None
+    extensions: Optional[Dict[str, object]] = None
+    lorebook_ids: Optional[List[int]] = None
 
 
 # simple in-memory store
@@ -86,7 +136,14 @@ async def create_character(payload: CharacterCreate) -> Character:
     """Create a new character and return the resulting record."""
 
     global _next_id
-    char = Character(id=_next_id, **payload.model_dump())
+    data = payload.model_dump()
+    if data.get("alternate_greetings") is None:
+        data["alternate_greetings"] = []
+    if data.get("tags") is None:
+        data["tags"] = []
+    if data.get("lorebook_ids") is None:
+        data["lorebook_ids"] = []
+    char = Character(id=_next_id, **data)
     _characters[_next_id] = char
     _next_id += 1
     return char
@@ -112,6 +169,17 @@ async def delete_character(char_id: int) -> None:
     return None
 
 
+@app.put("/characters/{char_id}", response_model=Character)
+async def update_character(char_id: int, payload: CharacterUpdate) -> Character:
+    char = _characters.get(char_id)
+    if char is None:
+        raise HTTPException(status_code=404, detail="Character not found")
+    data = payload.model_dump(exclude_unset=True)
+    updated = char.model_copy(update=data)
+    _characters[char_id] = updated
+    return updated
+
+
 # ---------------------------------------------------------------------------
 # Lorebook endpoints
 # ---------------------------------------------------------------------------
@@ -132,6 +200,23 @@ class LoreEntryCreate(BaseModel):
 
 _lore: Dict[int, LoreEntry] = {}
 _next_lore_id: int = 1
+
+
+class Lorebook(BaseModel):
+    id: int
+    name: str
+    description: str = ""
+    entry_ids: List[int] = []
+
+
+class LorebookCreate(BaseModel):
+    name: str
+    description: str = ""
+    entries: Optional[List[LoreEntryCreate]] = None
+
+
+_lorebooks: Dict[int, Lorebook] = {}
+_next_lorebook_id: int = 1
 
 
 @app.get("/lore", response_model=List[LoreEntry])
@@ -169,6 +254,44 @@ async def delete_lore(entry_id: int) -> None:
     if entry_id not in _lore:
         raise HTTPException(status_code=404, detail="Lore entry not found")
     del _lore[entry_id]
+    return None
+
+
+@app.get("/lorebooks", response_model=List[Lorebook])
+async def list_lorebooks() -> List[Lorebook]:
+    return list(_lorebooks.values())
+
+
+@app.post("/lorebooks", response_model=Lorebook, status_code=201)
+async def create_lorebook(payload: LorebookCreate) -> Lorebook:
+    global _next_lorebook_id, _next_lore
+    lb = Lorebook(id=_next_lorebook_id, name=payload.name, description=payload.description, entry_ids=[])
+    # Optionally create entries provided inline
+    if payload.entries:
+        global _next_lore_id
+        for le in payload.entries:
+            entry = LoreEntry(id=_next_lore_id, keyword=le.keyword, content=le.content)
+            _lore[_next_lore_id] = entry
+            lb.entry_ids.append(_next_lore_id)
+            _next_lore_id += 1
+    _lorebooks[_next_lorebook_id] = lb
+    _next_lorebook_id += 1
+    return lb
+
+
+@app.get("/lorebooks/{lb_id}", response_model=Lorebook)
+async def get_lorebook(lb_id: int) -> Lorebook:
+    lb = _lorebooks.get(lb_id)
+    if lb is None:
+        raise HTTPException(status_code=404, detail="Lorebook not found")
+    return lb
+
+
+@app.delete("/lorebooks/{lb_id}", status_code=204)
+async def delete_lorebook(lb_id: int) -> None:
+    if lb_id not in _lorebooks:
+        raise HTTPException(status_code=404, detail="Lorebook not found")
+    del _lorebooks[lb_id]
     return None
 
 
@@ -291,6 +414,24 @@ async def _llm_reply(message: str, cfg: AppConfig) -> str:
         return f"Echo: {message}"
 
     # Provider: openai (or compatible)
+    # Build optional system message from active character
+    system_msg = _build_system_from_character(_characters.get(cfg.active_character_id) if hasattr(cfg, 'active_character_id') else None)
+
+    # Replace tokens in messages
+    def _replace(text: str) -> str:
+        char_name = None
+        if cfg.active_character_id and cfg.active_character_id in _characters:
+            char_name = _characters[cfg.active_character_id].name
+        user_name = getattr(cfg, 'user_persona', None).name if getattr(cfg, 'user_persona', None) else "User"
+        if not text:
+            return text
+        t = text.replace("{{char}}", char_name or "Character")
+        t = t.replace("{{user}}", user_name)
+        return t
+    if system_msg:
+        system_msg = _replace(system_msg)
+    message = _replace(message)
+
     if provider == Provider.OPENAI:
         if not pcfg.api_key:
             raise HTTPException(status_code=400, detail="Missing API key for provider 'openai'")
@@ -301,14 +442,14 @@ async def _llm_reply(message: str, cfg: AppConfig) -> str:
             "Authorization": f"Bearer {pcfg.api_key}",
             "Content-Type": "application/json",
         }
-        body = {
-            "model": pcfg.model,
-            "messages": [
-                {"role": "user", "content": message},
-            ],
-            "temperature": pcfg.temperature,
-        }
+        messages = []
+        if system_msg:
+            messages.append({"role": "system", "content": system_msg})
+        messages.append({"role": "user", "content": message})
+        body = {"model": pcfg.model, "messages": messages, "temperature": pcfg.temperature}
         timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+        if getattr(cfg, 'debug', None) and getattr(cfg.debug, 'log_prompts', False):
+            print("[CoolChat] OpenAI request:", {"url": url, "body": body})
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, headers=headers, json=body)
             if resp.status_code >= 400:
@@ -318,6 +459,11 @@ async def _llm_reply(message: str, cfg: AppConfig) -> str:
                 except Exception:
                     detail = resp.text
                 raise HTTPException(status_code=502, detail={"provider_error": detail})
+            if getattr(cfg, 'debug', None) and getattr(cfg.debug, 'log_responses', False):
+                try:
+                    print("[CoolChat] OpenAI response:", resp.json())
+                except Exception:
+                    print("[CoolChat] OpenAI response text:", resp.text)
             data = resp.json()
             # Standard OpenAI response shape
             try:
@@ -343,14 +489,14 @@ async def _llm_reply(message: str, cfg: AppConfig) -> str:
         if title:
             headers["X-Title"] = title
 
-        body = {
-            "model": pcfg.model,
-            "messages": [
-                {"role": "user", "content": message},
-            ],
-            "temperature": pcfg.temperature,
-        }
+        messages = []
+        if system_msg:
+            messages.append({"role": "system", "content": system_msg})
+        messages.append({"role": "user", "content": message})
+        body = {"model": pcfg.model, "messages": messages, "temperature": pcfg.temperature}
         timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+        if getattr(cfg, 'debug', None) and getattr(cfg.debug, 'log_prompts', False):
+            print("[CoolChat] OpenRouter request:", {"url": url, "body": body})
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, headers=headers, json=body)
             if resp.status_code >= 400:
@@ -359,6 +505,11 @@ async def _llm_reply(message: str, cfg: AppConfig) -> str:
                 except Exception:
                     detail = resp.text
                 raise HTTPException(status_code=502, detail={"provider_error": detail})
+            if getattr(cfg, 'debug', None) and getattr(cfg.debug, 'log_responses', False):
+                try:
+                    print("[CoolChat] OpenRouter response:", resp.json())
+                except Exception:
+                    print("[CoolChat] OpenRouter response text:", resp.text)
             data = resp.json()
             try:
                 return data["choices"][0]["message"]["content"].strip()
@@ -377,14 +528,14 @@ async def _llm_reply(message: str, cfg: AppConfig) -> str:
             "Content-Type": "application/json",
             "Authorization": f"Bearer {pcfg.api_key}",
         }
-        body = {
-            "model": pcfg.model or "gemini-1.5-flash",
-            "messages": [
-                {"role": "user", "content": message},
-            ],
-            "temperature": pcfg.temperature,
-        }
+        messages = []
+        if system_msg:
+            messages.append({"role": "system", "content": system_msg})
+        messages.append({"role": "user", "content": message})
+        body = {"model": pcfg.model or "gemini-1.5-flash", "messages": messages, "temperature": pcfg.temperature}
         timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+        if getattr(cfg, 'debug', None) and getattr(cfg.debug, 'log_prompts', False):
+            print("[CoolChat] Gemini request:", {"base": base, "path": path, "body": body})
         async with httpx.AsyncClient(base_url=base, timeout=timeout) as client:
             resp = await client.post(path, headers=headers, json=body)
             if resp.status_code >= 400:
@@ -393,6 +544,11 @@ async def _llm_reply(message: str, cfg: AppConfig) -> str:
                 except Exception:
                     detail = resp.text
                 raise HTTPException(status_code=502, detail={"provider_error": detail})
+            if getattr(cfg, 'debug', None) and getattr(cfg.debug, 'log_responses', False):
+                try:
+                    print("[CoolChat] Gemini response:", resp.json())
+                except Exception:
+                    print("[CoolChat] Gemini response text:", resp.text)
             data = resp.json()
             try:
                 return data["choices"][0]["message"]["content"].strip()
@@ -408,14 +564,54 @@ async def chat_endpoint(payload: ChatRequest) -> ChatResponse:
     """Return a chat reply using configured provider (echo by default)."""
 
     cfg = load_config()
+    # Try to incorporate active character persona as a system prompt when calling LLMs
+    active_char = None
+    if cfg.active_character_id and cfg.active_character_id in _characters:
+        active_char = _characters[cfg.active_character_id]
+    # For now we only pass the user message; system persona is stitched inside _llm_reply
     try:
-        reply = await _llm_reply(payload.message, cfg)
+        reply = await _llm_reply(_inject_persona(payload.message, active_char), cfg)
     except HTTPException:
         raise
     except Exception as exc:  # pragma: no cover - safety net
         raise HTTPException(status_code=500, detail=str(exc))
 
     return ChatResponse(reply=reply)
+
+
+def _build_system_from_character(char: Optional[Character]) -> Optional[str]:
+    if not char:
+        return None
+    segments: List[str] = []
+    if char.system_prompt:
+        segments.append(char.system_prompt)
+    if char.personality:
+        segments.append(f"Personality: {char.personality}")
+    if char.scenario:
+        segments.append(f"Scenario: {char.scenario}")
+    if char.description:
+        segments.append(f"Description: {char.description}")
+    # Append linked lorebook contents naively
+    if char.lorebook_ids:
+        lore_texts = []
+        for lb_id in char.lorebook_ids:
+            lb = _lorebooks.get(lb_id)
+            if not lb:
+                continue
+            for eid in lb.entry_ids:
+                e = _lore.get(eid)
+                if e:
+                    lore_texts.append(f"[{e.keyword}] {e.content}")
+        if lore_texts:
+            segments.append("World Info:\n" + "\n".join(lore_texts))
+    if not segments:
+        return None
+    return "\n\n".join(segments)
+
+
+def _inject_persona(user_message: str, char: Optional[Character]) -> str:
+    # For echo provider, we just keep original. For others, the system is built separately in _llm_reply.
+    return user_message
 
 
 # ---------------------------------------------------------------------------
@@ -432,7 +628,10 @@ class ProviderConfigMasked(BaseModel):
 
 class ConfigResponse(BaseModel):
     active_provider: str
+    active_character_id: int | None = None
     providers: Dict[str, ProviderConfigMasked]
+    debug: Dict[str, bool]
+    user_persona: Dict[str, str]
 
 
 class ProviderConfigUpdate(BaseModel):
@@ -445,6 +644,9 @@ class ProviderConfigUpdate(BaseModel):
 class ConfigUpdate(BaseModel):
     active_provider: str | None = None
     providers: Dict[str, ProviderConfigUpdate] | None = None
+    active_character_id: int | None = None
+    debug: Dict[str, bool] | None = None
+    user_persona: Dict[str, str] | None = None
 
 
 @app.get("/config", response_model=ConfigResponse)
@@ -458,7 +660,19 @@ async def get_config() -> ConfigResponse:
             model=pc.model,
             temperature=pc.temperature,
         )
-    return ConfigResponse(active_provider=cfg.active_provider, providers=masked)
+    return ConfigResponse(
+        active_provider=cfg.active_provider,
+        active_character_id=cfg.active_character_id,
+        providers=masked,
+        debug={"log_prompts": getattr(cfg.debug, 'log_prompts', False), "log_responses": getattr(cfg.debug, 'log_responses', False)},
+        user_persona={
+            "name": getattr(cfg.user_persona, 'name', 'User'),
+            "description": getattr(cfg.user_persona, 'description', ''),
+            "personality": getattr(cfg.user_persona, 'personality', ''),
+            "motivations": getattr(cfg.user_persona, 'motivations', ''),
+            "tracking": getattr(cfg.user_persona, 'tracking', ''),
+        },
+    )
 
 
 @app.put("/config", response_model=ConfigResponse)
@@ -492,6 +706,24 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
     # Switch active provider if requested
     if payload.active_provider is not None:
         cfg.active_provider = payload.active_provider
+    if payload.active_character_id is not None:
+        cfg.active_character_id = payload.active_character_id
+    if payload.debug is not None:
+        if not hasattr(cfg, 'debug') or cfg.debug is None:
+            from .config import DebugConfig
+            cfg.debug = DebugConfig()
+        cfg.debug.log_prompts = bool(payload.debug.get("log_prompts", cfg.debug.log_prompts))
+        cfg.debug.log_responses = bool(payload.debug.get("log_responses", cfg.debug.log_responses))
+    if payload.user_persona is not None:
+        if not hasattr(cfg, 'user_persona') or cfg.user_persona is None:
+            from .config import UserPersona
+            cfg.user_persona = UserPersona()
+        up = payload.user_persona
+        cfg.user_persona.name = up.get("name", cfg.user_persona.name)
+        cfg.user_persona.description = up.get("description", cfg.user_persona.description)
+        cfg.user_persona.personality = up.get("personality", cfg.user_persona.personality)
+        cfg.user_persona.motivations = up.get("motivations", cfg.user_persona.motivations)
+        cfg.user_persona.tracking = up.get("tracking", cfg.user_persona.tracking)
 
     try:
         save_config(cfg)
@@ -507,7 +739,26 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
             model=pc.model,
             temperature=pc.temperature,
         )
-    return ConfigResponse(active_provider=cfg.active_provider, providers=masked)
+    return ConfigResponse(
+        active_provider=cfg.active_provider,
+        active_character_id=cfg.active_character_id,
+        providers=masked,
+        debug={"log_prompts": getattr(cfg.debug, 'log_prompts', False), "log_responses": getattr(cfg.debug, 'log_responses', False)},
+        user_persona={
+            "name": getattr(cfg.user_persona, 'name', 'User'),
+            "description": getattr(cfg.user_persona, 'description', ''),
+            "personality": getattr(cfg.user_persona, 'personality', ''),
+            "motivations": getattr(cfg.user_persona, 'motivations', ''),
+            "tracking": getattr(cfg.user_persona, 'tracking', ''),
+        },
+    )
+
+
+@app.get("/config/raw")
+async def get_config_raw():
+    """Return the full config including API keys for Advanced tab."""
+    cfg = load_config()
+    return cfg.model_dump()
 
 
 # ---------------------------------------------------------------------------
@@ -617,17 +868,34 @@ async def import_character(
     description: str | None = Form(default=""),
     avatar_url: str | None = Form(default=None),
 ):
-    # If a JSON file was provided, parse it to extract fields
+    # If a file was provided, detect PNG or JSON
     data = None
     if file is not None:
-        try:
-            raw = await file.read()
-            import json as _json
-            data = _json.loads(raw.decode("utf-8"))
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid import file: {e}")
+        raw = await file.read()
+        if raw[:8] == b"\x89PNG\r\n\x1a\n":
+            try:
+                data = _parse_png_card(raw)
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Invalid PNG card: {e}")
+            # Save the PNG to static folder and set avatar_url
+            try:
+                import os as _os
+                static_chars = _os.path.join(_os.path.dirname(__file__), "static", "characters")
+                _os.makedirs(static_chars, exist_ok=True)
+                fname = f"{_next_id}.png"
+                fpath = _os.path.join(static_chars, fname)
+                with open(fpath, "wb") as fh:
+                    fh.write(raw)
+                data["avatar_url"] = f"/static/characters/{fname}"
+            except Exception:
+                pass
+        else:
+            try:
+                import json as _json
+                data = _json.loads(raw.decode("utf-8"))
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Invalid import file: {e}")
     else:
-        # Fall back to form fields if provided
         data = {"name": name, "description": description or "", "avatar_url": avatar_url}
 
     if not data or not data.get("name"):
@@ -637,7 +905,152 @@ async def import_character(
         name=data.get("name"),
         description=data.get("description", ""),
         avatar_url=data.get("avatar_url"),
+        first_message=data.get("first_message") or data.get("first_mes"),
+        alternate_greetings=data.get("alternate_greetings") or [],
+        scenario=data.get("scenario"),
+        system_prompt=data.get("system_prompt"),
+        personality=data.get("personality"),
+        mes_example=data.get("mes_example"),
+        creator_notes=data.get("creator_notes"),
+        tags=data.get("tags") or [],
+        post_history_instructions=data.get("post_history_instructions"),
+        extensions=data.get("extensions"),
+        lorebook_ids=data.get("lorebook_ids") or [],
     )
     # Reuse create_character logic
     return await create_character(payload)
+
+
+def _parse_png_card(raw: bytes) -> Dict[str, object]:
+    import struct, json, base64
+    pos = 8  # after signature
+    found = {}
+    while pos + 8 <= len(raw):
+        length = struct.unpack(">I", raw[pos:pos+4])[0]; pos += 4
+        ctype = raw[pos:pos+4]; pos += 4
+        data = raw[pos:pos+length]; pos += length
+        crc = raw[pos:pos+4]; pos += 4  # noqa
+        if ctype == b"tEXt":
+            # keyword\x00text
+            try:
+                nul = data.index(b"\x00")
+                key = data[:nul].decode("latin1")
+                text = data[nul+1:].decode("utf-8", errors="ignore")
+            except Exception:
+                continue
+            if key in ("chara_card_v2", "chara"):
+                found[key] = text
+        elif ctype == b"iTXt":
+            # keyword\x00comp_flag\x00comp_method\x00lang\x00translated\x00text
+            try:
+                parts = data.split(b"\x00", 5)
+                key = parts[0].decode("latin1")
+                comp_flag = parts[1][:1] if len(parts) > 1 else b"\x00"
+                # parts[2]=comp_method, parts[3]=lang, parts[4]=translated
+                text = parts[5] if len(parts) > 5 else b""
+                if comp_flag == b"\x01":
+                    import zlib
+                    text = zlib.decompress(text)
+                text = text.decode("utf-8", errors="ignore")
+            except Exception:
+                continue
+            if key in ("chara_card_v2", "chara"):
+                found[key] = text
+        if ctype == b"IEND":
+            break
+    # Prefer v2 JSON
+    if "chara_card_v2" in found:
+        try:
+            return json.loads(found["chara_card_v2"])  # type: ignore
+        except Exception as e:
+            raise ValueError(f"bad chara_card_v2 JSON: {e}")
+    if "chara" in found:
+        # Usually base64 JSON
+        try:
+            decoded = base64.b64decode(found["chara"])  # type: ignore
+            return json.loads(decoded)
+        except Exception as e:
+            raise ValueError(f"bad chara base64: {e}")
+    raise ValueError("No character JSON found in PNG")
+
+
+class SuggestRequest(BaseModel):
+    field: str
+    character: Dict[str, object] | None = None  # current draft fields
+
+
+class SuggestResponse(BaseModel):
+    value: str
+
+
+@app.post("/characters/suggest_field", response_model=SuggestResponse)
+async def suggest_field(payload: SuggestRequest) -> SuggestResponse:
+    cfg = load_config()
+    char = payload.character or {}
+    name = str(char.get("name")) if char.get("name") else "Character"
+    field = payload.field
+    # Build context: include filled fields except the one being suggested
+    ctx_lines = []
+    for k, v in char.items():
+        if k == field:
+            continue
+        if v is None:
+            continue
+        ctx_lines.append(f"- {k}: {v}")
+    ctx = "\n".join(ctx_lines)
+    prompt = (
+        f"You are an AI Character Card creator helper. We are creating a new character named {name}. "
+        f"You need to fill in the {field} field. The following fields have been filled out already; use them for context if helpful. "
+        f"Reply with a single JSON string with your content, no additional text.\n\n"
+        f"Filled fields:\n{ctx}\n\n"
+    )
+    # Replace tokens
+    if hasattr(cfg, 'user_persona') and cfg.user_persona:
+        uname = cfg.user_persona.name or "User"
+    else:
+        uname = "User"
+    cname = name
+    prompt = prompt.replace("{{char}}", cname).replace("{{user}}", uname)
+
+    # Call LLM
+    reply = await _llm_reply(prompt, cfg)
+    # Extract a JSON string; accept plain string or quoted JSON
+    value = reply
+    try:
+        import json as _json
+        j = _json.loads(reply)
+        if isinstance(j, str):
+            value = j
+    except Exception:
+        pass
+    return SuggestResponse(value=value)
+
+
+# ---------------------------------------------------------------------------
+# Lorebook import
+# ---------------------------------------------------------------------------
+
+
+@app.post("/lorebooks/import", response_model=Lorebook, status_code=201)
+async def import_lorebook(file: UploadFile = File(...)) -> Lorebook:
+    raw = await file.read()
+    import json as _json
+    try:
+        data = _json.loads(raw.decode("utf-8"))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid lorebook file: {e}")
+    # Accept either { name, description?, entries: [{keyword, content}] } or just [ {keyword, content} ]
+    if isinstance(data, list):
+        entries = [LoreEntryCreate(keyword=i.get("keyword", ""), content=i.get("content", "")) for i in data]
+        lb = await create_lorebook(LorebookCreate(name="Imported Lorebook", description="", entries=entries))
+        return lb
+    elif isinstance(data, dict):
+        name = data.get("name") or "Imported Lorebook"
+        description = data.get("description") or ""
+        entries_data = data.get("entries") or []
+        entries = [LoreEntryCreate(keyword=i.get("keyword", ""), content=i.get("content", "")) for i in entries_data]
+        lb = await create_lorebook(LorebookCreate(name=name, description=description, entries=entries))
+        return lb
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported lorebook JSON structure")
 

@@ -39,9 +39,25 @@ class ProviderConfig(BaseModel):
     temperature: float = 0.7
 
 
+class UserPersona(BaseModel):
+    name: str = "User"
+    description: str = ""
+    personality: str = ""
+    motivations: str = ""
+    tracking: str = ""
+
+
+class DebugConfig(BaseModel):
+    log_prompts: bool = False
+    log_responses: bool = False
+
+
 class AppConfig(BaseModel):
     active_provider: str = Provider.ECHO
     providers: Dict[str, ProviderConfig]
+    active_character_id: Optional[int] = None
+    user_persona: UserPersona = UserPersona()
+    debug: DebugConfig = DebugConfig()
 
 
 def ensure_parent(path: Path) -> None:
@@ -84,6 +100,13 @@ def load_config(path: Optional[Path] = None) -> AppConfig:
             # Save migration back
             save_config(migrated, cfg_path)
             return migrated
+        # Ensure default fields exist when older config versions are read
+        if "providers" in data and "active_provider" in data:
+            # backfill nested fields
+            if "user_persona" not in data:
+                data["user_persona"] = UserPersona().model_dump()
+            if "debug" not in data:
+                data["debug"] = DebugConfig().model_dump()
         return AppConfig(**data)
     except Exception:
         # On error, fallback to defaults but do not overwrite user's file
