@@ -6,13 +6,11 @@ subset of SillyTavern's functionality so the front-end can store and retrieve
 character definitions.
 """
 
-from pathlib import Path
-
-from fastapi import APIRouter, FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List
+
 app = FastAPI(title="CoolChat")
 
 # Allow CORS for frontend development
@@ -24,7 +22,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-api_router = APIRouter(prefix="/api")
 
 # ---------------------------------------------------------------------------
 # Models and in-memory storage
@@ -56,52 +53,31 @@ class CharacterCreate(BaseModel):
 _characters: Dict[int, Character] = {}
 _next_id: int = 1
 
-@api_router.get("/")
+
+@app.get("/")
 async def root():
     """Basic sanity check endpoint for the API root."""
     return {"message": "CoolChat backend running"}
 
-@api_router.get("/health")
+@app.get("/health")
 async def health_check():
     """Simple endpoint to confirm the service is running."""
     return {"status": "ok"}
 
-# ---------------------------------------------------------------------------
-# Chat endpoints
-# ---------------------------------------------------------------------------
-
-
-class ChatRequest(BaseModel):
-    """Payload for the chat endpoint."""
-
-    message: str
-
-
-class ChatResponse(BaseModel):
-    """Response returned after processing a chat message."""
-
-    reply: str
-
-
-@app.post("/chat", response_model=ChatResponse)
-async def chat(payload: ChatRequest) -> ChatResponse:
-    """Very small demo chat endpoint that simply echoes the message."""
-
-    return ChatResponse(reply=f"You said: {payload.message}")
 
 # ---------------------------------------------------------------------------
 # Character endpoints
 # ---------------------------------------------------------------------------
 
 
-@api_router.get("/characters", response_model=List[Character])
+@app.get("/characters", response_model=List[Character])
 async def list_characters() -> List[Character]:
     """Return all stored character cards."""
 
     return list(_characters.values())
 
 
-@api_router.post("/characters", response_model=Character, status_code=201)
+@app.post("/characters", response_model=Character, status_code=201)
 async def create_character(payload: CharacterCreate) -> Character:
     """Create a new character and return the resulting record."""
 
@@ -112,7 +88,7 @@ async def create_character(payload: CharacterCreate) -> Character:
     return char
 
 
-@api_router.get("/characters/{char_id}", response_model=Character)
+@app.get("/characters/{char_id}", response_model=Character)
 async def get_character(char_id: int) -> Character:
     """Fetch a single character by its identifier."""
 
@@ -122,7 +98,7 @@ async def get_character(char_id: int) -> Character:
     return char
 
 
-@api_router.delete("/characters/{char_id}", status_code=204)
+@app.delete("/characters/{char_id}", status_code=204)
 async def delete_character(char_id: int) -> None:
     """Remove a character from the store."""
 
@@ -130,6 +106,7 @@ async def delete_character(char_id: int) -> None:
         raise HTTPException(status_code=404, detail="Character not found")
     del _characters[char_id]
     return None
+
 
 # ---------------------------------------------------------------------------
 # Lorebook endpoints
@@ -153,14 +130,14 @@ _lore: Dict[int, LoreEntry] = {}
 _next_lore_id: int = 1
 
 
-@api_router.get("/lore", response_model=List[LoreEntry])
+@app.get("/lore", response_model=List[LoreEntry])
 async def list_lore() -> List[LoreEntry]:
     """Return all lore entries."""
 
     return list(_lore.values())
 
 
-@api_router.post("/lore", response_model=LoreEntry, status_code=201)
+@app.post("/lore", response_model=LoreEntry, status_code=201)
 async def create_lore(payload: LoreEntryCreate) -> LoreEntry:
     """Create a new lore entry."""
 
@@ -171,7 +148,7 @@ async def create_lore(payload: LoreEntryCreate) -> LoreEntry:
     return entry
 
 
-@api_router.get("/lore/{entry_id}", response_model=LoreEntry)
+@app.get("/lore/{entry_id}", response_model=LoreEntry)
 async def get_lore(entry_id: int) -> LoreEntry:
     """Retrieve a single lore entry."""
 
@@ -181,7 +158,7 @@ async def get_lore(entry_id: int) -> LoreEntry:
     return entry
 
 
-@api_router.delete("/lore/{entry_id}", status_code=204)
+@app.delete("/lore/{entry_id}", status_code=204)
 async def delete_lore(entry_id: int) -> None:
     """Delete a lore entry."""
 
@@ -190,24 +167,31 @@ async def delete_lore(entry_id: int) -> None:
     del _lore[entry_id]
     return None
 
+
 # ---------------------------------------------------------------------------
 # Chat endpoint
 # ---------------------------------------------------------------------------
 
 
-class ChatMessage(BaseModel):
-    """Payload for a basic chat message."""
+class ChatRequest(BaseModel):
+    """Incoming chat message payload."""
 
     message: str
 
 
-@api_router.post("/chat")
-async def chat(payload: ChatMessage) -> Dict[str, str]:
-    """Return a trivial response echoing the user's message."""
+class ChatResponse(BaseModel):
+    """Simple echo response returned to the caller."""
 
-    return {"reply": f"You said: {payload.message}"}
+    reply: str
 
 
-app.include_router(api_router)
-static_dir = Path(__file__).resolve().parent.parent / "frontend" / "dist"
-app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+@app.post("/chat", response_model=ChatResponse)
+async def chat_endpoint(payload: ChatRequest) -> ChatResponse:
+    """Echo the provided message back to the client.
+
+    This placeholder endpoint lets the front-end exercise a basic chat
+    workflow while more sophisticated LLM integrations are developed.
+    """
+
+    return ChatResponse(reply=f"Echo: {payload.message}")
+

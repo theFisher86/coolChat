@@ -7,13 +7,13 @@ client = TestClient(app)
 
 def test_character_crud_cycle():
     # ensure initially empty
-    resp = client.get("/api/characters")
+    resp = client.get("/characters")
     assert resp.status_code == 200
     assert resp.json() == []
 
     # create a character
     payload = {"name": "Alice", "description": "A curious adventurer"}
-    resp = client.post("/api/characters", json=payload)
+    resp = client.post("/characters", json=payload)
     assert resp.status_code == 201
     data = resp.json()
     assert data["id"] == 1
@@ -22,14 +22,14 @@ def test_character_crud_cycle():
     char_id = data["id"]
 
     # fetch it individually
-    resp = client.get(f"/api/characters/{char_id}")
+    resp = client.get(f"/characters/{char_id}")
     assert resp.status_code == 200
     assert resp.json()["name"] == payload["name"]
 
     # delete it
-    resp = client.delete(f"/api/characters/{char_id}")
+    resp = client.delete(f"/characters/{char_id}")
     assert resp.status_code == 204
 
     # ensure gone
-    resp = client.get(f"/api/characters/{char_id}")
+    resp = client.get(f"/characters/{char_id}")
     assert resp.status_code == 404

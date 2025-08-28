@@ -10,5 +10,3 @@ __pycache__/
 # Pytest cache
 .pytest_cache/
 
-frontend/dist/assets/index-11fc0940.css
-frontend/dist/assets/index-6e14291d.js
