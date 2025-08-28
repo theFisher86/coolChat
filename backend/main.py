@@ -169,6 +169,79 @@ async def delete_lore(entry_id: int) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Memory endpoints
+# ---------------------------------------------------------------------------
+
+
+class MemoryEntry(BaseModel):
+    """Persisted memory snippet with an auto-generated summary."""
+
+    id: int
+    content: str
+    summary: str
+
+
+class MemoryCreate(BaseModel):
+    """Incoming payload for a new memory entry."""
+
+    content: str
+
+
+_memory: Dict[int, MemoryEntry] = {}
+_next_memory_id: int = 1
+
+
+def _summarize(text: str, width: int = 60) -> str:
+    """Create a short summary for the supplied text."""
+
+    import textwrap
+
+    return textwrap.shorten(text, width=width, placeholder="...")
+
+
+@app.get("/memory", response_model=List[MemoryEntry])
+async def list_memory() -> List[MemoryEntry]:
+    """Return all stored memory entries."""
+
+    return list(_memory.values())
+
+
+@app.post("/memory", response_model=MemoryEntry, status_code=201)
+async def create_memory(payload: MemoryCreate) -> MemoryEntry:
+    """Store a new memory entry with an auto-generated summary."""
+
+    global _next_memory_id
+    entry = MemoryEntry(
+        id=_next_memory_id,
+        content=payload.content,
+        summary=_summarize(payload.content),
+    )
+    _memory[_next_memory_id] = entry
+    _next_memory_id += 1
+    return entry
+
+
+@app.get("/memory/{entry_id}", response_model=MemoryEntry)
+async def get_memory(entry_id: int) -> MemoryEntry:
+    """Retrieve a memory entry by identifier."""
+
+    entry = _memory.get(entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Memory entry not found")
+    return entry
+
+
+@app.delete("/memory/{entry_id}", status_code=204)
+async def delete_memory(entry_id: int) -> None:
+    """Remove a memory entry from the store."""
+
+    if entry_id not in _memory:
+        raise HTTPException(status_code=404, detail="Memory entry not found")
+    del _memory[entry_id]
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Chat endpoint
 # ---------------------------------------------------------------------------
 
