@@ -13,6 +13,7 @@ from typing import Dict, List
 import asyncio
 import httpx
 from .config import AppConfig, load_config, save_config, mask_secret, Provider
+import os
 
 app = FastAPI(title="CoolChat")
 
@@ -262,8 +263,19 @@ class ChatResponse(BaseModel):
 
 
 async def _llm_reply(message: str, cfg: AppConfig) -> str:
+    # In test environments, avoid external calls unless explicitly allowed.
+    def _external_enabled() -> bool:
+        if os.getenv("COOLCHAT_ALLOW_EXTERNAL") == "1":
+            return True
+        # If pytest is running, default to disabled
+        return os.getenv("PYTEST_CURRENT_TEST") is None
+
     # Provider: echo (default)
     if cfg.provider == Provider.ECHO:
+        return f"Echo: {message}"
+
+    # If external calls are disabled, fallback to echo behavior
+    if not _external_enabled():
         return f"Echo: {message}"
 
     # Provider: openai (or compatible)
@@ -295,6 +307,80 @@ async def _llm_reply(message: str, cfg: AppConfig) -> str:
                 raise HTTPException(status_code=502, detail={"provider_error": detail})
             data = resp.json()
             # Standard OpenAI response shape
+            try:
+                return data["choices"][0]["message"]["content"].strip()
+            except Exception:
+                raise HTTPException(status_code=502, detail={"provider_error": "Unexpected response schema"})
+
+    # Provider: openrouter (OpenAI-compatible)
+    if cfg.provider == Provider.OPENROUTER:
+        if not cfg.api_key:
+            raise HTTPException(status_code=400, detail="Missing API key for provider 'openrouter'")
+
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {cfg.api_key}",
+            "Content-Type": "application/json",
+        }
+        # Optional: pass through referer/title if set as env (not required)
+        referer = os.getenv("COOLCHAT_HTTP_REFERER")
+        title = os.getenv("COOLCHAT_X_TITLE")
+        if referer:
+            headers["HTTP-Referer"] = referer
+        if title:
+            headers["X-Title"] = title
+
+        body = {
+            "model": cfg.model,
+            "messages": [
+                {"role": "user", "content": message},
+            ],
+            "temperature": cfg.temperature,
+        }
+        timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(url, headers=headers, json=body)
+            if resp.status_code >= 400:
+                try:
+                    detail = resp.json()
+                except Exception:
+                    detail = resp.text
+                raise HTTPException(status_code=502, detail={"provider_error": detail})
+            data = resp.json()
+            try:
+                return data["choices"][0]["message"]["content"].strip()
+            except Exception:
+                raise HTTPException(status_code=502, detail={"provider_error": "Unexpected response schema"})
+
+    # Provider: gemini
+    if cfg.provider == Provider.GEMINI:
+        if not cfg.api_key:
+            raise HTTPException(status_code=400, detail="Missing API key for provider 'gemini'")
+
+        # Use OpenAI-compatible endpoint with Authorization header
+        base = (cfg.api_base or "https://generativelanguage.googleapis.com/v1beta/openai").rstrip("/")
+        path = "/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {cfg.api_key}",
+        }
+        body = {
+            "model": cfg.model or "gemini-1.5-flash",
+            "messages": [
+                {"role": "user", "content": message},
+            ],
+            "temperature": cfg.temperature,
+        }
+        timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+        async with httpx.AsyncClient(base_url=base, timeout=timeout) as client:
+            resp = await client.post(path, headers=headers, json=body)
+            if resp.status_code >= 400:
+                try:
+                    detail = resp.json()
+                except Exception:
+                    detail = resp.text
+                raise HTTPException(status_code=502, detail={"provider_error": detail})
+            data = resp.json()
             try:
                 return data["choices"][0]["message"]["content"].strip()
             except Exception:
@@ -366,7 +452,28 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
     if payload.temperature is not None:
         cfg.temperature = payload.temperature
 
-    save_config(cfg)
+    # Apply sensible defaults if fields left blank for certain providers
+    if cfg.provider == Provider.OPENAI:
+        if not cfg.api_base:
+            cfg.api_base = "https://api.openai.com/v1"
+        if not cfg.model:
+            cfg.model = "gpt-4o-mini"
+    elif cfg.provider == Provider.OPENROUTER:
+        if not cfg.api_base:
+            cfg.api_base = "https://openrouter.ai/api/v1"
+        if not cfg.model:
+            cfg.model = "openrouter/auto"
+    elif cfg.provider == Provider.GEMINI:
+        # Gemini OpenAI-compatible base and default model
+        if not cfg.api_base:
+            cfg.api_base = "https://generativelanguage.googleapis.com/v1beta/openai"
+        if not cfg.model:
+            cfg.model = "gemini-1.5-flash"
+
+    try:
+        save_config(cfg)
+    except Exception as e:  # propagate as HTTP error to surface 500s
+        raise HTTPException(status_code=500, detail=f"Failed to save config: {e}")
     return ConfigResponse(
         provider=cfg.provider,
         api_key_masked=mask_secret(cfg.api_key),
@@ -374,4 +481,94 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
         model=cfg.model,
         temperature=cfg.temperature,
     )
+
+
+# ---------------------------------------------------------------------------
+# Models endpoint (provider-aware)
+# ---------------------------------------------------------------------------
+
+
+class ModelsResponse(BaseModel):
+    models: List[str]
+
+
+@app.get("/models", response_model=ModelsResponse)
+async def list_models(provider: str | None = None) -> ModelsResponse:
+    cfg = load_config()
+    p = provider or cfg.provider
+
+    async def _err(detail):
+        raise HTTPException(status_code=400, detail=detail)
+
+    timeout = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
+
+    if p == Provider.ECHO:
+        return ModelsResponse(models=[])
+
+    if p == Provider.OPENAI:
+        if not cfg.api_key:
+            await _err("Missing API key for openai")
+        base = (cfg.api_base or "https://api.openai.com/v1").rstrip("/")
+        url = base + "/models"
+        headers = {"Authorization": f"Bearer {cfg.api_key}"}
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.get(url, headers=headers)
+        if resp.status_code >= 400:
+            try:
+                detail = resp.json()
+            except Exception:
+                detail = resp.text
+            raise HTTPException(status_code=502, detail=detail)
+        data = resp.json()
+        ids = []
+        for item in data.get("data", []):
+            mid = item.get("id") or item.get("name")
+            if mid:
+                ids.append(mid)
+        return ModelsResponse(models=ids)
+
+    if p == Provider.OPENROUTER:
+        url = "https://openrouter.ai/api/v1/models"
+        headers = {}
+        if cfg.api_key:
+            headers["Authorization"] = f"Bearer {cfg.api_key}"
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.get(url, headers=headers)
+        if resp.status_code >= 400:
+            try:
+                detail = resp.json()
+            except Exception:
+                detail = resp.text
+            raise HTTPException(status_code=502, detail=detail)
+        data = resp.json()
+        ids = []
+        for item in data.get("data", []):
+            mid = item.get("id") or item.get("name")
+            if mid:
+                ids.append(mid)
+        return ModelsResponse(models=ids)
+
+    if p == Provider.GEMINI:
+        if not cfg.api_key:
+            await _err("Missing API key for gemini")
+        base = (cfg.api_base or "https://generativelanguage.googleapis.com/v1beta/openai").rstrip("/")
+        url = base + "/models"
+        headers = {"Authorization": f"Bearer {cfg.api_key}"}
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.get(url, headers=headers)
+        if resp.status_code >= 400:
+            try:
+                detail = resp.json()
+            except Exception:
+                detail = resp.text
+            raise HTTPException(status_code=502, detail=detail)
+        data = resp.json()
+        ids = []
+        for item in data.get("data", []):
+            mid = item.get("id") or item.get("name")
+            if mid:
+                ids.append(mid)
+        return ModelsResponse(models=ids)
+
+    raise HTTPException(status_code=400, detail=f"Unsupported provider: {p}")
 

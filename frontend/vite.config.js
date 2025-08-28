@@ -6,12 +6,13 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/health': 'http://localhost:8000',
-      '/chat': 'http://localhost:8000',
-      '/config': 'http://localhost:8000',
-      '/memory': 'http://localhost:8000',
-      '/characters': 'http://localhost:8000',
-      '/lore': 'http://localhost:8000',
+      '/health': 'http://127.0.0.1:8000',
+      '/chat': 'http://127.0.0.1:8000',
+      '/config': 'http://127.0.0.1:8000',
+      '/models': 'http://127.0.0.1:8000',
+      '/memory': 'http://127.0.0.1:8000',
+      '/characters': 'http://127.0.0.1:8000',
+      '/lore': 'http://127.0.0.1:8000',
     },
   },
   test: {

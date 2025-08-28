@@ -28,6 +28,8 @@ def _default_config_path() -> Path:
 class Provider(str):
     ECHO = "echo"
     OPENAI = "openai"  # OpenAI or compatible endpoint
+    OPENROUTER = "openrouter"  # OpenRouter (OpenAI-compatible)
+    GEMINI = "gemini"  # Google Generative Language API
 
 
 class AppConfig(BaseModel):
@@ -69,4 +71,3 @@ def mask_secret(secret: Optional[str]) -> Optional[str]:
     if len(secret) <= 6:
         return "*" * len(secret)
     return secret[:3] + "*" * (len(secret) - 7) + secret[-4:]
-
