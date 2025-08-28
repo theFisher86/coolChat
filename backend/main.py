@@ -6,16 +6,13 @@ subset of SillyTavern's functionality so the front-end can store and retrieve
 character definitions.
 """
 
+from pathlib import Path
+
 from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List
-
-import os
-
-from .routers.chat import router as chat_router
-
 app = FastAPI(title="CoolChat")
 
 # Allow CORS for frontend development
@@ -27,8 +24,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(chat_router)
-
+api_router = APIRouter(prefix="/api")
 
 # ---------------------------------------------------------------------------
 # Models and in-memory storage
@@ -194,4 +190,24 @@ async def delete_lore(entry_id: int) -> None:
     del _lore[entry_id]
     return None
 
-app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
+# ---------------------------------------------------------------------------
+# Chat endpoint
+# ---------------------------------------------------------------------------
+
+
+class ChatMessage(BaseModel):
+    """Payload for a basic chat message."""
+
+    message: str
+
+
+@api_router.post("/chat")
+async def chat(payload: ChatMessage) -> Dict[str, str]:
+    """Return a trivial response echoing the user's message."""
+
+    return {"reply": f"You said: {payload.message}"}
+
+
+app.include_router(api_router)
+static_dir = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
