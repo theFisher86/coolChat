@@ -768,11 +768,18 @@ def _truncate_to_tokens(text: str, max_tokens: int) -> str:
     return text[:target_chars] + "\n..."
 
 
-  def _build_system_from_character(char: Optional[Character], user_persona: Optional[object] = None, max_tokens: int = 2048, recent_text: str = "") -> Optional[str]:
+def _build_system_from_character(
+    char: Optional[Character],
+    user_persona: Optional[object] = None,
+    max_tokens: int = 2048,
+    recent_text: str = "",
+) -> Optional[str]:
     segments: List[str] = []
     # Include user persona if present
-    if user_persona and getattr(user_persona, 'name', None):
-        up = f"User Persona: {user_persona.name}\n{getattr(user_persona, 'description', '')}".strip()
+    if user_persona and getattr(user_persona, "name", None):
+        up = (
+            f"User Persona: {user_persona.name}\n{getattr(user_persona, 'description', '')}"
+        ).strip()
         if up:
             segments.append(up)
     if char:
@@ -804,7 +811,9 @@ def _truncate_to_tokens(text: str, max_tokens: int) -> str:
                             found_secondary = [k for k in seconds if k in hay]
                             logic = (e.logic or "AND ANY").upper()
                             if logic == "AND ALL":
-                                include = len(found_primary) == len(primaries) and (not seconds or len(found_secondary) == len(seconds))
+                                include = len(found_primary) == len(primaries) and (
+                                    not seconds or len(found_secondary) == len(seconds)
+                                )
                             elif logic == "NOT ANY":
                                 include = len(found_primary) == 0 and len(found_secondary) == 0
                             elif logic == "NOT ALL":
@@ -819,28 +828,29 @@ def _truncate_to_tokens(text: str, max_tokens: int) -> str:
             if lore_texts:
                 title = "Triggered World Info" if triggered_any else "World Info"
                 segments.append(f"{title}:\n" + "\n".join(lore_texts))
-      # Include globally active lorebooks regardless of character linkage
-      try:
-          from .config import load_config as _lc
-          _cfg = _lc()
-          actives = getattr(_cfg, 'active_lorebook_ids', []) or []
-          if actives:
-              lore_texts = []
-              for lb_id in actives:
-                  lb = _lorebooks.get(lb_id)
-                  if not lb:
-                      continue
-                  for eid in lb.entry_ids:
-                      e = _lore.get(eid)
-                      if e:
-                          lore_texts.append(f"[{e.keyword}] {e.content}")
-              if lore_texts:
-                  segments.append("Active Lorebooks:\n" + "\n".join(lore_texts))
-      except Exception:
-          pass
+    # Include globally active lorebooks regardless of character linkage
+    try:
+        from .config import load_config as _lc
 
-      if not segments:
-          return None
+        _cfg = _lc()
+        actives = getattr(_cfg, "active_lorebook_ids", []) or []
+        if actives:
+            lore_texts = []
+            for lb_id in actives:
+                lb = _lorebooks.get(lb_id)
+                if not lb:
+                    continue
+                for eid in lb.entry_ids:
+                    e = _lore.get(eid)
+                    if e:
+                        lore_texts.append(f"[{e.keyword}] {e.content}")
+            if lore_texts:
+                segments.append("Active Lorebooks:\n" + "\n".join(lore_texts))
+    except Exception:
+        pass
+
+    if not segments:
+        return None
     return _truncate_to_tokens("\n\n".join(segments), max_tokens)
 
 
@@ -852,7 +862,7 @@ def _trim_history(session_id: str, cfg: AppConfig) -> None:
     if not hist:
         return
     # Leave last N messages within budget (approx)
-    budget = max(512, getattr(cfg, 'max_context_tokens', 2048))
+    budget = max(512, getattr(cfg, "max_context_tokens", 2048))
     total = sum(_estimate_tokens(m.get("content", "")) for m in hist)
     while hist and total > budget * 2:
         removed = hist.pop(0)
