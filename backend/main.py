@@ -832,6 +832,17 @@ async def _llm_reply(message: str, cfg: AppConfig, recent_text: str | None = Non
             return text
         t = text.replace("{{char}}", char_name or "Character")
         t = t.replace("{{user}}", user_name)
+        # Custom variables from prompts.json
+        try:
+            from .storage import load_json as _lj
+            pdata = _lj("prompts.json", {})
+            vars = pdata.get("variables", {}) if isinstance(pdata, dict) else {}
+            if isinstance(vars, dict):
+                for k, v in vars.items():
+                    if isinstance(k, str) and isinstance(v, str):
+                        t = t.replace("{{"+k+"}}", v)
+        except Exception:
+            pass
         return t
     if system_msg:
         system_msg = _replace(system_msg)
@@ -2048,11 +2059,19 @@ async def generate_from_chat(payload: GenerateFromChatRequest) -> GenerateFromCh
     hist = _chat_histories.get(sid, [])
     convo = "\n".join([f"{m['role']}: {m['content']}" for m in hist][-10:])
     # Ask LLM for a one-line scene prompt
-    scene_req = (
-        "Summarize the current scene for an image in a single concise line suitable as a text-to-image prompt. "
-        "Focus on salient visual elements and avoid names, extra quotes, or brackets."
-        "\n\nConversation:\n" + convo
-    )
+    # Scene summary prompt (user-editable system prompt)
+    try:
+        from .storage import load_json as _lj
+        _p = _lj("prompts.json", {})
+        sys_p = (_p.get("system", {}) or {}).get("image_summary") if isinstance(_p, dict) else None
+    except Exception:
+        sys_p = None
+    if not sys_p:
+        sys_p = (
+            "Summarize the current scene for an image in a single concise line suitable as a text-to-image prompt. "
+            "Focus on salient visual elements and avoid names, extra quotes, or brackets.\n\nConversation:\n{{conversation}}"
+        )
+    scene_req = sys_p.replace("{{conversation}}", convo)
     desc = await _llm_reply(scene_req, cfg)
     # Clean JSON-string replies
     try:
@@ -2087,13 +2106,33 @@ async def generate_from_chat(payload: GenerateFromChatRequest) -> GenerateFromCh
             if r.status_code >= 400:
                 raise HTTPException(status_code=502, detail="Pollinations image fetch failed")
             img = r.content
-        images_dir = _os.path.join(_os.path.dirname(__file__), "..", "public", "images")
-        _os.makedirs(images_dir, exist_ok=True)
+        images_root = _os.path.join(_os.path.dirname(__file__), "..", "public", "images")
+        _os.makedirs(images_root, exist_ok=True)
+        # Save under character folder
+        try:
+            cname = _characters.get(getattr(cfg, 'active_character_id', None)).name if getattr(cfg, 'active_character_id', None) in _characters else "default"
+        except Exception:
+            cname = "default"
+        try:
+            from pathlib import Path as _Path
+            cdir = _Path(images_root) / (_safe_name(cname))
+            cdir.mkdir(parents=True, exist_ok=True)
+            images_dir = str(cdir)
+        except Exception:
+            images_dir = images_root
         fname = f"scene_{int(_time.time()*1000)}.png"
         fpath = _os.path.join(images_dir, fname)
         with open(fpath, "wb") as fh:
             fh.write(img)
-        url = f"/public/images/{fname}"
+        sub = images_dir.replace(images_root, "").strip("/\\")
+        url = f"/public/images/{(sub + '/' if sub else '')}{fname}"
+        # Append to chat history for persistence
+        try:
+            hist = _chat_histories.setdefault(sid, [])
+            hist.append({"role": "assistant", "image_url": url, "content": final_prompt})
+            _save_histories()
+        except Exception:
+            pass
         return GenerateFromChatResponse(image_url=url, prompt=final_prompt)
     elif active == ImageProvider.DEZGO:
         import httpx as _httpx, os as _os, time as _time
@@ -2188,13 +2227,31 @@ async def generate_from_chat(payload: GenerateFromChatRequest) -> GenerateFromCh
             if r.status_code >= 400:
                 raise HTTPException(status_code=502, detail=f"Dezgo error: {r.text}")
             img = r.content
-        images_dir = _os.path.join(_os.path.dirname(__file__), "..", "public", "images")
-        _os.makedirs(images_dir, exist_ok=True)
+        images_root = _os.path.join(_os.path.dirname(__file__), "..", "public", "images")
+        _os.makedirs(images_root, exist_ok=True)
+        try:
+            cname = _characters.get(getattr(cfg, 'active_character_id', None)).name if getattr(cfg, 'active_character_id', None) in _characters else "default"
+        except Exception:
+            cname = "default"
+        try:
+            from pathlib import Path as _Path
+            cdir = _Path(images_root) / (_safe_name(cname))
+            cdir.mkdir(parents=True, exist_ok=True)
+            images_dir = str(cdir)
+        except Exception:
+            images_dir = images_root
         fname = f"scene_{int(_time.time()*1000)}.png"
         fpath = _os.path.join(images_dir, fname)
         with open(fpath, "wb") as fh:
             fh.write(img)
-        url = f"/public/images/{fname}"
+        sub = images_dir.replace(images_root, "").strip("/\\")
+        url = f"/public/images/{(sub + '/' if sub else '')}{fname}"
+        try:
+            hist = _chat_histories.setdefault(sid, [])
+            hist.append({"role": "assistant", "image_url": url, "content": final_prompt})
+            _save_histories()
+        except Exception:
+            pass
         return GenerateFromChatResponse(image_url=url, prompt=final_prompt)
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported image provider: {active}")
@@ -2336,21 +2393,25 @@ async def get_theme(name: str):
 
 @app.get("/prompts")
 async def get_prompts():
-    data = load_json("prompts.json", {"active": [], "all": []})
+    data = load_json("prompts.json", {"active": [], "all": [], "system": {"lore_suggest": "", "image_summary": ""}, "variables": {} })
     return data
 
 
 @app.post("/prompts")
 async def save_prompts(payload: Dict[str, object]):
-    # Expect shape { active: string[] | {text}[], all: string[] | {text}[] }
+    # Expect shape { active: list, all: list, system: { ... }, variables: { name: value } }
     try:
         if not isinstance(payload, dict):
             raise ValueError("invalid payload")
         active = payload.get("active") or []
         allp = payload.get("all") or []
+        system = payload.get("system") or {}
+        variables = payload.get("variables") or {}
         if not isinstance(active, list) or not isinstance(allp, list):
             raise ValueError("invalid prompts arrays")
-        data = {"active": active, "all": allp}
+        if not isinstance(system, dict) or not isinstance(variables, dict):
+            raise ValueError("invalid system/variables")
+        data = {"active": active, "all": allp, "system": system, "variables": variables}
         save_json("prompts.json", data)
         return {"status": "ok"}
     except Exception as e:

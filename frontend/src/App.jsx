@@ -574,20 +574,21 @@ function App() {
           />
         )}
         {suggestOpen && (
-          <SuggestLoreModal suggestions={suggests} onClose={() => setSuggestOpen(false)} onApply={async (edited) => {
+          <SuggestLoreModal suggestions={suggests} onClose={() => setSuggestOpen(false)} onApply={async (edited, targetLbId) => {
             try {
               const cfg = await getConfig();
               const activeIds = cfg.active_lorebook_ids || [];
-              if (!activeIds.length) { alert('No active lorebooks set'); return; }
+              const lbId = targetLbId || activeIds[0];
+              if (!lbId) { alert('No active lorebooks set'); return; }
               const newIds = [];
               for (const sug of edited.filter(x=>x.include)) {
                 const r = await fetch('/lore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword: sug.keyword, content: sug.content })});
                 if (r.ok) { const e = await r.json(); newIds.push(e.id); }
               }
               if (newIds.length) {
-                const lbcur = await (await fetch(`/lorebooks/${activeIds[0]}`)).json();
+                const lbcur = await (await fetch(`/lorebooks/${lbId}`)).json();
                 const ids = [...(lbcur.entry_ids||[]), ...newIds];
-                await updateLorebook(activeIds[0], { entry_ids: ids });
+                await updateLorebook(lbId, { entry_ids: ids });
               }
               setSuggestOpen(false);
             } catch (e) { console.error(e); alert(e.message);} }} />
@@ -617,6 +618,8 @@ function ImagesTab() {
     if (s.includes('sdxl')) return 'sdxl';
     return 'sd1';
   };
+
+  const fam = modelFamily(cfg.dezgo?.model);
 
   return (
     <div className="config-form">
@@ -659,6 +662,10 @@ function ImagesTab() {
               {models.map(m => (<option key={m} value={m}>{m}</option>))}
             </select>
           </label>
+          <div className="muted">Family: {fam.toUpperCase()}</div>
+          <div className="muted">
+            {fam==='sd1' ? 'Transparent background disabled; Upscale available.' : (fam==='sdxl_lightning' ? 'Steps disabled (fixed Lightning).' : 'Transparent background available; consider steps ~30.')}
+          </div>
           <label>
             <span>LoRA 1 Strength</span>
             <input type="range" min="0" max="1" step="0.05" disabled={!cfg.dezgo.lora_flux_1 && !cfg.dezgo.lora_sd1_1} value={cfg.dezgo.lora1_strength ?? 0.7} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora1_strength: parseFloat(e.target.value) } }))} />
@@ -716,13 +723,42 @@ function PromptsTab() {
   const [all, setAll] = useState([]);
   const [active, setActive] = useState([]);
   const [newText, setNewText] = useState('');
-  useEffect(() => { (async () => { try { const d = await getPrompts(); setAll(d.all || []); setActive(d.active || []);} catch (e) { console.error(e);} })(); }, []);
-  const save = async (na, aa) => { try { await savePrompts({ all: na, active: aa }); setAll(na); setActive(aa);} catch (e) { console.error(e); alert(e.message);} };
+  const [system, setSystem] = useState({ lore_suggest: '', image_summary: '' });
+  const [vars, setVars] = useState({});
+  const [newVarName, setNewVarName] = useState('');
+  const [newVarValue, setNewVarValue] = useState('');
+  useEffect(() => { (async () => { try { const d = await getPrompts(); setAll(d.all || []); setActive(d.active || []); setSystem(d.system || { lore_suggest: '', image_summary: '' }); setVars(d.variables || {});} catch (e) { console.error(e);} })(); }, []);
+  const save = async (na = all, aa = active, sys = system, vs = vars) => { try { await savePrompts({ all: na, active: aa, system: sys, variables: vs }); setAll(na); setActive(aa); setSystem(sys); setVars(vs);} catch (e) { console.error(e); alert(e.message);} };
   const toggleActive = (txt) => { const aa = active.includes(txt) ? active.filter(x=>x!==txt) : [...active, txt]; save(all, aa); };
   const add = () => { const t = newText.trim(); if (!t) return; const na = [...all, t]; setNewText(''); save(na, active); };
   const remove = (txt) => { const na = all.filter(x=>x!==txt); const aa = active.filter(x=>x!==txt); save(na, aa); };
   return (
     <div className="config-form">
+      <h3>System Prompts</h3>
+      <label>
+        <span>Lorebook suggestion prompt</span>
+        <textarea rows={4} value={system.lore_suggest} onChange={(e)=> setSystem(s => ({ ...s, lore_suggest: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="Use {{conversation}} and {{existing_keywords}}" />
+      </label>
+      <label>
+        <span>Image generation prompt</span>
+        <textarea rows={4} value={system.image_summary} onChange={(e)=> setSystem(s => ({ ...s, image_summary: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="Use {{conversation}}" />
+      </label>
+      <h3>Variables</h3>
+      <div className="row" style={{ gap: 8 }}>
+        <input placeholder="name (e.g., site)" value={newVarName} onChange={(e)=> setNewVarName(e.target.value)} />
+        <input placeholder="value" value={newVarValue} onChange={(e)=> setNewVarValue(e.target.value)} />
+        <button className="secondary" onClick={()=>{ const n = newVarName.trim(); if (!n) return; const vs = { ...vars, [n]: newVarValue }; setNewVarName(''); setNewVarValue(''); save(all, active, system, vs); }}>Add</button>
+      </div>
+      <div className="row" style={{ display: 'block', marginTop: 8 }}>
+        {Object.entries(vars).map(([k,v]) => (
+          <div key={k} className="row" style={{ gap: 8, alignItems: 'center', marginBottom: 6 }}>
+            <code style={{ width: 160 }}>{`{{${k}}}`}</code>
+            <input style={{ flex: 1 }} value={v} onChange={(e)=> { const vs = { ...vars, [k]: e.target.value }; setVars(vs); }} onBlur={()=> save(all, active, system, vars)} />
+            <button className="secondary" onClick={()=>{ const vs = { ...vars }; delete vs[k]; save(all, active, system, vs); }}>Delete</button>
+          </div>
+        ))}
+      </div>
+      <h3>General Prompts</h3>
       <label>
         <span>New Prompt</span>
         <div className="row" style={{ gap: 8 }}>
@@ -867,9 +903,20 @@ function AppearanceTab() {
 
 function SuggestLoreModal({ suggestions, onClose, onApply }) {
   const [rows, setRows] = useState(() => (suggestions || []).map(s => ({ include: true, keyword: s.keyword || '', content: s.content || '' })));
+  const [lbOptions, setLbOptions] = useState([]);
+  const [selLb, setSelLb] = useState('');
+  useEffect(() => { (async () => { try { const cfg = await getConfig(); const actives = cfg.active_lorebook_ids || []; if (actives.length) { const lbs = await listLorebooks(); const opts = lbs.filter(x => actives.includes(x.id)).map(x => ({ id: x.id, name: x.name })); setLbOptions(opts); setSelLb(String(opts[0]?.id || '')); } } catch (e) { console.error(e);} })(); }, []);
   return (
     <section className="panel overlay">
       <h2>Lore Suggestions</h2>
+      {lbOptions.length > 1 && (
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <span className="muted">Target Lorebook</span>
+          <select value={selLb} onChange={(e)=> setSelLb(e.target.value)}>
+            {lbOptions.map(o => (<option key={o.id} value={o.id}>{o.name}</option>))}
+          </select>
+        </div>
+      )}
       <div className="char-list" style={{ maxHeight: 360, overflow: 'auto' }}>
         {rows.map((r, i) => (
           <div key={i} className="char-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
@@ -883,7 +930,7 @@ function SuggestLoreModal({ suggestions, onClose, onApply }) {
       </div>
       <div className="row" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
         <button className="secondary" onClick={onClose}>Cancel</button>
-        <button onClick={()=> onApply(rows)}>Add Selected</button>
+        <button onClick={()=> onApply(rows, selLb ? parseInt(selLb,10) : null)}>Add Selected</button>
       </div>
     </section>
   );
