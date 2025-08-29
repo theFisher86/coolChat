@@ -939,11 +939,11 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
     if payload.providers:
         for key, upd in payload.providers.items():
             base = cfg.providers.get(key, ProviderConfig())
-            if upd.api_key is not None:
+            if upd.api_key is not None and upd.api_key != "":
                 base.api_key = upd.api_key
-            if upd.api_base is not None:
+            if upd.api_base is not None and upd.api_base != "":
                 base.api_base = upd.api_base
-            if upd.model is not None:
+            if upd.model is not None and upd.model != "":
                 base.model = upd.model
             if upd.temperature is not None:
                 base.temperature = upd.temperature
@@ -1018,6 +1018,21 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
         save_config(cfg)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save config: {e}")
+
+    # Update last_connection snapshot
+    try:
+        ap = cfg.active_provider
+        pc = cfg.providers.get(ap, ProviderConfig())
+        cfg.last_connection = {
+            "provider": ap,
+            "api_base": pc.api_base,
+            "model": pc.model,
+            "temperature": pc.temperature,
+            "api_key": pc.api_key,
+        }
+        save_config(cfg)
+    except Exception:
+        pass
 
     # Return masked config
     masked: Dict[str, ProviderConfigMasked] = {}

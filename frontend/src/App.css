@@ -105,6 +105,8 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, sans-s
 .editor-grid textarea, .editor-grid input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #374151; background: #0b1220; color: var(--text); }
 .think { padding: 4px 8px; border-radius: 6px; background: #374151; color: #e5e7eb; border: none; cursor: pointer; }
 .paint { padding: 4px 8px; border-radius: 6px; background: #2563eb; color: #fff; border: none; cursor: pointer; }
+.color-swatch { width: 28px; height: 28px; border-radius: 6px; border: 1px solid #374151; background: #222; }
+.color-row input[type="color"] { width: 28px; height: 28px; padding: 0; border: none; background: transparent; }
 .characters, .panel { background: #0a0f1e; }
 
 @keyframes breathing {

@@ -390,10 +390,10 @@ function App() {
             <div className="char-list">
               {loreEntries.map(le => (
                 <div key={le.id} className="char-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                  <div className="row" style={{ gap: 8, width: '100%', alignItems: 'center' }}>
-                    <button className="secondary" onClick={() => setExpandedEntries(s => ({ ...s, [le.id]: !s[le.id] }))}>{expandedEntries[le.id] ? '▾' : '▸'}</button>
-                    <input style={{ flex: 1 }} value={le.keyword} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, keyword: e.target.value }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { keyword: e.target.value }); } catch (err) { alert(err.message); } }} />
-                  </div>
+                <div className="row" style={{ gap: 8, width: '100%', alignItems: 'center' }}>
+                  <button className="secondary" onClick={() => setExpandedEntries(s => ({ ...s, [le.id]: !s[le.id] }))}>{expandedEntries[le.id] ? '▾' : '▸'}</button>
+                  <input style={{ flex: 1 }} value={le.keyword || '(untitled)'} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, keyword: e.target.value }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { keyword: e.target.value }); } catch (err) { console.error(err); alert(err.message); } }} />
+                </div>
                   {expandedEntries[le.id] && (
                     <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 8, marginTop: 8 }}>
                       <div className="muted">Primary Keywords</div>
@@ -498,14 +498,14 @@ function App() {
 export default App;
 
 function ImagesTab() {
-  const [cfg, setCfg] = useState({ active: 'pollinations', pollinations: { api_key: '', model: '' }, dezgo: { api_key: '', model: '', lora_url: '' } });
+  const [cfg, setCfg] = useState({ active: 'pollinations', pollinations: { api_key: '', model: '' }, dezgo: { api_key: '', model: '', lora_flux_1: '', lora_flux_2: '', lora_sd1_1: '', lora_sd1_2: '', transparent: false, width: '', height: '', steps: '', upscale: false } });
   const [models, setModels] = useState([]);
 
-  useEffect(() => { (async () => { try { const c = await getConfig(); setCfg(c.images); const m = await getImageModels(c.images.active); setModels(m.models || []);} catch {} })(); }, []);
+  useEffect(() => { (async () => { try { const c = await getConfig(); setCfg(c.images); const m = await getImageModels(c.images.active); setModels(m.models || []);} catch (e) { console.error(e);} })(); }, []);
 
-  const loadModels = async (prov) => { try { const m = await getImageModels(prov); setModels(m.models || []);} catch { setModels([]);} };
+  const loadModels = async (prov) => { try { const m = await getImageModels(prov); setModels(m.models || []);} catch (e) { console.error(e); setModels([]);} };
 
-  const saveCfg = async (next) => { try { await updateConfig({ images: next }); } catch (e) { alert(e.message);} };
+  const saveCfg = async (next) => { try { await updateConfig({ images: next }); } catch (e) { console.error(e); alert(e.message);} };
 
   return (
     <div className="config-form">
@@ -531,21 +531,56 @@ function ImagesTab() {
         <>
           <label>
             <span>API Key</span>
-            <input value={cfg.dezgo.api_key || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, api_key: e.target.value } }))} onBlur={async () => { await saveCfg(cfg); }} />
+            <input value={cfg.dezgo.api_key || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, api_key: e.target.value } }))} />
           </label>
           <label>
             <span>Model</span>
-            <select value={cfg.dezgo.model || ''} onChange={async (e) => { const v = e.target.value; const next = { ...cfg, dezgo: { ...cfg.dezgo, model: v } }; setCfg(next); await saveCfg(next); }}>
+            <select value={cfg.dezgo.model || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, model: e.target.value } }))}>
               <option value="">(default)</option>
               {models.map(m => (<option key={m} value={m}>{m}</option>))}
             </select>
           </label>
           <label>
-            <span>LORA URL</span>
-            <input value={cfg.dezgo.lora_url || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora_url: e.target.value } }))} onBlur={async () => { await saveCfg(cfg); }} />
+            <span>Flux LORA #1 (SHA256)</span>
+            <input value={cfg.dezgo.lora_flux_1 || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora_flux_1: e.target.value } }))} />
+          </label>
+          <label>
+            <span>Flux LORA #2 (SHA256)</span>
+            <input value={cfg.dezgo.lora_flux_2 || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora_flux_2: e.target.value } }))} />
+          </label>
+          <label>
+            <span>SD1 LORA #1 (SHA256)</span>
+            <input value={cfg.dezgo.lora_sd1_1 || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora_sd1_1: e.target.value } }))} />
+          </label>
+          <label>
+            <span>SD1 LORA #2 (SHA256)</span>
+            <input value={cfg.dezgo.lora_sd1_2 || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora_sd1_2: e.target.value } }))} />
+          </label>
+          <label>
+            <span>Transparent</span>
+            <input type="checkbox" checked={!!cfg.dezgo.transparent} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, transparent: e.target.checked } }))} />
+          </label>
+          <label>
+            <span>Width</span>
+            <input type="number" value={cfg.dezgo.width || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, width: e.target.value } }))} />
+          </label>
+          <label>
+            <span>Height</span>
+            <input type="number" value={cfg.dezgo.height || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, height: e.target.value } }))} />
+          </label>
+          <label>
+            <span>Steps</span>
+            <input type="number" value={cfg.dezgo.steps || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, steps: e.target.value } }))} />
+          </label>
+          <label>
+            <span>Upscale</span>
+            <input type="checkbox" checked={!!cfg.dezgo.upscale} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, upscale: e.target.checked } }))} />
           </label>
         </>
       )}
+      <div className="row" style={{ gridColumn: '1 / -1' }}>
+        <button onClick={async () => { await saveCfg(cfg); }}>Save Image Settings</button>
+      </div>
     </div>
   );
 }
@@ -556,7 +591,7 @@ function AdvancedTab() {
   return (
     <div>
       <p className="muted">Full settings.json (copy/share):</p>
-      <textarea rows={16} style={{ width: '100%' }} readOnly value={raw} />
+      <textarea rows={16} style={{ width: '100%' }} value={raw} onChange={(e)=>setRaw(e.target.value)} />
       <div className="row" style={{ marginTop: 8 }}>
         <button className="secondary" onClick={() => {
           const blob = new Blob([raw], { type: 'application/json' });
@@ -570,6 +605,7 @@ function AdvancedTab() {
             try { const text = await f.text(); const data = JSON.parse(text); const r = await fetch('/config/raw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); if (!r.ok) throw new Error('Import failed'); alert('Imported. Reloading...'); location.reload(); } catch (err) { console.error(err); alert(err.message); } finally { e.target.value=''; }
           }} />
         </label>
+        <button onClick={async ()=>{ try { const data = JSON.parse(raw); const r = await fetch('/config/raw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); if (!r.ok) throw new Error('Save failed'); alert('Saved. Reloading...'); location.reload(); } catch (e) { console.error(e); alert(e.message);} }}>Save settings.json</button>
       </div>
     </div>
   );
@@ -605,8 +641,8 @@ function AppearanceTab() {
   const Color = ({ label, keyName, withThink }) => (
     <label>
       <span>{label}</span>
-      <div className="row" style={{ gap: 8 }}>
-        <input type="color" value={theme[keyName]} onChange={async (e) => { await save({ ...theme, [keyName]: e.target.value }); }} />
+      <div className="row color-row" style={{ gap: 8, alignItems: 'center' }}>
+        <input className="color-swatch" type="color" value={theme[keyName]} onChange={async (e) => { await save({ ...theme, [keyName]: e.target.value }); }} />
         <input value={theme[keyName]} onChange={async (e) => { await save({ ...theme, [keyName]: e.target.value }); }} />
         {withThink && (<button className="think" onClick={suggest}>💭</button>)}
       </div>

@@ -103,6 +103,7 @@ class AppConfig(BaseModel):
     max_context_tokens: int = 2048
     images: ImagesConfig = ImagesConfig()
     theme: AppearanceConfig = AppearanceConfig()
+    last_connection: Dict[str, Any] | None = None
 
 
 def ensure_parent(path: Path) -> None:
