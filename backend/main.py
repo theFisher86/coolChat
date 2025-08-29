@@ -27,12 +27,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve static files (e.g., imported character images)
+# Serve static files (e.g., imported character images) from repo ./public
 try:
     import os as _os
-    _static_dir = _os.path.join(_os.path.dirname(__file__), "static")
-    _os.makedirs(_static_dir, exist_ok=True)
-    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+    _public_dir = _os.path.join(_os.path.dirname(__file__), "..", "public")
+    _public_dir = _os.path.abspath(_public_dir)
+    _os.makedirs(_public_dir, exist_ok=True)
+    app.mount("/public", StaticFiles(directory=_public_dir), name="public")
 except Exception:
     pass
 
@@ -414,8 +415,12 @@ async def _llm_reply(message: str, cfg: AppConfig) -> str:
         return f"Echo: {message}"
 
     # Provider: openai (or compatible)
-    # Build optional system message from active character
-    system_msg = _build_system_from_character(_characters.get(cfg.active_character_id) if hasattr(cfg, 'active_character_id') else None)
+    # Build optional system message from active character and user persona, respecting token limit
+    system_msg = _build_system_from_character(
+        _characters.get(cfg.active_character_id) if hasattr(cfg, 'active_character_id') else None,
+        getattr(cfg, 'user_persona', None),
+        getattr(cfg, 'max_context_tokens', 2048),
+    )
 
     # Replace tokens in messages
     def _replace(text: str) -> str:
@@ -579,34 +584,49 @@ async def chat_endpoint(payload: ChatRequest) -> ChatResponse:
     return ChatResponse(reply=reply)
 
 
-def _build_system_from_character(char: Optional[Character]) -> Optional[str]:
-    if not char:
-        return None
+def _estimate_tokens(text: str) -> int:
+    return max(1, len(text) // 4)
+
+
+def _truncate_to_tokens(text: str, max_tokens: int) -> str:
+    if _estimate_tokens(text) <= max_tokens:
+        return text
+    target_chars = max_tokens * 4
+    return text[:target_chars] + "\n..."
+
+
+def _build_system_from_character(char: Optional[Character], user_persona: Optional[object] = None, max_tokens: int = 2048) -> Optional[str]:
     segments: List[str] = []
-    if char.system_prompt:
-        segments.append(char.system_prompt)
-    if char.personality:
-        segments.append(f"Personality: {char.personality}")
-    if char.scenario:
-        segments.append(f"Scenario: {char.scenario}")
-    if char.description:
-        segments.append(f"Description: {char.description}")
-    # Append linked lorebook contents naively
-    if char.lorebook_ids:
-        lore_texts = []
-        for lb_id in char.lorebook_ids:
-            lb = _lorebooks.get(lb_id)
-            if not lb:
-                continue
-            for eid in lb.entry_ids:
-                e = _lore.get(eid)
-                if e:
-                    lore_texts.append(f"[{e.keyword}] {e.content}")
-        if lore_texts:
-            segments.append("World Info:\n" + "\n".join(lore_texts))
+    # Include user persona if present
+    if user_persona and getattr(user_persona, 'name', None):
+        up = f"User Persona: {user_persona.name}\n{getattr(user_persona, 'description', '')}".strip()
+        if up:
+            segments.append(up)
+    if char:
+        if char.system_prompt:
+            segments.append(char.system_prompt)
+        if char.personality:
+            segments.append(f"Personality: {char.personality}")
+        if char.scenario:
+            segments.append(f"Scenario: {char.scenario}")
+        if char.description:
+            segments.append(f"Description: {char.description}")
+        # Append linked lorebook contents
+        if char.lorebook_ids:
+            lore_texts = []
+            for lb_id in char.lorebook_ids:
+                lb = _lorebooks.get(lb_id)
+                if not lb:
+                    continue
+                for eid in lb.entry_ids:
+                    e = _lore.get(eid)
+                    if e:
+                        lore_texts.append(f"[{e.keyword}] {e.content}")
+            if lore_texts:
+                segments.append("World Info:\n" + "\n".join(lore_texts))
     if not segments:
         return None
-    return "\n\n".join(segments)
+    return _truncate_to_tokens("\n\n".join(segments), max_tokens)
 
 
 def _inject_persona(user_message: str, char: Optional[Character]) -> str:
@@ -632,6 +652,7 @@ class ConfigResponse(BaseModel):
     providers: Dict[str, ProviderConfigMasked]
     debug: Dict[str, bool]
     user_persona: Dict[str, str]
+    max_context_tokens: int
 
 
 class ProviderConfigUpdate(BaseModel):
@@ -647,6 +668,7 @@ class ConfigUpdate(BaseModel):
     active_character_id: int | None = None
     debug: Dict[str, bool] | None = None
     user_persona: Dict[str, str] | None = None
+    max_context_tokens: int | None = None
 
 
 @app.get("/config", response_model=ConfigResponse)
@@ -672,6 +694,7 @@ async def get_config() -> ConfigResponse:
             "motivations": getattr(cfg.user_persona, 'motivations', ''),
             "tracking": getattr(cfg.user_persona, 'tracking', ''),
         },
+        max_context_tokens=getattr(cfg, 'max_context_tokens', 2048),
     )
 
 
@@ -724,6 +747,11 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
         cfg.user_persona.personality = up.get("personality", cfg.user_persona.personality)
         cfg.user_persona.motivations = up.get("motivations", cfg.user_persona.motivations)
         cfg.user_persona.tracking = up.get("tracking", cfg.user_persona.tracking)
+    if payload.max_context_tokens is not None:
+        try:
+            cfg.max_context_tokens = int(payload.max_context_tokens)
+        except Exception:
+            pass
 
     try:
         save_config(cfg)
@@ -751,6 +779,7 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
             "motivations": getattr(cfg.user_persona, 'motivations', ''),
             "tracking": getattr(cfg.user_persona, 'tracking', ''),
         },
+        max_context_tokens=getattr(cfg, 'max_context_tokens', 2048),
     )
 
 
@@ -821,8 +850,20 @@ async def list_models(provider: str | None = None) -> ModelsResponse:
                 detail = resp.text
             raise HTTPException(status_code=502, detail=detail)
         data = resp.json()
+        items = data.get("data", [])
+        def is_free(it):
+            pricing = it.get("pricing") or {}
+            # Heuristic: free if prompt/completion cost is 0
+            for k in ("prompt", "completion"):
+                v = pricing.get(k)
+                if v in (None, "0", 0, "0.0", 0.0):
+                    continue
+                return False
+            return True
+        # sort: free first, then name
+        items.sort(key=lambda it: (0 if is_free(it) else 1, (it.get("id") or it.get("name") or "z")))
         ids = []
-        for item in data.get("data", []):
+        for item in items:
             mid = item.get("id") or item.get("name")
             if mid:
                 ids.append(mid)
@@ -877,16 +918,16 @@ async def import_character(
                 data = _parse_png_card(raw)
             except Exception as e:
                 raise HTTPException(status_code=400, detail=f"Invalid PNG card: {e}")
-            # Save the PNG to static folder and set avatar_url
+            # Save the PNG to public folder and set avatar_url
             try:
                 import os as _os
-                static_chars = _os.path.join(_os.path.dirname(__file__), "static", "characters")
+                static_chars = _os.path.join(_os.path.dirname(__file__), "..", "public", "characters")
                 _os.makedirs(static_chars, exist_ok=True)
                 fname = f"{_next_id}.png"
                 fpath = _os.path.join(static_chars, fname)
                 with open(fpath, "wb") as fh:
                     fh.write(raw)
-                data["avatar_url"] = f"/static/characters/{fname}"
+                data["avatar_url"] = f"/public/characters/{fname}"
             except Exception:
                 pass
         else:
@@ -1014,16 +1055,96 @@ async def suggest_field(payload: SuggestRequest) -> SuggestResponse:
 
     # Call LLM
     reply = await _llm_reply(prompt, cfg)
-    # Extract a JSON string; accept plain string or quoted JSON
-    value = reply
+    # Extract a JSON string; accept plain string or quoted JSON; strip code fences
+    value = reply.strip()
+    # Remove code fences
+    if value.startswith("```"):
+        value = value.strip('`')
+        # Sometimes starts with json\n
+        if value.lower().startswith("json\n"):
+            value = value[5:]
+    # Try parse JSON
     try:
         import json as _json
-        j = _json.loads(reply)
+        j = _json.loads(value)
         if isinstance(j, str):
             value = j
+        elif isinstance(j, dict) and 'text' in j and isinstance(j['text'], str):
+            value = j['text']
+    except Exception:
+        # If surrounded by quotes, strip them
+        if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+            value = value[1:-1]
+    return SuggestResponse(value=value)
+
+
+@app.post("/characters/upload_avatar")
+async def upload_avatar(file: UploadFile = File(...)) -> Dict[str, str]:
+    data = await file.read()
+    import os as _os, time as _time
+    ext = ".png"
+    if file.filename and "." in file.filename:
+        ext = "." + file.filename.rsplit(".", 1)[-1].lower()
+        if ext not in (".png", ".jpg", ".jpeg", ".webp"):
+            ext = ".png"
+    characters_dir = _os.path.join(_os.path.dirname(__file__), "..", "public", "characters")
+    _os.makedirs(characters_dir, exist_ok=True)
+    fname = f"gen_{int(_time.time()*1000)}{ext}"
+    fpath = _os.path.join(characters_dir, fname)
+    with open(fpath, "wb") as fh:
+        fh.write(data)
+    return {"avatar_url": f"/public/characters/{fname}"}
+
+
+class GenerateAvatarRequest(BaseModel):
+    character: Dict[str, object] | None = None
+
+
+@app.post("/characters/generate_avatar")
+async def generate_avatar(payload: GenerateAvatarRequest) -> Dict[str, str]:
+    cfg = load_config()
+    char = payload.character or {}
+    name = str(char.get("name") or "Character")
+    # Compose prompt to LLM for a portrait description
+    context_lines = []
+    for k in ("description", "personality", "scenario", "system_prompt", "creator_notes", "tags"):
+        v = char.get(k)
+        if v:
+            context_lines.append(f"- {k}: {v}")
+    context = "\n".join(context_lines)
+    llm_prompt = (
+        f"You are an AI visual prompt engineer. Create a concise PORTRAIT description for character '{name}'. "
+        f"Focus on face, upper body, clothing, mood, lighting, and style. Avoid names or extra chatter. "
+        f"Return a single JSON string with the prompt only.\n\nContext:\n{context}"
+    )
+    desc = await _llm_reply(llm_prompt, cfg)
+    # sanitize
+    try:
+        import json as _json
+        j = _json.loads(desc)
+        if isinstance(j, str):
+            desc = j
     except Exception:
         pass
-    return SuggestResponse(value=value)
+    # Fetch image from Pollinations
+    import httpx as _httpx, urllib.parse as _urlp, os as _os, time as _time
+    url = f"https://image.pollinations.ai/prompt/{_urlp.quote(desc)}"
+    # Debug output: print full Pollinations URL when prompt logging is enabled
+    if getattr(cfg, 'debug', None) and getattr(cfg.debug, 'log_prompts', False):
+        print("[CoolChat] Pollinations URL:", url)
+    timeout = _httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+    async with _httpx.AsyncClient(timeout=timeout) as client:
+        r = await client.get(url)
+        if r.status_code >= 400:
+            raise HTTPException(status_code=502, detail="Pollinations image fetch failed")
+        img = r.content
+    characters_dir = _os.path.join(_os.path.dirname(__file__), "..", "public", "characters")
+    _os.makedirs(characters_dir, exist_ok=True)
+    fname = f"gen_{int(_time.time()*1000)}.png"
+    fpath = _os.path.join(characters_dir, fname)
+    with open(fpath, "wb") as fh:
+        fh.write(img)
+    return {"avatar_url": f"/public/characters/{fname}", "prompt": desc}
 
 
 # ---------------------------------------------------------------------------
@@ -1039,16 +1160,33 @@ async def import_lorebook(file: UploadFile = File(...)) -> Lorebook:
         data = _json.loads(raw.decode("utf-8"))
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid lorebook file: {e}")
-    # Accept either { name, description?, entries: [{keyword, content}] } or just [ {keyword, content} ]
+    # Support SillyTavern World Info format and simple formats
+    def _st_to_entries(items):
+        out = []
+        for i in items or []:
+            # Accept either dict entries or simple strings
+            if isinstance(i, str):
+                out.append(LoreEntryCreate(keyword=i, content=""))
+                continue
+            if not isinstance(i, dict):
+                continue
+            # SillyTavern: keys or triggers specify array of keywords
+            keys = i.get("keys") or i.get("triggers") or []
+            kw = keys[0] if isinstance(keys, list) and keys else (i.get("keyword") or "")
+            content = i.get("content") or i.get("text") or i.get("entry") or ""
+            out.append(LoreEntryCreate(keyword=kw, content=content))
+        return out
+
     if isinstance(data, list):
-        entries = [LoreEntryCreate(keyword=i.get("keyword", ""), content=i.get("content", "")) for i in data]
+        entries = _st_to_entries(data)
         lb = await create_lorebook(LorebookCreate(name="Imported Lorebook", description="", entries=entries))
         return lb
     elif isinstance(data, dict):
-        name = data.get("name") or "Imported Lorebook"
+        # SillyTavern commonly: { name, description?, entries: [...] }
+        name = data.get("name") or data.get("book_name") or "Imported Lorebook"
         description = data.get("description") or ""
-        entries_data = data.get("entries") or []
-        entries = [LoreEntryCreate(keyword=i.get("keyword", ""), content=i.get("content", "")) for i in entries_data]
+        entries_data = data.get("entries") or data.get("world_info") or []
+        entries = _st_to_entries(entries_data)
         lb = await create_lorebook(LorebookCreate(name=name, description=description, entries=entries))
         return lb
     else:

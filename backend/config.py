@@ -10,12 +10,14 @@ import os
 DEFAULT_MODEL = "gpt-4o-mini"
 
 
+def _repo_root() -> Path:
+    # backend/ -> repo root
+    return Path(__file__).resolve().parents[1]
+
+
 def _default_config_dir() -> Path:
-    # Prefer XDG if available, else ~/.coolchat
-    xdg = os.getenv("XDG_CONFIG_HOME")
-    if xdg:
-        return Path(xdg) / "coolchat"
-    return Path.home() / ".coolchat"
+    # Store under ./public by default to keep user data local to repo
+    return _repo_root() / "public"
 
 
 def _default_config_path() -> Path:
@@ -58,6 +60,7 @@ class AppConfig(BaseModel):
     active_character_id: Optional[int] = None
     user_persona: UserPersona = UserPersona()
     debug: DebugConfig = DebugConfig()
+    max_context_tokens: int = 2048
 
 
 def ensure_parent(path: Path) -> None:

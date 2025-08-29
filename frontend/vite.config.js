@@ -13,6 +13,7 @@ export default defineConfig({
       '/memory': 'http://127.0.0.1:8000',
       '/characters': 'http://127.0.0.1:8000',
       '/lore': 'http://127.0.0.1:8000',
+      '/public': 'http://127.0.0.1:8000',
       '/lorebooks': 'http://127.0.0.1:8000',
     },
   },

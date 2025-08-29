@@ -50,6 +50,7 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, sans-s
 .header { padding: 12px 16px; background: var(--panel); border-bottom: 1px solid #1f2937; }
 .header h1 { margin: 0; font-size: 18px; }
 .header { display: flex; align-items: center; gap: 8px; }
+.header { position: sticky; top: 0; z-index: 1000; }
 .spacer { flex: 1; }
 .secondary { background: #374151; color: #e5e7eb; border: none; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
 .secondary:hover { filter: brightness(1.1); }
@@ -84,7 +85,9 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, sans-s
 .char-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
 .char-card { position: relative; background: #0b1220; border: 1px solid #1f2937; border-radius: 10px; overflow: hidden; cursor: pointer; }
 .char-card img { width: 100%; height: 200px; object-fit: cover; display: block; }
+.char-card .row { display: flex; gap: 8px; }
 .char-card .name { position: absolute; left: 8px; bottom: 8px; background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 6px; font-weight: 600; letter-spacing: 0.3px; }
+.char-card .name { left: 50%; bottom: 50%; transform: translate(-50%, 50%); }
 .char-card .cog { position: absolute; right: 8px; top: 8px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; }
 .char-card .cog span { font-size: 14px; }
 .char-item { display: flex; align-items: center; justify-content: space-between; background: #0b1220; border: 1px solid #1f2937; border-radius: 8px; padding: 8px 10px; }
@@ -98,3 +101,12 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, sans-s
 .editor-grid .label { color: var(--muted); font-size: 12px; align-self: center; }
 .editor-grid textarea, .editor-grid input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #374151; background: #0b1220; color: var(--text); }
 .think { padding: 4px 8px; border-radius: 6px; background: #374151; color: #e5e7eb; border: none; cursor: pointer; }
+.paint { padding: 4px 8px; border-radius: 6px; background: #2563eb; color: #fff; border: none; cursor: pointer; }
+.characters, .panel { background: #0a0f1e; }
+
+@keyframes breathing {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+.thinking { animation: breathing 1.2s ease-in-out infinite; }
