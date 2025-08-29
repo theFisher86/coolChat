@@ -54,6 +54,28 @@ class DebugConfig(BaseModel):
     log_responses: bool = False
 
 
+class ImageProvider(str):
+    POLLINATIONS = "pollinations"
+    DEZGO = "dezgo"
+
+
+class PollinationsConfig(BaseModel):
+    api_key: Optional[str] = None  # not required by pollinations
+    model: Optional[str] = None
+
+
+class DezgoConfig(BaseModel):
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+    lora_url: Optional[str] = None
+
+
+class ImagesConfig(BaseModel):
+    active: str = ImageProvider.POLLINATIONS
+    pollinations: PollinationsConfig = PollinationsConfig()
+    dezgo: DezgoConfig = DezgoConfig()
+
+
 class AppConfig(BaseModel):
     active_provider: str = Provider.ECHO
     providers: Dict[str, ProviderConfig]
@@ -61,6 +83,7 @@ class AppConfig(BaseModel):
     user_persona: UserPersona = UserPersona()
     debug: DebugConfig = DebugConfig()
     max_context_tokens: int = 2048
+    images: ImagesConfig = ImagesConfig()
 
 
 def ensure_parent(path: Path) -> None:

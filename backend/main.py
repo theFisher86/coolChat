@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from typing import Dict, List, Optional
 import asyncio
 import httpx
-from .config import AppConfig, ProviderConfig, load_config, save_config, mask_secret, Provider
+from .config import AppConfig, ProviderConfig, load_config, save_config, mask_secret, Provider, ImagesConfig, ImageProvider
 import os
 
 app = FastAPI(title="CoolChat")
@@ -66,6 +66,8 @@ class Character(BaseModel):
     post_history_instructions: str | None = None
     extensions: Dict[str, object] | None = None
     lorebook_ids: List[int] = []
+    image_prompt_prefix: str | None = None
+    image_prompt_suffix: str | None = None
 
 
 class CharacterCreate(BaseModel):
@@ -85,6 +87,8 @@ class CharacterCreate(BaseModel):
     post_history_instructions: Optional[str] = None
     extensions: Optional[Dict[str, object]] = None
     lorebook_ids: Optional[List[int]] = None
+    image_prompt_prefix: Optional[str] = None
+    image_prompt_suffix: Optional[str] = None
 
 
 class CharacterUpdate(BaseModel):
@@ -102,6 +106,8 @@ class CharacterUpdate(BaseModel):
     post_history_instructions: Optional[str] = None
     extensions: Optional[Dict[str, object]] = None
     lorebook_ids: Optional[List[int]] = None
+    image_prompt_prefix: Optional[str] = None
+    image_prompt_suffix: Optional[str] = None
 
 
 # simple in-memory store
@@ -258,6 +264,26 @@ async def delete_lore(entry_id: int) -> None:
     return None
 
 
+class LoreEntryUpdate(BaseModel):
+    keyword: str | None = None
+    content: str | None = None
+
+
+@app.put("/lore/{entry_id}", response_model=LoreEntry)
+async def update_lore(entry_id: int, payload: LoreEntryUpdate) -> LoreEntry:
+    entry = _lore.get(entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Lore entry not found")
+    data = entry.model_dump()
+    if payload.keyword is not None:
+        data['keyword'] = payload.keyword
+    if payload.content is not None:
+        data['content'] = payload.content
+    updated = LoreEntry(**data)
+    _lore[entry_id] = updated
+    return updated
+
+
 @app.get("/lorebooks", response_model=List[Lorebook])
 async def list_lorebooks() -> List[Lorebook]:
     return list(_lorebooks.values())
@@ -294,6 +320,29 @@ async def delete_lorebook(lb_id: int) -> None:
         raise HTTPException(status_code=404, detail="Lorebook not found")
     del _lorebooks[lb_id]
     return None
+
+
+class LorebookUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    entry_ids: Optional[List[int]] = None
+
+
+@app.put("/lorebooks/{lb_id}", response_model=Lorebook)
+async def update_lorebook(lb_id: int, payload: LorebookUpdate) -> Lorebook:
+    lb = _lorebooks.get(lb_id)
+    if lb is None:
+        raise HTTPException(status_code=404, detail="Lorebook not found")
+    data = lb.model_dump()
+    if payload.name is not None:
+        data['name'] = payload.name
+    if payload.description is not None:
+        data['description'] = payload.description
+    if payload.entry_ids is not None:
+        data['entry_ids'] = payload.entry_ids
+    updated = Lorebook(**data)
+    _lorebooks[lb_id] = updated
+    return updated
 
 
 # ---------------------------------------------------------------------------
@@ -378,6 +427,8 @@ class ChatRequest(BaseModel):
     """Incoming chat message payload."""
 
     message: str
+    session_id: str | None = None
+    reset: bool | None = None
 
 
 class ChatResponse(BaseModel):
@@ -396,7 +447,7 @@ def _active_provider_cfg(cfg: AppConfig) -> tuple[str, ProviderConfig]:
     return p, pc
 
 
-async def _llm_reply(message: str, cfg: AppConfig) -> str:
+async def _llm_reply(message: str, cfg: AppConfig, recent_text: str | None = None) -> str:
     # In test environments, avoid external calls unless explicitly allowed.
     def _external_enabled() -> bool:
         if os.getenv("COOLCHAT_ALLOW_EXTERNAL") == "1":
@@ -420,6 +471,7 @@ async def _llm_reply(message: str, cfg: AppConfig) -> str:
         _characters.get(cfg.active_character_id) if hasattr(cfg, 'active_character_id') else None,
         getattr(cfg, 'user_persona', None),
         getattr(cfg, 'max_context_tokens', 2048),
+        recent_text or "",
     )
 
     # Replace tokens in messages
@@ -569,17 +621,24 @@ async def chat_endpoint(payload: ChatRequest) -> ChatResponse:
     """Return a chat reply using configured provider (echo by default)."""
 
     cfg = load_config()
-    # Try to incorporate active character persona as a system prompt when calling LLMs
-    active_char = None
-    if cfg.active_character_id and cfg.active_character_id in _characters:
-        active_char = _characters[cfg.active_character_id]
-    # For now we only pass the user message; system persona is stitched inside _llm_reply
+    # Chat history per session
+    session_id = payload.session_id or "default"
+    if payload.reset:
+        _chat_histories.pop(session_id, None)
+    history = _chat_histories.setdefault(session_id, [])
+    # Build recent text window for lore triggers
+    recent_text = "\n".join([m.get("content", "") for m in history[-6:]] + [payload.message])
     try:
-        reply = await _llm_reply(_inject_persona(payload.message, active_char), cfg)
+        reply = await _llm_reply(payload.message, cfg, recent_text=recent_text)
     except HTTPException:
         raise
     except Exception as exc:  # pragma: no cover - safety net
         raise HTTPException(status_code=500, detail=str(exc))
+
+    # Record history and trim by rough token budget
+    history.append({"role": "user", "content": payload.message})
+    history.append({"role": "assistant", "content": reply})
+    _trim_history(session_id, cfg)
 
     return ChatResponse(reply=reply)
 
@@ -595,7 +654,7 @@ def _truncate_to_tokens(text: str, max_tokens: int) -> str:
     return text[:target_chars] + "\n..."
 
 
-def _build_system_from_character(char: Optional[Character], user_persona: Optional[object] = None, max_tokens: int = 2048) -> Optional[str]:
+def _build_system_from_character(char: Optional[Character], user_persona: Optional[object] = None, max_tokens: int = 2048, recent_text: str = "") -> Optional[str]:
     segments: List[str] = []
     # Include user persona if present
     if user_persona and getattr(user_persona, 'name', None):
@@ -611,9 +670,10 @@ def _build_system_from_character(char: Optional[Character], user_persona: Option
             segments.append(f"Scenario: {char.scenario}")
         if char.description:
             segments.append(f"Description: {char.description}")
-        # Append linked lorebook contents
+        # Append linked lorebook contents; prefer triggered entries if any
         if char.lorebook_ids:
             lore_texts = []
+            triggered_any = False
             for lb_id in char.lorebook_ids:
                 lb = _lorebooks.get(lb_id)
                 if not lb:
@@ -621,12 +681,34 @@ def _build_system_from_character(char: Optional[Character], user_persona: Option
                 for eid in lb.entry_ids:
                     e = _lore.get(eid)
                     if e:
-                        lore_texts.append(f"[{e.keyword}] {e.content}")
+                        if recent_text:
+                            hay = recent_text.lower()
+                            if e.keyword.lower() in hay:
+                                lore_texts.append(f"[{e.keyword}] {e.content}")
+                                triggered_any = True
+                        else:
+                            lore_texts.append(f"[{e.keyword}] {e.content}")
             if lore_texts:
-                segments.append("World Info:\n" + "\n".join(lore_texts))
+                title = "Triggered World Info" if triggered_any else "World Info"
+                segments.append(f"{title}:\n" + "\n".join(lore_texts))
     if not segments:
         return None
     return _truncate_to_tokens("\n\n".join(segments), max_tokens)
+
+
+_chat_histories: Dict[str, List[Dict[str, str]]] = {}
+
+
+def _trim_history(session_id: str, cfg: AppConfig) -> None:
+    hist = _chat_histories.get(session_id)
+    if not hist:
+        return
+    # Leave last N messages within budget (approx)
+    budget = max(512, getattr(cfg, 'max_context_tokens', 2048))
+    total = sum(_estimate_tokens(m.get("content", "")) for m in hist)
+    while hist and total > budget * 2:
+        removed = hist.pop(0)
+        total -= _estimate_tokens(removed.get("content", ""))
 
 
 def _inject_persona(user_message: str, char: Optional[Character]) -> str:
@@ -653,6 +735,7 @@ class ConfigResponse(BaseModel):
     debug: Dict[str, bool]
     user_persona: Dict[str, str]
     max_context_tokens: int
+    images: Dict[str, Dict[str, str | None]]
 
 
 class ProviderConfigUpdate(BaseModel):
@@ -669,6 +752,7 @@ class ConfigUpdate(BaseModel):
     debug: Dict[str, bool] | None = None
     user_persona: Dict[str, str] | None = None
     max_context_tokens: int | None = None
+    images: Dict[str, Dict[str, str | None]] | None = None
 
 
 @app.get("/config", response_model=ConfigResponse)
@@ -695,6 +779,11 @@ async def get_config() -> ConfigResponse:
             "tracking": getattr(cfg.user_persona, 'tracking', ''),
         },
         max_context_tokens=getattr(cfg, 'max_context_tokens', 2048),
+        images={
+            "active": getattr(cfg.images, 'active', ImageProvider.POLLINATIONS),
+            "pollinations": {"api_key": None, "model": getattr(cfg.images.pollinations, 'model', None)},
+            "dezgo": {"api_key": None, "model": getattr(cfg.images.dezgo, 'model', None), "lora_url": getattr(cfg.images.dezgo, 'lora_url', None)},
+        },
     )
 
 
@@ -752,6 +841,26 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
             cfg.max_context_tokens = int(payload.max_context_tokens)
         except Exception:
             pass
+    if payload.images is not None:
+        imgs = getattr(cfg, 'images', ImagesConfig())
+        active = payload.images.get("active") if isinstance(payload.images, dict) else None
+        if isinstance(active, str):
+            imgs.active = active
+        poll = payload.images.get("pollinations") if isinstance(payload.images, dict) else None
+        if isinstance(poll, dict):
+            if "model" in poll:
+                imgs.pollinations.model = poll.get("model")
+            if "api_key" in poll:
+                imgs.pollinations.api_key = poll.get("api_key")
+        dez = payload.images.get("dezgo") if isinstance(payload.images, dict) else None
+        if isinstance(dez, dict):
+            if "model" in dez:
+                imgs.dezgo.model = dez.get("model")
+            if "api_key" in dez:
+                imgs.dezgo.api_key = dez.get("api_key")
+            if "lora_url" in dez:
+                imgs.dezgo.lora_url = dez.get("lora_url")
+        cfg.images = imgs
 
     try:
         save_config(cfg)
@@ -780,6 +889,11 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
             "tracking": getattr(cfg.user_persona, 'tracking', ''),
         },
         max_context_tokens=getattr(cfg, 'max_context_tokens', 2048),
+        images={
+            "active": getattr(cfg.images, 'active', ImageProvider.POLLINATIONS),
+            "pollinations": {"api_key": None, "model": getattr(cfg.images.pollinations, 'model', None)},
+            "dezgo": {"api_key": None, "model": getattr(cfg.images.dezgo, 'model', None), "lora_url": getattr(cfg.images.dezgo, 'lora_url', None)},
+        },
     )
 
 
@@ -1148,6 +1262,118 @@ async def generate_avatar(payload: GenerateAvatarRequest) -> Dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
+# Images: configuration and generation from chat
+# ---------------------------------------------------------------------------
+
+
+class ImageModelsResponse(BaseModel):
+    models: List[str]
+
+
+@app.get("/image/models", response_model=ImageModelsResponse)
+async def image_models(provider: str | None = None) -> ImageModelsResponse:
+    p = (provider or ImageProvider.POLLINATIONS).lower()
+    if p == ImageProvider.POLLINATIONS:
+        # Pollinations docs list examples; no public models endpoint — provide common examples
+        return ImageModelsResponse(models=["flux/dev", "sdxl", "stable-diffusion-2-1", "playground-v2.5"])
+    if p == ImageProvider.DEZGO:
+        # Subset examples per docs
+        return ImageModelsResponse(models=["anything-v4", "realistic-vision-v5", "deliberate-v2", "sdxl-base-1.0"])
+    return ImageModelsResponse(models=[])
+
+
+class GenerateFromChatRequest(BaseModel):
+    session_id: str | None = None
+
+
+class GenerateFromChatResponse(BaseModel):
+    image_url: str
+    prompt: str
+
+
+@app.post("/images/generate_from_chat", response_model=GenerateFromChatResponse)
+async def generate_from_chat(payload: GenerateFromChatRequest) -> GenerateFromChatResponse:
+    cfg = load_config()
+    sid = payload.session_id or "default"
+    hist = _chat_histories.get(sid, [])
+    convo = "\n".join([f"{m['role']}: {m['content']}" for m in hist][-10:])
+    # Ask LLM for a one-line scene prompt
+    scene_req = (
+        "Summarize the current scene for an image in a single concise line suitable as a text-to-image prompt. "
+        "Focus on salient visual elements and avoid names, extra quotes, or brackets."
+        "\n\nConversation:\n" + convo
+    )
+    desc = await _llm_reply(scene_req, cfg)
+    # Clean JSON-string replies
+    try:
+        import json as _json
+        parsed = _json.loads(desc)
+        if isinstance(parsed, str):
+            desc = parsed
+    except Exception:
+        pass
+    # Character-specific prepend/append
+    char = _characters.get(cfg.active_character_id) if getattr(cfg, 'active_character_id', None) else None
+    prefix = getattr(char, 'image_prompt_prefix', None) or ""
+    suffix = getattr(char, 'image_prompt_suffix', None) or ""
+    final_prompt = (prefix + " " + desc + " " + suffix).strip()
+
+    # Dispatch to configured image backend
+    img_cfg: ImagesConfig = getattr(cfg, 'images', ImagesConfig())
+    active = getattr(img_cfg, 'active', ImageProvider.POLLINATIONS)
+    url = None
+    if active == ImageProvider.POLLINATIONS:
+        import httpx as _httpx, urllib.parse as _urlp, os as _os, time as _time
+        model = getattr(img_cfg.pollinations, 'model', None)
+        q = final_prompt if not model else f"{final_prompt}, model={model}"
+        poll_url = f"https://image.pollinations.ai/prompt/{_urlp.quote(q)}"
+        if getattr(cfg, 'debug', None) and getattr(cfg.debug, 'log_prompts', False):
+            print("[CoolChat] Pollinations URL:", poll_url)
+        timeout = _httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+        async with _httpx.AsyncClient(timeout=timeout) as client:
+            r = await client.get(poll_url)
+            if r.status_code >= 400:
+                raise HTTPException(status_code=502, detail="Pollinations image fetch failed")
+            img = r.content
+        images_dir = _os.path.join(_os.path.dirname(__file__), "..", "public", "images")
+        _os.makedirs(images_dir, exist_ok=True)
+        fname = f"scene_{int(_time.time()*1000)}.png"
+        fpath = _os.path.join(images_dir, fname)
+        with open(fpath, "wb") as fh:
+            fh.write(img)
+        url = f"/public/images/{fname}"
+        return GenerateFromChatResponse(image_url=url, prompt=final_prompt)
+    elif active == ImageProvider.DEZGO:
+        import httpx as _httpx, os as _os, time as _time
+        key = getattr(img_cfg.dezgo, 'api_key', None)
+        if not key:
+            raise HTTPException(status_code=400, detail="Missing Dezgo API key")
+        model = getattr(img_cfg.dezgo, 'model', None)
+        lora = getattr(img_cfg.dezgo, 'lora_url', None)
+        body = {"prompt": final_prompt}
+        if model:
+            body["model"] = model
+        if lora:
+            body["lora"] = lora
+        headers = {"Authorization": key}
+        async with _httpx.AsyncClient(timeout=_httpx.Timeout(10.0, read=60.0)) as client:
+            r = await client.post("https://api.dezgo.com/text2image", data=body, headers=headers)
+            if r.status_code >= 400:
+                raise HTTPException(status_code=502, detail=f"Dezgo error: {r.text}")
+            img = r.content
+        images_dir = _os.path.join(_os.path.dirname(__file__), "..", "public", "images")
+        _os.makedirs(images_dir, exist_ok=True)
+        fname = f"scene_{int(_time.time()*1000)}.png"
+        fpath = _os.path.join(images_dir, fname)
+        with open(fpath, "wb") as fh:
+            fh.write(img)
+        url = f"/public/images/{fname}"
+        return GenerateFromChatResponse(image_url=url, prompt=final_prompt)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported image provider: {active}")
+
+
+# ---------------------------------------------------------------------------
 # Lorebook import
 # ---------------------------------------------------------------------------
 
@@ -1191,4 +1417,52 @@ async def import_lorebook(file: UploadFile = File(...)) -> Lorebook:
         return lb
     else:
         raise HTTPException(status_code=400, detail="Unsupported lorebook JSON structure")
+
+
+# ---------------------------------------------------------------------------
+# ST-compatible export
+# ---------------------------------------------------------------------------
+
+
+@app.get("/characters/{char_id}/export")
+async def export_character(char_id: int):
+    char = _characters.get(char_id)
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    data = char.model_dump()
+    # Map to a simple ST-like JSON; full PNG card export is future work
+    st = {
+        "name": data.get("name"),
+        "description": data.get("description", ""),
+        "first_mes": data.get("first_message"),
+        "alternate_greetings": data.get("alternate_greetings", []),
+        "scenario": data.get("scenario"),
+        "system_prompt": data.get("system_prompt"),
+        "personality": data.get("personality"),
+        "mes_example": data.get("mes_example"),
+        "creator_notes": data.get("creator_notes"),
+        "tags": data.get("tags", []),
+    }
+    from fastapi.responses import JSONResponse
+    return JSONResponse(st, media_type="application/json")
+
+
+@app.get("/lorebooks/{lb_id}/export")
+async def export_lorebook(lb_id: int):
+    lb = _lorebooks.get(lb_id)
+    if not lb:
+        raise HTTPException(status_code=404, detail="Lorebook not found")
+    entries = []
+    for eid in lb.entry_ids:
+        e = _lore.get(eid)
+        if not e:
+            continue
+        entries.append({"keys": [e.keyword], "content": e.content})
+    st = {
+        "name": lb.name,
+        "description": lb.description,
+        "entries": entries,
+    }
+    from fastapi.responses import JSONResponse
+    return JSONResponse(st, media_type="application/json")
 

@@ -12,7 +12,7 @@ export async function sendChat(message) {
   const res = await fetch('/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, session_id: 'default' }),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -138,6 +138,32 @@ export async function suggestCharacterField(field, characterDraft) {
   });
   if (!res.ok) throw new Error(`Suggest field failed: ${res.status}`);
   return res.json(); // { value }
+}
+
+export async function getImageModels(provider) {
+  const res = await fetch(`/image/models?provider=${encodeURIComponent(provider)}`);
+  if (!res.ok) throw new Error(`Get image models failed: ${res.status}`);
+  return res.json();
+}
+
+export async function generateImageFromChat() {
+  const res = await fetch('/images/generate_from_chat', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: 'default' }),
+  });
+  if (!res.ok) throw new Error(`Generate image failed: ${res.status}`);
+  return res.json();
+}
+
+export async function updateLoreEntry(id, data) {
+  const res = await fetch(`/lore/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  if (!res.ok) throw new Error(`Update lore failed: ${res.status}`);
+  return res.json();
+}
+
+export async function updateLorebook(id, data) {
+  const res = await fetch(`/lorebooks/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  if (!res.ok) throw new Error(`Update lorebook failed: ${res.status}`);
+  return res.json();
 }
 
 export default { checkHealth, sendChat, getConfig, updateConfig, getModels, listCharacters, createCharacter, deleteCharacter };
