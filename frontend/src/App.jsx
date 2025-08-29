@@ -143,7 +143,7 @@ function App() {
       <main className="chat">
         
         {showCharacters && (
-          <section className="characters">
+          <section className="characters overlay">
             <h2>Characters</h2>
             <div className="row">
               <label className="secondary" style={{ padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}>
@@ -189,11 +189,11 @@ function App() {
         )}
 
         {showConfig && (
-          <section className="panel">
+          <section className="panel overlay">
             <h2>Configuration</h2>
             <div className="row" style={{ gap: 6, marginBottom: 8 }}>
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('connection'); }}>Connection</button>
-              <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('debug'); }}>Debug</button>
+              <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('persona'); }}>Persona</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('appearance'); }}>Appearance</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('images'); }}>Images</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('advanced'); }}>Advanced</button>
@@ -204,11 +204,25 @@ function App() {
                 onSubmit={async (e) => {
                   e.preventDefault();
                   try {
-                    const updated = await updateConfig({ active_provider: activeProvider, providers: { [activeProvider]: configDraft } });
+                    const cfg = await getConfig();
+                    const current = cfg.providers?.[activeProvider] || {};
+                    const changes = {};
+                    for (const k of ['api_key','api_base','model','temperature']) {
+                      const nv = configDraft[k];
+                      const ov = current[k] ?? '';
+                      if (k === 'temperature') { if (typeof nv === 'number' && nv !== ov) changes[k] = nv; }
+                      else if (nv && nv !== ov) { changes[k] = nv; }
+                    }
+                    if (Object.keys(changes).length) {
+                      const lines = Object.entries(changes).map(([k,v])=>`- ${k}: old=${current[k] ?? '(none)'} -> new=${v}`).join('\n');
+                      if (!window.confirm(`Config.json already has this information, would you like to update it or discard?\n${lines}`)) {
+                        setConfigDraft({ api_key: '', api_base: current.api_base || '', model: current.model || '', temperature: current.temperature ?? 0.7 });
+                        return;
+                      }
+                    }
+                    const updated = await updateConfig({ active_provider: activeProvider, providers: { [activeProvider]: changes }, max_context_tokens: maxTokens });
                     setProviders(updated.providers || {});
-                  } catch (e) {
-                    alert(e.message);
-                  }
+                  } catch (e) { console.error(e); alert(e.message); }
                 }}
               >
                 <label>
@@ -318,7 +332,23 @@ function App() {
                     Reset
                   </button>
                 </div>
+                <label>
+                  <span>Max Context Tokens ({maxTokens})</span>
+                  <input type="range" min="512" max="8192" step="128" value={maxTokens} onChange={(e)=> setMaxTokens(parseInt(e.target.value,10))} />
+                </label>
               </form>
+            )}
+            {settingsTab === 'persona' && (
+              <div className="config-form">
+                <label>
+                  <span>User Name</span>
+                  <input value={userPersona.name} onChange={(e) => setUserPersona(u => ({ ...u, name: e.target.value }))} onBlur={async () => { try { await updateConfig({ user_persona: userPersona }); } catch (e) { console.error(e); alert(e.message);} }} />
+                </label>
+                <label>
+                  <span>User Description</span>
+                  <textarea rows={3} value={userPersona.description} onChange={(e) => setUserPersona(u => ({ ...u, description: e.target.value }))} onBlur={async () => { try { await updateConfig({ user_persona: userPersona }); } catch (e) { console.error(e); alert(e.message);} }} />
+                </label>
+              </div>
             )}
 
             {settingsTab === 'debug' && (
@@ -355,16 +385,16 @@ function App() {
               <AdvancedTab />
             )}
 
-            <div className="hint">
+            {settingsTab === 'connection' && (<div className="hint">)
               <p className="muted">
                 OpenRouter uses OpenAI-compatible endpoints. You can set API Base to https://openrouter.ai/api/v1. Gemini uses the OpenAI-compatible base at https://generativelanguage.googleapis.com/v1beta/openai.
               </p>
-            </div>
+            </div>)}
           </section>
         )}
 
         {showLorebooks && (
-          <section className="characters">
+          <section className="characters overlay">
             <h2>Lorebooks</h2>
             <div className="row">
               <label className="secondary" style={{ padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}>
@@ -387,17 +417,18 @@ function App() {
                 </>
               )}
             </div>
+            <ActiveLorebooks lorebooks={lorebooks} />
             <div className="char-list">
               {loreEntries.map(le => (
                 <div key={le.id} className="char-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
                 <div className="row" style={{ gap: 8, width: '100%', alignItems: 'center' }}>
-                  <button className="secondary" onClick={() => setExpandedEntries(s => ({ ...s, [le.id]: !s[le.id] }))}>{expandedEntries[le.id] ? '▾' : '▸'}</button>
-                  <input style={{ flex: 1 }} value={le.keyword || '(untitled)'} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, keyword: e.target.value }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { keyword: e.target.value }); } catch (err) { console.error(err); alert(err.message); } }} />
-                </div>
+                    <button className="secondary" onClick={() => setExpandedEntries(s => ({ ...s, [le.id]: !s[le.id] }))}>{expandedEntries[le.id] ? '▾' : '▸'}</button>
+                    <input style={{ flex: 1 }} value={le.title || le.keyword || '(untitled)'} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, title: e.target.value }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { title: e.target.value }); } catch (err) { console.error(err); alert(err.message); } }} />
+                  </div>
                   {expandedEntries[le.id] && (
                     <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 8, marginTop: 8 }}>
                       <div className="muted">Primary Keywords</div>
-                      <input value={(le.keywords||[]).join(', ')} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, keywords: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { keywords: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) }); } catch (err) { alert(err.message); } }} />
+                      <input value={(le.keywords||[]).join(', ')} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, keywords: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { keywords: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) }); } catch (err) { console.error(err); alert(err.message); } }} />
                       <div className="muted">Logic</div>
                       <select value={le.logic || 'AND ANY'} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, logic: e.target.value }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { logic: e.target.value }); } catch (err) { alert(err.message); } }}>
                         <option>AND ANY</option>
@@ -406,7 +437,7 @@ function App() {
                         <option>NOT ALL</option>
                       </select>
                       <div className="muted">Secondary Keywords</div>
-                      <input value={(le.secondary_keywords||[]).join(', ')} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, secondary_keywords: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { secondary_keywords: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) }); } catch (err) { alert(err.message); } }} />
+                      <input value={(le.secondary_keywords||[]).join(', ')} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, secondary_keywords: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { secondary_keywords: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) }); } catch (err) { console.error(err); alert(err.message); } }} />
                       <div className="muted">Order</div>
                       <input type="number" value={le.order||0} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, order: parseInt(e.target.value,10) }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { order: parseInt(e.target.value,10) }); } catch (err) { alert(err.message); } }} />
                       <div className="muted">Trigger %</div>
@@ -443,8 +474,9 @@ function App() {
 
         <div className="input-tools">
           <button className="secondary" title="Generate image from chat" onClick={async () => {
-            try { const r = await generateImageFromChat(); setMessages(m => [...m, { role: 'assistant', image_url: r.image_url }]); } catch (e) { alert(e.message); }
+            try { const r = await generateImageFromChat(); setMessages(m => [...m, { role: 'assistant', image_url: r.image_url }]); } catch (e) { console.error(e); alert(e.message); }
           }}>🖌️</button>
+          <button className="secondary" title="Scroll to bottom" style={{ marginLeft: 'auto' }} onClick={() => { try { const el = document.querySelector('.messages'); if (el) el.scrollTop = el.scrollHeight; } catch (e) { console.error(e); } }}>⤓</button>
         </div>
         <form className="input-row" onSubmit={onSubmit}>
           <input
@@ -525,13 +557,17 @@ function ImagesTab() {
               {models.map(m => (<option key={m} value={m}>{m}</option>))}
             </select>
           </label>
+          <label>
+            <span>API Key</span>
+            <input placeholder={cfg.pollinations.api_key_masked ? `Saved: ${cfg.pollinations.api_key_masked}` : ''} value={cfg.pollinations.api_key || ''} onChange={(e) => setCfg(c => ({ ...c, pollinations: { ...c.pollinations, api_key: e.target.value } }))} />
+          </label>
         </>
       )}
       {cfg.active === 'dezgo' && (
         <>
           <label>
             <span>API Key</span>
-            <input value={cfg.dezgo.api_key || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, api_key: e.target.value } }))} />
+            <input placeholder={cfg.dezgo.api_key_masked ? `Saved: ${cfg.dezgo.api_key_masked}` : ''} value={cfg.dezgo.api_key || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, api_key: e.target.value } }))} />
           </label>
           <label>
             <span>Model</span>
@@ -579,7 +615,30 @@ function ImagesTab() {
         </>
       )}
       <div className="row" style={{ gridColumn: '1 / -1' }}>
-        <button onClick={async () => { await saveCfg(cfg); }}>Save Image Settings</button>
+        <button onClick={async () => { try { const current = (await getConfig()).images; const changes = JSON.stringify(cfg) !== JSON.stringify(current); if (changes) { if (!window.confirm('Images config.json will be updated. Proceed?')) return; } await saveCfg(cfg); } catch (e) { console.error(e); alert(e.message); } }}>Save Image Settings</button>
+      </div>
+    </div>
+  );
+}
+
+function ActiveLorebooks({ lorebooks }) {
+  const [activeIds, setActiveIds] = useState([]);
+  const [selId, setSelId] = useState('');
+  useEffect(() => { (async () => { try { const cfg = await getConfig(); setActiveIds(cfg.active_lorebook_ids || []);} catch (e) { console.error(e);} })(); }, []);
+  const add = async () => { try { const id = parseInt(selId,10); if (!id) return; if (!activeIds.includes(id)) { const list = [...activeIds, id]; setActiveIds(list); await updateConfig({ active_lorebook_ids: list }); } } catch (e) { console.error(e); alert(e.message);} };
+  const remove = async (id) => { try { const list = activeIds.filter(x => x!==id); setActiveIds(list); await updateConfig({ active_lorebook_ids: list }); } catch (e) { console.error(e); alert(e.message);} };
+  return (
+    <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+      <span className="muted">Active Lorebooks</span>
+      <select value={selId} onChange={(e)=> setSelId(e.target.value)}>
+        <option value="">(select)</option>
+        {lorebooks.map(lb => (<option key={lb.id} value={lb.id}>{lb.name}</option>))}
+      </select>
+      <button className="secondary" onClick={add}>➕</button>
+      <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+        {activeIds.map(id => { const lb = lorebooks.find(x => x.id===id); return (
+          <span key={id} className="secondary" style={{ padding: '4px 8px', borderRadius: 6 }}>{lb ? lb.name : `#${id}`} <button className="secondary" onClick={() => remove(id)}>➖</button></span>
+        ); })}
       </div>
     </div>
   );
@@ -607,6 +666,27 @@ function AdvancedTab() {
         </label>
         <button onClick={async ()=>{ try { const data = JSON.parse(raw); const r = await fetch('/config/raw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); if (!r.ok) throw new Error('Save failed'); alert('Saved. Reloading...'); location.reload(); } catch (e) { console.error(e); alert(e.message);} }}>Save settings.json</button>
       </div>
+      <hr />
+      <p className="muted">Saved themes</p>
+      <ThemesManager />
+    </div>
+  );
+}
+
+function ThemesManager() {
+  const [names, setNames] = useState([]);
+  const [sel, setSel] = useState('');
+  const [theme, setTheme] = useState(null);
+  const load = async () => { try { const r = await fetch('/themes'); if (r.ok) { const d = await r.json(); setNames(d.names || []); } } catch (e) { console.error(e);} };
+  useEffect(() => { load(); }, []);
+  return (
+    <div className="row" style={{ gap: 8 }}>
+      <select value={sel} onChange={(e)=> setSel(e.target.value)}>
+        <option value="">(select)</option>
+        {names.map(n => (<option key={n} value={n}>{n}</option>))}
+      </select>
+      <button className="secondary" onClick={async ()=>{ if (!sel) return; try { const r = await fetch(`/themes/${sel}`); if (!r.ok) throw new Error('Load failed'); const t = await r.json(); await fetch('/config', { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ theme: t }) }); alert('Theme loaded'); } catch (e) { console.error(e); alert(e.message);} }}>Load Theme</button>
+      <button onClick={async ()=>{ const name = prompt('Save theme as:'); if (!name) return; try { const cfg = await getConfig(); const t = cfg.theme || {}; const r = await fetch('/themes', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, theme: t })}); if (!r.ok) throw new Error('Save theme failed'); alert('Theme saved'); load(); } catch (e) { console.error(e); alert(e.message);} }}>Save Current Theme</button>
     </div>
   );
 }
@@ -644,7 +724,7 @@ function AppearanceTab() {
       <div className="row color-row" style={{ gap: 8, alignItems: 'center' }}>
         <input className="color-swatch" type="color" value={theme[keyName]} onChange={async (e) => { await save({ ...theme, [keyName]: e.target.value }); }} />
         <input value={theme[keyName]} onChange={async (e) => { await save({ ...theme, [keyName]: e.target.value }); }} />
-        {withThink && (<button className="think" onClick={suggest}>💭</button>)}
+        {withThink && (<button className="think" title="Have the AI suggest a color theme based on your chosen primary color. This will overwrite your current theme configuration." onClick={suggest}>💭</button>)}
       </div>
     </label>
   );

@@ -293,6 +293,7 @@ async def delete_lore(entry_id: int) -> None:
 class LoreEntryUpdate(BaseModel):
     keyword: str | None = None
     content: str | None = None
+    title: str | None = None
 
 
 @app.put("/lore/{entry_id}", response_model=LoreEntry)
@@ -305,6 +306,8 @@ async def update_lore(entry_id: int, payload: LoreEntryUpdate) -> LoreEntry:
         data['keyword'] = payload.keyword
     if payload.content is not None:
         data['content'] = payload.content
+    if payload.title is not None:
+        data['title'] = payload.title
     updated = LoreEntry(**data)
     _lore[entry_id] = updated
     _save_lore()
@@ -553,7 +556,7 @@ async def _llm_reply(message: str, cfg: AppConfig, recent_text: str | None = Non
     system_msg = _build_system_from_character(
         _characters.get(cfg.active_character_id) if hasattr(cfg, 'active_character_id') else None,
         getattr(cfg, 'user_persona', None),
-        getattr(cfg, 'max_context_tokens', 2048),
+        (getattr(cfg.providers.get(provider, ProviderConfig()), 'max_context_tokens', None) or getattr(cfg, 'max_context_tokens', 2048)),
         recent_text or "",
     )
 
@@ -765,7 +768,7 @@ def _truncate_to_tokens(text: str, max_tokens: int) -> str:
     return text[:target_chars] + "\n..."
 
 
-def _build_system_from_character(char: Optional[Character], user_persona: Optional[object] = None, max_tokens: int = 2048, recent_text: str = "") -> Optional[str]:
+  def _build_system_from_character(char: Optional[Character], user_persona: Optional[object] = None, max_tokens: int = 2048, recent_text: str = "") -> Optional[str]:
     segments: List[str] = []
     # Include user persona if present
     if user_persona and getattr(user_persona, 'name', None):
@@ -816,8 +819,28 @@ def _build_system_from_character(char: Optional[Character], user_persona: Option
             if lore_texts:
                 title = "Triggered World Info" if triggered_any else "World Info"
                 segments.append(f"{title}:\n" + "\n".join(lore_texts))
-    if not segments:
-        return None
+      # Include globally active lorebooks regardless of character linkage
+      try:
+          from .config import load_config as _lc
+          _cfg = _lc()
+          actives = getattr(_cfg, 'active_lorebook_ids', []) or []
+          if actives:
+              lore_texts = []
+              for lb_id in actives:
+                  lb = _lorebooks.get(lb_id)
+                  if not lb:
+                      continue
+                  for eid in lb.entry_ids:
+                      e = _lore.get(eid)
+                      if e:
+                          lore_texts.append(f"[{e.keyword}] {e.content}")
+              if lore_texts:
+                  segments.append("Active Lorebooks:\n" + "\n".join(lore_texts))
+      except Exception:
+          pass
+
+      if not segments:
+          return None
     return _truncate_to_tokens("\n\n".join(segments), max_tokens)
 
 
@@ -862,10 +885,11 @@ class ConfigResponse(BaseModel):
     max_context_tokens: int
     class ImagesOut(BaseModel):
         active: str
-        pollinations: Dict[str, str | None]
-        dezgo: Dict[str, str | None]
+        pollinations: Dict[str, object]
+        dezgo: Dict[str, object]
     images: ImagesOut
     theme: Dict[str, str] | None = None
+    active_lorebook_ids: List[int] | None = None
 
 
 class ProviderConfigUpdate(BaseModel):
@@ -884,6 +908,7 @@ class ConfigUpdate(BaseModel):
     max_context_tokens: int | None = None
     images: Dict[str, object] | None = None
     theme: Dict[str, str] | None = None
+    active_lorebook_ids: List[int] | None = None
 
 
 @app.get("/config", response_model=ConfigResponse)
@@ -912,22 +937,26 @@ async def get_config() -> ConfigResponse:
         max_context_tokens=getattr(cfg, 'max_context_tokens', 2048),
         images=ConfigResponse.ImagesOut(
             active=getattr(cfg.images, 'active', ImageProvider.POLLINATIONS),
-            pollinations={"api_key": None, "model": getattr(cfg.images.pollinations, 'model', None)},
+            pollinations={
+                "api_key_masked": (mask_secret(getattr(cfg.images.pollinations, 'api_key', None)) if hasattr(cfg.images, 'pollinations') else None),
+                "model": getattr(cfg.images.pollinations, 'model', None),
+            },
             dezgo={
-                "api_key": None,
+                "api_key_masked": (mask_secret(getattr(cfg.images.dezgo, 'api_key', None)) if hasattr(cfg.images, 'dezgo') else None),
                 "model": getattr(cfg.images.dezgo, 'model', None),
                 "lora_flux_1": getattr(cfg.images.dezgo, 'lora_flux_1', None),
                 "lora_flux_2": getattr(cfg.images.dezgo, 'lora_flux_2', None),
                 "lora_sd1_1": getattr(cfg.images.dezgo, 'lora_sd1_1', None),
                 "lora_sd1_2": getattr(cfg.images.dezgo, 'lora_sd1_2', None),
-                "transparent": str(getattr(cfg.images.dezgo, 'transparent', False)),
-                "width": str(getattr(cfg.images.dezgo, 'width', '')),
-                "height": str(getattr(cfg.images.dezgo, 'height', '')),
-                "steps": str(getattr(cfg.images.dezgo, 'steps', '')),
-                "upscale": str(getattr(cfg.images.dezgo, 'upscale', '')),
+                "transparent": getattr(cfg.images.dezgo, 'transparent', False),
+                "width": getattr(cfg.images.dezgo, 'width', None),
+                "height": getattr(cfg.images.dezgo, 'height', None),
+                "steps": getattr(cfg.images.dezgo, 'steps', None),
+                "upscale": getattr(cfg.images.dezgo, 'upscale', None),
             },
         ),
         theme=getattr(cfg, 'theme', None).model_dump() if getattr(cfg, 'theme', None) else None,
+        active_lorebook_ids=getattr(cfg, 'active_lorebook_ids', []) or [],
     )
 
 
@@ -1013,6 +1042,11 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
         for k in ("primary","secondary","text1","text2","highlight","lowlight"):
             if k in payload.theme:
                 setattr(cfg.theme, k, payload.theme[k])
+    if payload.active_lorebook_ids is not None:
+        try:
+            cfg.active_lorebook_ids = [int(x) for x in payload.active_lorebook_ids]
+        except Exception:
+            cfg.active_lorebook_ids = payload.active_lorebook_ids
 
     try:
         save_config(cfg)
@@ -1074,6 +1108,7 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
             },
         ),
         theme=getattr(cfg, 'theme', None).model_dump() if getattr(cfg, 'theme', None) else None,
+        active_lorebook_ids=getattr(cfg, 'active_lorebook_ids', []) or [],
     )
 
 
@@ -1089,13 +1124,36 @@ class ThemeSuggestResponse(BaseModel):
 async def theme_suggest(payload: ThemeSuggestRequest) -> ThemeSuggestResponse:
     cfg = load_config()
     prompt = f"Given {payload.primary} please suggest 5 more colors that will provide an easily readable and pleasing UI theme. Select a secondary color that compliments the primary, Two text colors that will stand out and be readable with the primary and secondary colors as their background respectively. And include a highlight and lowlight color. Return the colors as comma separated hex codes. Do not include anything else in your reply."
-    reply = await _llm_reply(prompt, cfg)
-    text = reply.strip().strip('`')
-    if text.lower().startswith('json'):
-        text = text[4:].strip()
-    parts = [p.strip() for p in text.split(',') if p.strip()]
-    parts = parts[:5]
-    return ThemeSuggestResponse(colors=parts)
+    try:
+        print("[CoolChat] theme_suggest provider=", cfg.active_provider)
+        reply = await _llm_reply(prompt, cfg)
+        print("[CoolChat] theme_suggest reply=", reply)
+        text = reply.strip().strip('`')
+        if text.lower().startswith('json'):
+            text = text[4:].strip()
+        parts = [p.strip() for p in text.split(',') if p.strip()]
+        parts = parts[:5]
+        if len(parts) < 5:
+            raise ValueError("insufficient colors")
+        return ThemeSuggestResponse(colors=parts)
+    except Exception as e:
+        print("[CoolChat] theme_suggest fallback due to:", e)
+        # simple fallback palette based on primary: generate tints/shades
+        base = payload.primary.lstrip('#')
+        try:
+            r = int(base[0:2], 16); g = int(base[2:4], 16); b = int(base[4:6], 16)
+        except Exception:
+            r, g, b = (37, 99, 235)
+        def clamp(x):
+            return max(0, min(255, int(x)))
+        def hex3(r,g,b):
+            return f"#{r:02x}{g:02x}{b:02x}"
+        secondary = hex3(clamp(r*0.6), clamp(g*0.6), clamp(b*0.6))
+        text1 = "#e5e7eb"
+        text2 = "#cbd5e1"
+        highlight = hex3(clamp(255-r*0.2), clamp(255-g*0.2), clamp(255-b*0.2))
+        lowlight = "#111827"
+        return ThemeSuggestResponse(colors=[secondary, text1, text2, highlight, lowlight])
 
 
 @app.get("/config/raw")
@@ -1488,11 +1546,41 @@ class ImageModelsResponse(BaseModel):
 async def image_models(provider: str | None = None) -> ImageModelsResponse:
     p = (provider or ImageProvider.POLLINATIONS).lower()
     if p == ImageProvider.POLLINATIONS:
-        # Pollinations docs list examples; no public models endpoint — provide common examples
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=30.0)) as client:
+                r = await client.get("https://image.pollinations.ai/models")
+                if r.status_code == 200:
+                    data = r.json()
+                    if isinstance(data, list):
+                        models = []
+                        for it in data:
+                            mid = it.get("id") or it.get("name") if isinstance(it, dict) else it
+                            if mid:
+                                models.append(mid)
+                        if models:
+                            return ImageModelsResponse(models=models)
+        except Exception as e:
+            print("[CoolChat] pollinations models fetch failed:", e)
+        # fallback
         return ImageModelsResponse(models=["flux/dev", "sdxl", "stable-diffusion-2-1", "playground-v2.5"])
     if p == ImageProvider.DEZGO:
-        # Subset examples per docs
-        return ImageModelsResponse(models=["anything-v4", "realistic-vision-v5", "deliberate-v2", "sdxl-base-1.0"])
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=30.0)) as client:
+                r = await client.get("https://api.dezgo.com/models")
+                if r.status_code == 200:
+                    data = r.json()
+                    if isinstance(data, list):
+                        models = []
+                        for it in data:
+                            mid = it.get("id") or it.get("name") if isinstance(it, dict) else it
+                            if mid:
+                                models.append(mid)
+                        if models:
+                            return ImageModelsResponse(models=models)
+        except Exception as e:
+            print("[CoolChat] dezgo models fetch failed:", e)
+        # fallback examples
+        return ImageModelsResponse(models=["sdxl-base-1.0", "anything-v4", "realistic-vision-v5", "deliberate-v2"]) 
     return ImageModelsResponse(models=[])
 
 
@@ -1535,17 +1623,19 @@ async def generate_from_chat(payload: GenerateFromChatRequest) -> GenerateFromCh
     # Dispatch to configured image backend
     img_cfg: ImagesConfig = getattr(cfg, 'images', ImagesConfig())
     active = getattr(img_cfg, 'active', ImageProvider.POLLINATIONS)
+    print("[CoolChat] images.generate_from_chat active=", active)
     url = None
     if active == ImageProvider.POLLINATIONS:
         import httpx as _httpx, urllib.parse as _urlp, os as _os, time as _time
         model = getattr(img_cfg.pollinations, 'model', None)
-        q = final_prompt if not model else f"{final_prompt}, model={model}"
-        poll_url = f"https://image.pollinations.ai/prompt/{_urlp.quote(q)}"
-        if getattr(cfg, 'debug', None) and getattr(cfg.debug, 'log_prompts', False):
-            print("[CoolChat] Pollinations URL:", poll_url)
+        poll_url = f"https://image.pollinations.ai/prompt/{_urlp.quote(final_prompt)}"
+        if model:
+            poll_url += f"?model={_urlp.quote(model)}"
+        print("[CoolChat] Pollinations URL:", poll_url)
         timeout = _httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
         async with _httpx.AsyncClient(timeout=timeout) as client:
             r = await client.get(poll_url)
+            print("[CoolChat] Pollinations status=", r.status_code)
             if r.status_code >= 400:
                 raise HTTPException(status_code=502, detail="Pollinations image fetch failed")
             img = r.content
@@ -1581,8 +1671,11 @@ async def generate_from_chat(payload: GenerateFromChatRequest) -> GenerateFromCh
         if getattr(img_cfg.dezgo, 'upscale', None):
             body["upscale"] = "true"
         headers = {"Authorization": key}
+        print("[CoolChat] Dezgo headers= Authorization length:", len(key) if key else 0)
+        print("[CoolChat] Dezgo body=", body)
         async with _httpx.AsyncClient(timeout=_httpx.Timeout(10.0, read=60.0)) as client:
             r = await client.post("https://api.dezgo.com/text2image", data=body, headers=headers)
+            print("[CoolChat] Dezgo status=", r.status_code)
             if r.status_code >= 400:
                 raise HTTPException(status_code=502, detail=f"Dezgo error: {r.text}")
             img = r.content
@@ -1621,27 +1714,47 @@ async def import_lorebook(file: UploadFile = File(...)) -> Lorebook:
                 continue
             if not isinstance(i, dict):
                 continue
-            # SillyTavern: keys or triggers specify array of keywords
-            keys = i.get("keys") or i.get("triggers") or []
-            kw = keys[0] if isinstance(keys, list) and keys else (i.get("keyword") or "")
+            # Map Eldoria-like schema
+            keys = i.get("keys") or i.get("triggers") or i.get("key") or []
+            if isinstance(keys, dict):
+                keys = list(keys.values())
+            kw = keys[0] if isinstance(keys, list) and keys else (i.get("keyword") or i.get("comment") or "")
             content = i.get("content") or i.get("text") or i.get("entry") or ""
-            logic = i.get("logic") or "AND ANY"
-            secondary = i.get("secondary_keys") or i.get("secondary_keywords") or []
+            secondary = i.get("secondary_keys") or i.get("secondary_keywords") or i.get("keysecondary") or []
+            # Logic mapping: selectiveLogic numeric -> string
+            logic_map = {0: "AND ANY", 3: "AND ALL", 1: "NOT ALL", 2: "NOT ANY"}
+            logic_val = i.get("logic")
+            if logic_val is None:
+                sl = i.get("selectiveLogic")
+                if isinstance(sl, int):
+                    logic_val = logic_map.get(sl, "AND ANY")
+            if not logic_val:
+                logic_val = "AND ANY"
             order = i.get("order") or 0
             trigger = i.get("probability") or i.get("trigger") or 100
-            out.append(LoreEntryCreate(keyword=kw, content=content, keywords=keys if isinstance(keys, list) else [], logic=logic, secondary_keywords=secondary, order=order, trigger=trigger))
+            out.append(LoreEntryCreate(keyword=kw, content=content, keywords=keys if isinstance(keys, list) else [], logic=logic_val, secondary_keywords=secondary, order=order, trigger=trigger))
         return out
 
     if isinstance(data, list):
         entries = _st_to_entries(data)
-        lb = await create_lorebook(LorebookCreate(name="Imported Lorebook", description="", entries=entries))
+        fname = getattr(file, 'filename', None)
+        name = os.path.splitext(os.path.basename(fname))[0] if fname else "Imported Lorebook"
+        lb = await create_lorebook(LorebookCreate(name=name, description="", entries=entries))
         return lb
     elif isinstance(data, dict):
-        # SillyTavern commonly: { name, description?, entries: [...] }
-        name = data.get("name") or data.get("book_name") or data.get("title") or "Imported Lorebook"
+        # SillyTavern commonly: { name, description?, entries: [...] } but may be an object mapping
+        fname = getattr(file, 'filename', None)
+        inferred = os.path.splitext(os.path.basename(fname))[0] if fname else None
+        name = data.get("name") or data.get("book_name") or data.get("title") or inferred or "Imported Lorebook"
         description = data.get("description") or ""
         entries_data = data.get("entries") or data.get("world_info") or []
-        entries = _st_to_entries(entries_data)
+        if isinstance(entries_data, dict):
+            print("[CoolChat] lore import: entries dict keys:", list(entries_data.keys()))
+            items = list(entries_data.values())
+        else:
+            items = entries_data
+        entries = _st_to_entries(items)
+        print("[CoolChat] lore import: parsed entries count:", len(entries))
         lb = await create_lorebook(LorebookCreate(name=name, description=description, entries=entries))
         return lb
     else:
@@ -1674,6 +1787,46 @@ async def export_character(char_id: int):
     }
     from fastapi.responses import JSONResponse
     return JSONResponse(st, media_type="application/json")
+
+
+# ---------------------------------------------------------------------------
+# Themes storage (public/themes.json)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/themes")
+async def list_themes():
+    data = load_json("themes.json", {})
+    return {"names": list(data.keys())}
+
+
+class SaveThemeRequest(BaseModel):
+    name: str
+    theme: Dict[str, str]
+
+
+@app.post("/themes")
+async def save_theme(req: SaveThemeRequest):
+    data = load_json("themes.json", {})
+    data[req.name] = req.theme
+    save_json("themes.json", data)
+    # also set as current theme
+    cfg = load_config()
+    try:
+        from .config import AppearanceConfig
+        cfg.theme = AppearanceConfig(**req.theme)
+        save_config(cfg)
+    except Exception:
+        pass
+    return {"status": "ok"}
+
+
+@app.get("/themes/{name}")
+async def get_theme(name: str):
+    data = load_json("themes.json", {})
+    if name not in data:
+        raise HTTPException(status_code=404, detail="Theme not found")
+    return data[name]
 
 
 @app.get("/lorebooks/{lb_id}/export")

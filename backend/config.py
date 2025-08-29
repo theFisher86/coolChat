@@ -40,6 +40,7 @@ class ProviderConfig(BaseModel):
     api_base: Optional[str] = None
     model: Optional[str] = None
     temperature: float = 0.7
+    max_context_tokens: Optional[int] = None
 
 
 class UserPersona(BaseModel):
@@ -104,6 +105,7 @@ class AppConfig(BaseModel):
     images: ImagesConfig = ImagesConfig()
     theme: AppearanceConfig = AppearanceConfig()
     last_connection: Dict[str, Any] | None = None
+    active_lorebook_ids: Optional[list[int]] = []
 
 
 def ensure_parent(path: Path) -> None:
