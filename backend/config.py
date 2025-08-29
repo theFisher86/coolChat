@@ -32,6 +32,7 @@ class Provider(str):
     OPENAI = "openai"  # OpenAI or compatible endpoint
     OPENROUTER = "openrouter"  # OpenRouter (OpenAI-compatible)
     GEMINI = "gemini"  # Google Generative Language API
+    POLLINATIONS = "pollinations"  # text.pollinations.ai (OpenAI-compatible)
 
 
 class ProviderConfig(BaseModel):
@@ -67,13 +68,30 @@ class PollinationsConfig(BaseModel):
 class DezgoConfig(BaseModel):
     api_key: Optional[str] = None
     model: Optional[str] = None
-    lora_url: Optional[str] = None
+    lora_flux_1: Optional[str] = None
+    lora_flux_2: Optional[str] = None
+    lora_sd1_1: Optional[str] = None
+    lora_sd1_2: Optional[str] = None
+    transparent: bool = False
+    width: Optional[int] = None
+    height: Optional[int] = None
+    steps: Optional[int] = None
+    upscale: Optional[bool] = None
 
 
 class ImagesConfig(BaseModel):
     active: str = ImageProvider.POLLINATIONS
     pollinations: PollinationsConfig = PollinationsConfig()
     dezgo: DezgoConfig = DezgoConfig()
+
+
+class AppearanceConfig(BaseModel):
+    primary: str = "#2563eb"
+    secondary: str = "#374151"
+    text1: str = "#e5e7eb"
+    text2: str = "#cbd5e1"
+    highlight: str = "#10b981"
+    lowlight: str = "#111827"
 
 
 class AppConfig(BaseModel):
@@ -84,6 +102,7 @@ class AppConfig(BaseModel):
     debug: DebugConfig = DebugConfig()
     max_context_tokens: int = 2048
     images: ImagesConfig = ImagesConfig()
+    theme: AppearanceConfig = AppearanceConfig()
 
 
 def ensure_parent(path: Path) -> None:

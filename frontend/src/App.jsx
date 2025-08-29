@@ -41,6 +41,7 @@ function App() {
   const [lorebooks, setLorebooks] = useState([]);
   const [selectedLorebook, setSelectedLorebook] = useState(null);
   const [loreEntries, setLoreEntries] = useState([]);
+  const [expandedEntries, setExpandedEntries] = useState({});
 
   const [debugFlags, setDebugFlags] = useState({ log_prompts: false, log_responses: false });
   const [maxTokens, setMaxTokens] = useState(2048);
@@ -140,11 +141,7 @@ function App() {
       </header>
 
       <main className="chat">
-        <div className="row" style={{ gap: 8, padding: '8px 16px', borderBottom: '1px solid #1f2937', background: '#0b1220' }}>
-          <button className="secondary" title="Generate image from chat" onClick={async () => {
-            try { const r = await generateImageFromChat(); setMessages(m => [...m, { role: 'assistant', image_url: r.image_url }]); } catch (e) { alert(e.message); }
-          }}>🖌️</button>
-        </div>
+        
         {showCharacters && (
           <section className="characters">
             <h2>Characters</h2>
@@ -181,7 +178,7 @@ function App() {
                   <div className="cog" onClick={(e) => { e.stopPropagation(); setEditingChar(c); setEditorOpen(true); }}><span>⚙️</span></div>
                   <div style={{ padding: '8px' }}>
                     <div className="row" style={{ justifyContent: 'space-between' }}>
-                      <button onClick={async () => { try { await updateConfig({ active_character_id: c.id }); } catch (e) { alert(e.message); } }}>Use</button>
+                    <button onClick={async () => { try { await updateConfig({ active_character_id: c.id }); setShowCharacters(false);} catch (e) { console.error(e); alert(e.message); } }}>Use</button>
                       <button className="secondary" onClick={async () => { try { await deleteCharacter(c.id); const list = await listCharacters(); setCharacters(list);} catch (e) { alert(e.message);} }}>Delete</button>
                     </div>
                   </div>
@@ -349,7 +346,7 @@ function App() {
               </div>
             )}
             {settingsTab === 'appearance' && (
-              <p className="muted">Theme options coming soon.</p>
+              <AppearanceTab />
             )}
             {settingsTab === 'images' && (
               <ImagesTab providers={providers} />
@@ -374,7 +371,7 @@ function App() {
                 Import Lorebook JSON
                 <input type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={async (e) => {
                   const f = e.target.files?.[0]; if (!f) return;
-                  try { const fd = new FormData(); fd.append('file', f); const res = await fetch('/lorebooks/import', { method: 'POST', body: fd }); if (!res.ok) throw new Error('Import failed'); const lbs = await listLorebooks(); setLorebooks(lbs); } catch (err) { alert(err.message); }
+                  try { const fd = new FormData(); fd.append('file', f); const res = await fetch('/lorebooks/import', { method: 'POST', body: fd }); if (!res.ok) throw new Error('Import failed'); const lbs = await listLorebooks(); setLorebooks(lbs); setSelectedLorebook(lbs[lbs.length-1]||null);} catch (err) { console.error(err); alert(err.message); }
                   e.target.value = '';
                 }} />
               </label>
@@ -392,18 +389,39 @@ function App() {
             </div>
             <div className="char-list">
               {loreEntries.map(le => (
-                <div key={le.id} className="char-item">
-                  <div className="row" style={{ gap: 8, width: '100%' }}>
-                    <input style={{ width: 180 }} value={le.keyword} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, keyword: e.target.value }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { keyword: e.target.value }); } catch (err) { alert(err.message); } }} />
-                    <input style={{ flex: 1 }} value={le.content} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, content: e.target.value }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { content: e.target.value }); } catch (err) { alert(err.message); } }} />
+                <div key={le.id} className="char-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                  <div className="row" style={{ gap: 8, width: '100%', alignItems: 'center' }}>
+                    <button className="secondary" onClick={() => setExpandedEntries(s => ({ ...s, [le.id]: !s[le.id] }))}>{expandedEntries[le.id] ? '▾' : '▸'}</button>
+                    <input style={{ flex: 1 }} value={le.keyword} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, keyword: e.target.value }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { keyword: e.target.value }); } catch (err) { alert(err.message); } }} />
                   </div>
+                  {expandedEntries[le.id] && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 8, marginTop: 8 }}>
+                      <div className="muted">Primary Keywords</div>
+                      <input value={(le.keywords||[]).join(', ')} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, keywords: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { keywords: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) }); } catch (err) { alert(err.message); } }} />
+                      <div className="muted">Logic</div>
+                      <select value={le.logic || 'AND ANY'} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, logic: e.target.value }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { logic: e.target.value }); } catch (err) { alert(err.message); } }}>
+                        <option>AND ANY</option>
+                        <option>AND ALL</option>
+                        <option>NOT ANY</option>
+                        <option>NOT ALL</option>
+                      </select>
+                      <div className="muted">Secondary Keywords</div>
+                      <input value={(le.secondary_keywords||[]).join(', ')} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, secondary_keywords: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { secondary_keywords: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) }); } catch (err) { alert(err.message); } }} />
+                      <div className="muted">Order</div>
+                      <input type="number" value={le.order||0} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, order: parseInt(e.target.value,10) }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { order: parseInt(e.target.value,10) }); } catch (err) { alert(err.message); } }} />
+                      <div className="muted">Trigger %</div>
+                      <input type="number" value={le.trigger||100} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, trigger: parseInt(e.target.value,10) }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { trigger: parseInt(e.target.value,10) }); } catch (err) { alert(err.message); } }} />
+                      <div className="muted">Content</div>
+                      <textarea rows={4} value={le.content} onChange={(e) => setLoreEntries(arr => arr.map(x => x.id===le.id? { ...x, content: e.target.value }: x))} onBlur={async (e) => { try { await updateLoreEntry(le.id, { content: e.target.value }); } catch (err) { alert(err.message); } }} />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
             {selectedLorebook && (
               <div className="row">
                 <button onClick={async () => {
-                  try { const r = await fetch('/lore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword: 'keyword', content: 'content' })}); if (!r.ok) throw new Error('Failed'); const entry = await r.json(); const ids = [...(selectedLorebook.entry_ids||[]), entry.id]; await updateLorebook(selectedLorebook.id, { entry_ids: ids }); const lbs = await listLorebooks(); setLorebooks(lbs); const lb = lbs.find(x => x.id===selectedLorebook.id); setSelectedLorebook(lb||null); } catch (e) { alert(e.message); }
+                  try { const r = await fetch('/lore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword: 'keyword', content: 'content' })}); if (!r.ok) throw new Error('Failed'); const entry = await r.json(); const ids = [...(selectedLorebook.entry_ids||[]), entry.id]; await updateLorebook(selectedLorebook.id, { entry_ids: ids }); const lbs = await listLorebooks(); setLorebooks(lbs); const lb = lbs.find(x => x.id===selectedLorebook.id); setSelectedLorebook(lb||null); } catch (e) { console.error(e); alert(e.message); }
                 }}>+ Add Entry</button>
               </div>
             )}
@@ -423,6 +441,11 @@ function App() {
           )}
         </div>
 
+        <div className="input-tools">
+          <button className="secondary" title="Generate image from chat" onClick={async () => {
+            try { const r = await generateImageFromChat(); setMessages(m => [...m, { role: 'assistant', image_url: r.image_url }]); } catch (e) { alert(e.message); }
+          }}>🖌️</button>
+        </div>
         <form className="input-row" onSubmit={onSubmit}>
           <input
             type="text"
@@ -529,11 +552,75 @@ function ImagesTab() {
 
 function AdvancedTab() {
   const [raw, setRaw] = useState('');
-  useEffect(() => { (async () => { try { const r = await fetch('/config/raw'); if (r.ok) setRaw(JSON.stringify(await r.json(), null, 2)); } catch {} })(); }, []);
+  useEffect(() => { (async () => { try { const r = await fetch('/config/raw'); if (r.ok) setRaw(JSON.stringify(await r.json(), null, 2)); } catch (e) { console.error(e);} })(); }, []);
   return (
     <div>
       <p className="muted">Full settings.json (copy/share):</p>
       <textarea rows={16} style={{ width: '100%' }} readOnly value={raw} />
+      <div className="row" style={{ marginTop: 8 }}>
+        <button className="secondary" onClick={() => {
+          const blob = new Blob([raw], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a'); a.href = url; a.download = 'settings.json'; a.click(); URL.revokeObjectURL(url);
+        }}>Export settings.json</button>
+        <label className="secondary" style={{ padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}>
+          Import settings.json
+          <input type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={async (e) => {
+            const f = e.target.files?.[0]; if (!f) return;
+            try { const text = await f.text(); const data = JSON.parse(text); const r = await fetch('/config/raw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); if (!r.ok) throw new Error('Import failed'); alert('Imported. Reloading...'); location.reload(); } catch (err) { console.error(err); alert(err.message); } finally { e.target.value=''; }
+          }} />
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function AppearanceTab() {
+  const [theme, setTheme] = useState({ primary: '#2563eb', secondary: '#374151', text1: '#e5e7eb', text2: '#cbd5e1', highlight: '#10b981', lowlight: '#111827' });
+  useEffect(() => { (async () => { try { const r = await getConfig(); if (r.theme) setTheme(r.theme);} catch (e) { console.error(e);} })(); }, []);
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--primary', theme.primary);
+    root.style.setProperty('--panel', theme.secondary);
+    root.style.setProperty('--text', theme.text1);
+    root.style.setProperty('--muted', theme.text2);
+    root.style.setProperty('--assistant', theme.highlight);
+    root.style.setProperty('--bg', theme.lowlight);
+  }, [theme]);
+
+  const save = async (next) => { setTheme(next); try { await updateConfig({ theme: next }); } catch (e) { console.error(e); alert(e.message);} };
+
+  const suggest = async () => {
+    try {
+      const r = await fetch('/theme/suggest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ primary: theme.primary }) });
+      if (!r.ok) throw new Error('Suggest failed');
+      const { colors } = await r.json();
+      if (colors.length >= 5) {
+        const next = { ...theme, secondary: colors[0], text1: colors[1], text2: colors[2], highlight: colors[3], lowlight: colors[4] };
+        await save(next);
+      }
+    } catch (e) { console.error(e); alert(e.message);} 
+  };
+
+  const Color = ({ label, keyName, withThink }) => (
+    <label>
+      <span>{label}</span>
+      <div className="row" style={{ gap: 8 }}>
+        <input type="color" value={theme[keyName]} onChange={async (e) => { await save({ ...theme, [keyName]: e.target.value }); }} />
+        <input value={theme[keyName]} onChange={async (e) => { await save({ ...theme, [keyName]: e.target.value }); }} />
+        {withThink && (<button className="think" onClick={suggest}>💭</button>)}
+      </div>
+    </label>
+  );
+
+  return (
+    <div className="config-form">
+      <Color label="Primary" keyName="primary" withThink />
+      <Color label="Secondary" keyName="secondary" />
+      <Color label="Text 1" keyName="text1" />
+      <Color label="Text 2" keyName="text2" />
+      <Color label="Highlight" keyName="highlight" />
+      <Color label="Lowlight" keyName="lowlight" />
     </div>
   );
 }

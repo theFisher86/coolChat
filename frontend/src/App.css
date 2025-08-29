@@ -67,6 +67,8 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, sans-s
 .message.error .bubble { background: #450a0a; color: #fecaca; }
 
 .input-row { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #1f2937; background: var(--panel); }
+.input-tools { display: flex; gap: 8px; padding: 8px 16px; border-top: 1px solid #1f2937; background: #0b1220; position: sticky; bottom: 56px; z-index: 400; }
+.modal { z-index: 900; }
 .input-row input { flex: 1; padding: 10px 12px; border-radius: 8px; border: 1px solid #374151; background: #0b1220; color: var(--text); }
 .input-row button { padding: 10px 14px; border-radius: 8px; background: #2563eb; color: white; border: none; cursor: pointer; }
 .input-row button:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -77,6 +79,7 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, sans-s
 .config-form { display: grid; grid-template-columns: repeat(2, minmax(200px, 1fr)); gap: 12px; margin-top: 8px; }
 .config-form label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
 .config-form input, .config-form select { padding: 8px 10px; border-radius: 8px; border: 1px solid #374151; background: #0b1220; color: var(--text); }
+.characters input, .characters select, .characters textarea { padding: 8px 10px; border-radius: 8px; border: 1px solid #374151; background: #0b1220; color: var(--text); }
 .row { display: flex; gap: 8px; align-items: center; }
 .hint { margin-top: 8px; }
 

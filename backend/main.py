@@ -14,6 +14,7 @@ from typing import Dict, List, Optional
 import asyncio
 import httpx
 from .config import AppConfig, ProviderConfig, load_config, save_config, mask_secret, Provider, ImagesConfig, ImageProvider
+from .storage import load_json, save_json, public_dir
 import os
 
 app = FastAPI(title="CoolChat")
@@ -153,6 +154,7 @@ async def create_character(payload: CharacterCreate) -> Character:
     char = Character(id=_next_id, **data)
     _characters[_next_id] = char
     _next_id += 1
+    _save_characters()
     return char
 
 
@@ -173,6 +175,7 @@ async def delete_character(char_id: int) -> None:
     if char_id not in _characters:
         raise HTTPException(status_code=404, detail="Character not found")
     del _characters[char_id]
+    _save_characters()
     return None
 
 
@@ -184,6 +187,7 @@ async def update_character(char_id: int, payload: CharacterUpdate) -> Character:
     data = payload.model_dump(exclude_unset=True)
     updated = char.model_copy(update=data)
     _characters[char_id] = updated
+    _save_characters()
     return updated
 
 
@@ -198,11 +202,22 @@ class LoreEntry(BaseModel):
     id: int
     keyword: str
     content: str
+    # Extended matching
+    keywords: List[str] = []  # primary keywords (comma list in UI)
+    logic: str = "AND ANY"  # AND ANY, AND ALL, NOT ANY, NOT ALL
+    secondary_keywords: List[str] = []
+    order: int = 0
+    trigger: int = 100
 
 
 class LoreEntryCreate(BaseModel):
     keyword: str
     content: str
+    keywords: Optional[List[str]] = None
+    logic: Optional[str] = None
+    secondary_keywords: Optional[List[str]] = None
+    order: Optional[int] = None
+    trigger: Optional[int] = None
 
 
 _lore: Dict[int, LoreEntry] = {}
@@ -238,9 +253,19 @@ async def create_lore(payload: LoreEntryCreate) -> LoreEntry:
     """Create a new lore entry."""
 
     global _next_lore_id
-    entry = LoreEntry(id=_next_lore_id, **payload.model_dump())
+    data = payload.model_dump()
+    if data.get("keywords") is None:
+        data["keywords"] = []
+    if data.get("logic") is None:
+        data["logic"] = "AND ANY"
+    if data.get("secondary_keywords") is None:
+        data["secondary_keywords"] = []
+    data["order"] = data.get("order") or 0
+    data["trigger"] = data.get("trigger") or 100
+    entry = LoreEntry(id=_next_lore_id, **data)
     _lore[_next_lore_id] = entry
     _next_lore_id += 1
+    _save_lore()
     return entry
 
 
@@ -261,6 +286,7 @@ async def delete_lore(entry_id: int) -> None:
     if entry_id not in _lore:
         raise HTTPException(status_code=404, detail="Lore entry not found")
     del _lore[entry_id]
+    _save_lore()
     return None
 
 
@@ -281,6 +307,7 @@ async def update_lore(entry_id: int, payload: LoreEntryUpdate) -> LoreEntry:
         data['content'] = payload.content
     updated = LoreEntry(**data)
     _lore[entry_id] = updated
+    _save_lore()
     return updated
 
 
@@ -297,12 +324,22 @@ async def create_lorebook(payload: LorebookCreate) -> Lorebook:
     if payload.entries:
         global _next_lore_id
         for le in payload.entries:
-            entry = LoreEntry(id=_next_lore_id, keyword=le.keyword, content=le.content)
+            entry = LoreEntry(
+                id=_next_lore_id,
+                keyword=le.keyword,
+                content=le.content,
+                keywords=le.keywords or [],
+                logic=le.logic or "AND ANY",
+                secondary_keywords=le.secondary_keywords or [],
+                order=le.order or 0,
+                trigger=le.trigger or 100,
+            )
             _lore[_next_lore_id] = entry
             lb.entry_ids.append(_next_lore_id)
             _next_lore_id += 1
     _lorebooks[_next_lorebook_id] = lb
     _next_lorebook_id += 1
+    _save_lorebooks(); _save_lore()
     return lb
 
 
@@ -319,6 +356,7 @@ async def delete_lorebook(lb_id: int) -> None:
     if lb_id not in _lorebooks:
         raise HTTPException(status_code=404, detail="Lorebook not found")
     del _lorebooks[lb_id]
+    _save_lorebooks()
     return None
 
 
@@ -342,6 +380,7 @@ async def update_lorebook(lb_id: int, payload: LorebookUpdate) -> Lorebook:
         data['entry_ids'] = payload.entry_ids
     updated = Lorebook(**data)
     _lorebooks[lb_id] = updated
+    _save_lorebooks()
     return updated
 
 
@@ -366,6 +405,48 @@ class MemoryCreate(BaseModel):
 
 _memory: Dict[int, MemoryEntry] = {}
 _next_memory_id: int = 1
+
+
+def _load_state() -> None:
+    global _characters, _next_id, _lore, _next_lore_id, _lorebooks, _next_lorebook_id, _memory, _next_memory_id, _chat_histories
+    data = load_json("characters.json", {"next_id": 1, "items": []})
+    _next_id = int(data.get("next_id", 1))
+    _characters = {c["id"]: Character(**c) for c in data.get("items", [])}
+
+    data = load_json("lore.json", {"next_id": 1, "items": []})
+    _next_lore_id = int(data.get("next_id", 1))
+    _lore = {e["id"]: LoreEntry(**e) for e in data.get("items", [])}
+
+    data = load_json("lorebooks.json", {"next_id": 1, "items": []})
+    _next_lorebook_id = int(data.get("next_id", 1))
+    _lorebooks = {lb["id"]: Lorebook(**lb) for lb in data.get("items", [])}
+
+    data = load_json("memory.json", {"next_id": 1, "items": []})
+    _next_memory_id = int(data.get("next_id", 1))
+    _memory = {m["id"]: MemoryEntry(**m) for m in data.get("items", [])}
+
+    globals_dict = load_json("histories.json", {})
+    _chat_histories.clear(); _chat_histories.update(globals_dict)
+
+
+def _save_characters() -> None:
+    save_json("characters.json", {"next_id": _next_id, "items": [c.model_dump() for c in _characters.values()]})
+
+
+def _save_lore() -> None:
+    save_json("lore.json", {"next_id": _next_lore_id, "items": [e.model_dump() for e in _lore.values()]})
+
+
+def _save_lorebooks() -> None:
+    save_json("lorebooks.json", {"next_id": _next_lorebook_id, "items": [lb.model_dump() for lb in _lorebooks.values()]})
+
+
+def _save_memory() -> None:
+    save_json("memory.json", {"next_id": _next_memory_id, "items": [m.model_dump() for m in _memory.values()]})
+
+
+def _save_histories() -> None:
+    save_json("histories.json", _chat_histories)
 
 
 def _summarize(text: str, width: int = 60) -> str:
@@ -395,6 +476,7 @@ async def create_memory(payload: MemoryCreate) -> MemoryEntry:
     )
     _memory[_next_memory_id] = entry
     _next_memory_id += 1
+    _save_memory()
     return entry
 
 
@@ -415,6 +497,7 @@ async def delete_memory(entry_id: int) -> None:
     if entry_id not in _memory:
         raise HTTPException(status_code=404, detail="Memory entry not found")
     del _memory[entry_id]
+    _save_memory()
     return None
 
 
@@ -612,6 +695,33 @@ async def _llm_reply(message: str, cfg: AppConfig, recent_text: str | None = Non
             except Exception:
                 raise HTTPException(status_code=502, detail={"provider_error": "Unexpected response schema"})
 
+    if provider == Provider.POLLINATIONS:
+        # text.pollinations.ai provides OpenAI-compatible chat completions under /openai
+        base = (pcfg.api_base or "https://text.pollinations.ai").rstrip("/")
+        url = base + "/openai/chat/completions"
+        headers = {"Content-Type": "application/json"}
+        if pcfg.api_key:
+            headers["Authorization"] = f"Bearer {pcfg.api_key}"
+        messages = []
+        if system_msg:
+            messages.append({"role": "system", "content": system_msg})
+        messages.append({"role": "user", "content": message})
+        body = {"model": pcfg.model or "openai-large", "messages": messages, "temperature": pcfg.temperature}
+        timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(url, headers=headers, json=body)
+            if resp.status_code >= 400:
+                try:
+                    detail = resp.json()
+                except Exception:
+                    detail = resp.text
+                raise HTTPException(status_code=502, detail={"provider_error": detail})
+            data = resp.json()
+            try:
+                return data["choices"][0]["message"]["content"].strip()
+            except Exception:
+                raise HTTPException(status_code=502, detail={"provider_error": "Unexpected response schema"})
+
     # Unknown provider
     raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
 
@@ -639,6 +749,7 @@ async def chat_endpoint(payload: ChatRequest) -> ChatResponse:
     history.append({"role": "user", "content": payload.message})
     history.append({"role": "assistant", "content": reply})
     _trim_history(session_id, cfg)
+    _save_histories()
 
     return ChatResponse(reply=reply)
 
@@ -681,13 +792,27 @@ def _build_system_from_character(char: Optional[Character], user_persona: Option
                 for eid in lb.entry_ids:
                     e = _lore.get(eid)
                     if e:
+                        include = False
                         if recent_text:
                             hay = recent_text.lower()
-                            if e.keyword.lower() in hay:
-                                lore_texts.append(f"[{e.keyword}] {e.content}")
-                                triggered_any = True
+                            primaries = [x.lower() for x in (e.keywords or [e.keyword]) if x]
+                            seconds = [x.lower() for x in (e.secondary_keywords or []) if x]
+                            found_primary = [k for k in primaries if k in hay]
+                            found_secondary = [k for k in seconds if k in hay]
+                            logic = (e.logic or "AND ANY").upper()
+                            if logic == "AND ALL":
+                                include = len(found_primary) == len(primaries) and (not seconds or len(found_secondary) == len(seconds))
+                            elif logic == "NOT ANY":
+                                include = len(found_primary) == 0 and len(found_secondary) == 0
+                            elif logic == "NOT ALL":
+                                include = not (len(found_primary) == len(primaries))
+                            else:  # AND ANY default
+                                include = bool(found_primary) or bool(found_secondary)
                         else:
+                            include = True
+                        if include:
                             lore_texts.append(f"[{e.keyword}] {e.content}")
+                            triggered_any = True
             if lore_texts:
                 title = "Triggered World Info" if triggered_any else "World Info"
                 segments.append(f"{title}:\n" + "\n".join(lore_texts))
@@ -735,7 +860,12 @@ class ConfigResponse(BaseModel):
     debug: Dict[str, bool]
     user_persona: Dict[str, str]
     max_context_tokens: int
-    images: Dict[str, Dict[str, str | None]]
+    class ImagesOut(BaseModel):
+        active: str
+        pollinations: Dict[str, str | None]
+        dezgo: Dict[str, str | None]
+    images: ImagesOut
+    theme: Dict[str, str] | None = None
 
 
 class ProviderConfigUpdate(BaseModel):
@@ -752,7 +882,8 @@ class ConfigUpdate(BaseModel):
     debug: Dict[str, bool] | None = None
     user_persona: Dict[str, str] | None = None
     max_context_tokens: int | None = None
-    images: Dict[str, Dict[str, str | None]] | None = None
+    images: Dict[str, object] | None = None
+    theme: Dict[str, str] | None = None
 
 
 @app.get("/config", response_model=ConfigResponse)
@@ -779,11 +910,24 @@ async def get_config() -> ConfigResponse:
             "tracking": getattr(cfg.user_persona, 'tracking', ''),
         },
         max_context_tokens=getattr(cfg, 'max_context_tokens', 2048),
-        images={
-            "active": getattr(cfg.images, 'active', ImageProvider.POLLINATIONS),
-            "pollinations": {"api_key": None, "model": getattr(cfg.images.pollinations, 'model', None)},
-            "dezgo": {"api_key": None, "model": getattr(cfg.images.dezgo, 'model', None), "lora_url": getattr(cfg.images.dezgo, 'lora_url', None)},
-        },
+        images=ConfigResponse.ImagesOut(
+            active=getattr(cfg.images, 'active', ImageProvider.POLLINATIONS),
+            pollinations={"api_key": None, "model": getattr(cfg.images.pollinations, 'model', None)},
+            dezgo={
+                "api_key": None,
+                "model": getattr(cfg.images.dezgo, 'model', None),
+                "lora_flux_1": getattr(cfg.images.dezgo, 'lora_flux_1', None),
+                "lora_flux_2": getattr(cfg.images.dezgo, 'lora_flux_2', None),
+                "lora_sd1_1": getattr(cfg.images.dezgo, 'lora_sd1_1', None),
+                "lora_sd1_2": getattr(cfg.images.dezgo, 'lora_sd1_2', None),
+                "transparent": str(getattr(cfg.images.dezgo, 'transparent', False)),
+                "width": str(getattr(cfg.images.dezgo, 'width', '')),
+                "height": str(getattr(cfg.images.dezgo, 'height', '')),
+                "steps": str(getattr(cfg.images.dezgo, 'steps', '')),
+                "upscale": str(getattr(cfg.images.dezgo, 'upscale', '')),
+            },
+        ),
+        theme=getattr(cfg, 'theme', None).model_dump() if getattr(cfg, 'theme', None) else None,
     )
 
 
@@ -841,6 +985,7 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
             cfg.max_context_tokens = int(payload.max_context_tokens)
         except Exception:
             pass
+
     if payload.images is not None:
         imgs = getattr(cfg, 'images', ImagesConfig())
         active = payload.images.get("active") if isinstance(payload.images, dict) else None
@@ -854,13 +999,20 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
                 imgs.pollinations.api_key = poll.get("api_key")
         dez = payload.images.get("dezgo") if isinstance(payload.images, dict) else None
         if isinstance(dez, dict):
-            if "model" in dez:
-                imgs.dezgo.model = dez.get("model")
-            if "api_key" in dez:
-                imgs.dezgo.api_key = dez.get("api_key")
-            if "lora_url" in dez:
-                imgs.dezgo.lora_url = dez.get("lora_url")
+            for k in ("model","api_key","lora_flux_1","lora_flux_2","lora_sd1_1","lora_sd1_2"):
+                if k in dez:
+                    setattr(imgs.dezgo, k, dez.get(k))
+            for k in ("transparent","width","height","steps","upscale"):
+                if k in dez:
+                    setattr(imgs.dezgo, k, dez.get(k))
         cfg.images = imgs
+    if payload.theme is not None:
+        if not hasattr(cfg, 'theme') or cfg.theme is None:
+            from .config import AppearanceConfig
+            cfg.theme = AppearanceConfig()
+        for k in ("primary","secondary","text1","text2","highlight","lowlight"):
+            if k in payload.theme:
+                setattr(cfg.theme, k, payload.theme[k])
 
     try:
         save_config(cfg)
@@ -889,12 +1041,46 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
             "tracking": getattr(cfg.user_persona, 'tracking', ''),
         },
         max_context_tokens=getattr(cfg, 'max_context_tokens', 2048),
-        images={
-            "active": getattr(cfg.images, 'active', ImageProvider.POLLINATIONS),
-            "pollinations": {"api_key": None, "model": getattr(cfg.images.pollinations, 'model', None)},
-            "dezgo": {"api_key": None, "model": getattr(cfg.images.dezgo, 'model', None), "lora_url": getattr(cfg.images.dezgo, 'lora_url', None)},
-        },
+        images=ConfigResponse.ImagesOut(
+            active=getattr(cfg.images, 'active', ImageProvider.POLLINATIONS),
+            pollinations={"api_key": None, "model": getattr(cfg.images.pollinations, 'model', None)},
+            dezgo={
+                "api_key": None,
+                "model": getattr(cfg.images.dezgo, 'model', None),
+                "lora_flux_1": getattr(cfg.images.dezgo, 'lora_flux_1', None),
+                "lora_flux_2": getattr(cfg.images.dezgo, 'lora_flux_2', None),
+                "lora_sd1_1": getattr(cfg.images.dezgo, 'lora_sd1_1', None),
+                "lora_sd1_2": getattr(cfg.images.dezgo, 'lora_sd1_2', None),
+                "transparent": str(getattr(cfg.images.dezgo, 'transparent', False)),
+                "width": str(getattr(cfg.images.dezgo, 'width', '')),
+                "height": str(getattr(cfg.images.dezgo, 'height', '')),
+                "steps": str(getattr(cfg.images.dezgo, 'steps', '')),
+                "upscale": str(getattr(cfg.images.dezgo, 'upscale', '')),
+            },
+        ),
+        theme=getattr(cfg, 'theme', None).model_dump() if getattr(cfg, 'theme', None) else None,
     )
+
+
+class ThemeSuggestRequest(BaseModel):
+    primary: str
+
+
+class ThemeSuggestResponse(BaseModel):
+    colors: List[str]
+
+
+@app.post("/theme/suggest", response_model=ThemeSuggestResponse)
+async def theme_suggest(payload: ThemeSuggestRequest) -> ThemeSuggestResponse:
+    cfg = load_config()
+    prompt = f"Given {payload.primary} please suggest 5 more colors that will provide an easily readable and pleasing UI theme. Select a secondary color that compliments the primary, Two text colors that will stand out and be readable with the primary and secondary colors as their background respectively. And include a highlight and lowlight color. Return the colors as comma separated hex codes. Do not include anything else in your reply."
+    reply = await _llm_reply(prompt, cfg)
+    text = reply.strip().strip('`')
+    if text.lower().startswith('json'):
+        text = text[4:].strip()
+    parts = [p.strip() for p in text.split(',') if p.strip()]
+    parts = parts[:5]
+    return ThemeSuggestResponse(colors=parts)
 
 
 @app.get("/config/raw")
@@ -902,6 +1088,19 @@ async def get_config_raw():
     """Return the full config including API keys for Advanced tab."""
     cfg = load_config()
     return cfg.model_dump()
+
+
+@app.post("/config/raw")
+async def replace_config(raw: Dict[str, object]):
+    """Replace the entire configuration with the provided JSON."""
+    try:
+        # Validate by constructing AppConfig
+        from .config import AppConfig
+        cfg = AppConfig(**raw)
+        save_config(cfg)
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid config: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -1349,12 +1548,23 @@ async def generate_from_chat(payload: GenerateFromChatRequest) -> GenerateFromCh
         if not key:
             raise HTTPException(status_code=400, detail="Missing Dezgo API key")
         model = getattr(img_cfg.dezgo, 'model', None)
-        lora = getattr(img_cfg.dezgo, 'lora_url', None)
         body = {"prompt": final_prompt}
         if model:
             body["model"] = model
-        if lora:
-            body["lora"] = lora
+        # LORAs
+        for k in ("lora_flux_1","lora_flux_2","lora_sd1_1","lora_sd1_2"):
+            v = getattr(img_cfg.dezgo, k, None)
+            if v:
+                body[k] = v
+        # Options
+        if getattr(img_cfg.dezgo, 'transparent', False):
+            body["transparent"] = "true"
+        for k in ("width","height","steps"):
+            v = getattr(img_cfg.dezgo, k, None)
+            if v:
+                body[k] = str(v)
+        if getattr(img_cfg.dezgo, 'upscale', None):
+            body["upscale"] = "true"
         headers = {"Authorization": key}
         async with _httpx.AsyncClient(timeout=_httpx.Timeout(10.0, read=60.0)) as client:
             r = await client.post("https://api.dezgo.com/text2image", data=body, headers=headers)
@@ -1400,7 +1610,11 @@ async def import_lorebook(file: UploadFile = File(...)) -> Lorebook:
             keys = i.get("keys") or i.get("triggers") or []
             kw = keys[0] if isinstance(keys, list) and keys else (i.get("keyword") or "")
             content = i.get("content") or i.get("text") or i.get("entry") or ""
-            out.append(LoreEntryCreate(keyword=kw, content=content))
+            logic = i.get("logic") or "AND ANY"
+            secondary = i.get("secondary_keys") or i.get("secondary_keywords") or []
+            order = i.get("order") or 0
+            trigger = i.get("probability") or i.get("trigger") or 100
+            out.append(LoreEntryCreate(keyword=kw, content=content, keywords=keys if isinstance(keys, list) else [], logic=logic, secondary_keywords=secondary, order=order, trigger=trigger))
         return out
 
     if isinstance(data, list):
@@ -1409,7 +1623,7 @@ async def import_lorebook(file: UploadFile = File(...)) -> Lorebook:
         return lb
     elif isinstance(data, dict):
         # SillyTavern commonly: { name, description?, entries: [...] }
-        name = data.get("name") or data.get("book_name") or "Imported Lorebook"
+        name = data.get("name") or data.get("book_name") or data.get("title") or "Imported Lorebook"
         description = data.get("description") or ""
         entries_data = data.get("entries") or data.get("world_info") or []
         entries = _st_to_entries(entries_data)
