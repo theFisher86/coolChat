@@ -15,6 +15,12 @@ import {
   generateImageFromChat,
   updateLoreEntry,
   updateLorebook,
+  listChats,
+  getChat,
+  resetChat,
+  getPrompts,
+  savePrompts,
+  suggestLoreFromChat,
 } from './api';
 
 function App() {
@@ -25,6 +31,12 @@ function App() {
 
   const [showConfig, setShowConfig] = useState(false);
   const [settingsTab, setSettingsTab] = useState('connection');
+  const [showChats, setShowChats] = useState(false);
+  const [sessionId, setSessionId] = useState('default');
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  const [phoneUrl, setPhoneUrl] = useState('https://example.org');
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggests, setSuggests] = useState([]);
 
   const [activeProvider, setActiveProvider] = useState('echo');
   const [providers, setProviders] = useState({}); // provider -> masked config
@@ -64,6 +76,11 @@ function App() {
       }
     })();
   }, []);
+
+  // Load chat history on session change
+  useEffect(() => {
+    (async () => { try { const { messages: msgs } = await getChat(sessionId); setMessages(msgs || []);} catch {} })();
+  }, [sessionId]);
 
   // Characters and lorebooks
   useEffect(() => {
@@ -115,7 +132,7 @@ function App() {
     setInput('');
     setSending(true);
     try {
-      const reply = await sendChat(trimmed);
+      const reply = await sendChat(trimmed, sessionId);
       setMessages((m) => [...m, { role: 'assistant', content: reply }]);
     } catch (err) {
       setError(err.message);
@@ -125,12 +142,18 @@ function App() {
   };
 
   return (
-    <div className="app">
+    <div className={`app ${phoneOpen ? 'phone-open' : ''}`}>
       <header className="header">
         <h1>CoolChat</h1>
         <div className="spacer" />
         <button className="secondary" onClick={() => setShowCharacters((s) => !s)}>
           {showCharacters ? 'Hide Characters' : 'Characters'}
+        </button>
+        <button className="secondary" onClick={() => setPhoneOpen(o => !o)}>
+          {phoneOpen ? 'Close Phone' : 'Phone'}
+        </button>
+        <button className="secondary" onClick={() => setShowChats((s) => !s)}>
+          {showChats ? 'Hide Chats' : 'Chats'}
         </button>
         <button className="secondary" onClick={() => setShowLorebooks((s) => !s)}>
           {showLorebooks ? 'Hide Lorebooks' : 'Lorebooks'}
@@ -140,6 +163,15 @@ function App() {
         </button>
       </header>
 
+      {phoneOpen && (
+        <div className="phone-panel">
+          <div className="bar">
+            <input style={{ flex: 1 }} placeholder="https://" value={phoneUrl} onChange={(e)=> setPhoneUrl(e.target.value)} />
+            <button className="secondary" onClick={()=> setPhoneUrl(phoneUrl)}>Go</button>
+          </div>
+          <iframe src={phoneUrl} title="Phone" />
+        </div>
+      )}
       <main className="chat">
         
         {showCharacters && (
@@ -188,6 +220,13 @@ function App() {
           </section>
         )}
 
+        {showChats && (
+          <section className="panel overlay">
+            <h2>Chats</h2>
+            <ChatManager sessionId={sessionId} setSessionId={setSessionId} onClose={() => setShowChats(false)} />
+          </section>
+        )}
+
         {showConfig && (
           <section className="panel overlay">
             <h2>Configuration</h2>
@@ -196,6 +235,7 @@ function App() {
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('persona'); }}>Persona</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('appearance'); }}>Appearance</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('images'); }}>Images</button>
+              <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('prompts'); }}>Prompts</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('advanced'); }}>Advanced</button>
             </div>
             {settingsTab === 'connection' && (
@@ -381,6 +421,9 @@ function App() {
             {settingsTab === 'images' && (
               <ImagesTab providers={providers} />
             )}
+            {settingsTab === 'prompts' && (
+              <PromptsTab />
+            )}
             {settingsTab === 'advanced' && (
               <AdvancedTab />
             )}
@@ -396,6 +439,7 @@ function App() {
         {showLorebooks && (
           <section className="characters overlay">
             <h2>Lorebooks</h2>
+            <ActiveLorebooks lorebooks={lorebooks} />
             <div className="row">
               <label className="secondary" style={{ padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}>
                 Import Lorebook JSON
@@ -417,7 +461,6 @@ function App() {
                 </>
               )}
             </div>
-            <ActiveLorebooks lorebooks={lorebooks} />
             <div className="char-list">
               {loreEntries.map(le => (
                 <div key={le.id} className="char-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
@@ -473,8 +516,16 @@ function App() {
         </div>
 
         <div className="input-tools">
+          <button className="secondary" title="Suggest lore entries from chat" onClick={async () => {
+            try {
+              const s = await suggestLoreFromChat(sessionId);
+              if (!s.suggestions || s.suggestions.length === 0) { alert('No suggestions'); return; }
+              setSuggests(s.suggestions);
+              setSuggestOpen(true);
+            } catch (e) { console.error(e); alert(e.message); }
+          }}>📖</button>
           <button className="secondary" title="Generate image from chat" onClick={async () => {
-            try { const r = await generateImageFromChat(); setMessages(m => [...m, { role: 'assistant', image_url: r.image_url }]); } catch (e) { console.error(e); alert(e.message); }
+            try { const r = await generateImageFromChat(sessionId); setMessages(m => [...m, { role: 'assistant', image_url: r.image_url }]); } catch (e) { console.error(e); alert(e.message); }
           }}>🖌️</button>
           <button className="secondary" title="Scroll to bottom" style={{ marginLeft: 'auto' }} onClick={() => { try { const el = document.querySelector('.messages'); if (el) el.scrollTop = el.scrollHeight; } catch (e) { console.error(e); } }}>⤓</button>
         </div>
@@ -522,6 +573,25 @@ function App() {
             }}
           />
         )}
+        {suggestOpen && (
+          <SuggestLoreModal suggestions={suggests} onClose={() => setSuggestOpen(false)} onApply={async (edited) => {
+            try {
+              const cfg = await getConfig();
+              const activeIds = cfg.active_lorebook_ids || [];
+              if (!activeIds.length) { alert('No active lorebooks set'); return; }
+              const newIds = [];
+              for (const sug of edited.filter(x=>x.include)) {
+                const r = await fetch('/lore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword: sug.keyword, content: sug.content })});
+                if (r.ok) { const e = await r.json(); newIds.push(e.id); }
+              }
+              if (newIds.length) {
+                const lbcur = await (await fetch(`/lorebooks/${activeIds[0]}`)).json();
+                const ids = [...(lbcur.entry_ids||[]), ...newIds];
+                await updateLorebook(activeIds[0], { entry_ids: ids });
+              }
+              setSuggestOpen(false);
+            } catch (e) { console.error(e); alert(e.message);} }} />
+        )}
       </main>
     </div>
   );
@@ -538,6 +608,15 @@ function ImagesTab() {
   const loadModels = async (prov) => { try { const m = await getImageModels(prov); setModels(m.models || []);} catch (e) { console.error(e); setModels([]);} };
 
   const saveCfg = async (next) => { try { await updateConfig({ images: next }); } catch (e) { console.error(e); alert(e.message);} };
+
+  // Helpers for Dezgo model family
+  const modelFamily = (m) => {
+    const s = (m || '').toLowerCase();
+    if (s.includes('flux')) return 'flux';
+    if (s.includes('lightning')) return 'sdxl_lightning';
+    if (s.includes('sdxl')) return 'sdxl';
+    return 'sd1';
+  };
 
   return (
     <div className="config-form">
@@ -571,10 +650,22 @@ function ImagesTab() {
           </label>
           <label>
             <span>Model</span>
-            <select value={cfg.dezgo.model || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, model: e.target.value } }))}>
+            <select value={cfg.dezgo.model || ''} onChange={(e) => {
+              const v = e.target.value; const fam = modelFamily(v);
+              const next = { ...cfg, dezgo: { ...cfg.dezgo, model: v, steps: fam==='flux' ? 4 : (fam==='sdxl_lightning' ? '' : (cfg.dezgo.steps || 30)) } };
+              setCfg(next); saveCfg(next);
+            }}>
               <option value="">(default)</option>
               {models.map(m => (<option key={m} value={m}>{m}</option>))}
             </select>
+          </label>
+          <label>
+            <span>LoRA 1 Strength</span>
+            <input type="range" min="0" max="1" step="0.05" disabled={!cfg.dezgo.lora_flux_1 && !cfg.dezgo.lora_sd1_1} value={cfg.dezgo.lora1_strength ?? 0.7} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora1_strength: parseFloat(e.target.value) } }))} />
+          </label>
+          <label>
+            <span>LoRA 2 Strength</span>
+            <input type="range" min="0" max="1" step="0.05" disabled={!cfg.dezgo.lora_flux_2 && !cfg.dezgo.lora_sd1_2} value={cfg.dezgo.lora2_strength ?? 0.7} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora2_strength: parseFloat(e.target.value) } }))} />
           </label>
           <label>
             <span>Flux LORA #1 (SHA256)</span>
@@ -593,8 +684,8 @@ function ImagesTab() {
             <input value={cfg.dezgo.lora_sd1_2 || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora_sd1_2: e.target.value } }))} />
           </label>
           <label>
-            <span>Transparent</span>
-            <input type="checkbox" checked={!!cfg.dezgo.transparent} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, transparent: e.target.checked } }))} />
+            <span>Transparent Background</span>
+            <input type="checkbox" disabled={modelFamily(cfg.dezgo.model) === 'sd1'} checked={!!cfg.dezgo.transparent} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, transparent: e.target.checked } }))} />
           </label>
           <label>
             <span>Width</span>
@@ -606,16 +697,47 @@ function ImagesTab() {
           </label>
           <label>
             <span>Steps</span>
-            <input type="number" value={cfg.dezgo.steps || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, steps: e.target.value } }))} />
+            <input type="number" disabled={modelFamily(cfg.dezgo.model)==='sdxl_lightning'} value={cfg.dezgo.steps || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, steps: e.target.value } }))} />
           </label>
           <label>
             <span>Upscale</span>
-            <input type="checkbox" checked={!!cfg.dezgo.upscale} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, upscale: e.target.checked } }))} />
+            <input type="checkbox" disabled={modelFamily(cfg.dezgo.model) !== 'sd1'} checked={!!cfg.dezgo.upscale} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, upscale: e.target.checked } }))} />
           </label>
         </>
       )}
       <div className="row" style={{ gridColumn: '1 / -1' }}>
-        <button onClick={async () => { try { const current = (await getConfig()).images; const changes = JSON.stringify(cfg) !== JSON.stringify(current); if (changes) { if (!window.confirm('Images config.json will be updated. Proceed?')) return; } await saveCfg(cfg); } catch (e) { console.error(e); alert(e.message); } }}>Save Image Settings</button>
+        <button onClick={async () => { try { const current = (await getConfig()).images; const changes = JSON.stringify(cfg) !== JSON.stringify(current); if (changes) { if (!window.confirm('Images config.json will be updated. Proceed?')) return; } await saveCfg(cfg); alert('Saved'); } catch (e) { console.error(e); alert(e.message); } }}>Save Image Settings</button>
+      </div>
+    </div>
+  );
+}
+
+function PromptsTab() {
+  const [all, setAll] = useState([]);
+  const [active, setActive] = useState([]);
+  const [newText, setNewText] = useState('');
+  useEffect(() => { (async () => { try { const d = await getPrompts(); setAll(d.all || []); setActive(d.active || []);} catch (e) { console.error(e);} })(); }, []);
+  const save = async (na, aa) => { try { await savePrompts({ all: na, active: aa }); setAll(na); setActive(aa);} catch (e) { console.error(e); alert(e.message);} };
+  const toggleActive = (txt) => { const aa = active.includes(txt) ? active.filter(x=>x!==txt) : [...active, txt]; save(all, aa); };
+  const add = () => { const t = newText.trim(); if (!t) return; const na = [...all, t]; setNewText(''); save(na, active); };
+  const remove = (txt) => { const na = all.filter(x=>x!==txt); const aa = active.filter(x=>x!==txt); save(na, aa); };
+  return (
+    <div className="config-form">
+      <label>
+        <span>New Prompt</span>
+        <div className="row" style={{ gap: 8 }}>
+          <input value={newText} onChange={(e)=> setNewText(e.target.value)} placeholder="Short prompt text to include in system context" />
+          <button className="secondary" onClick={add}>Add</button>
+        </div>
+      </label>
+      <div className="row" style={{ display: 'block' }}>
+        {(all||[]).map((p, i) => (
+          <div key={i} className="row" style={{ gap: 8, alignItems: 'center', marginBottom: 6 }}>
+            <input type="checkbox" checked={active.includes(p)} onChange={()=> toggleActive(p)} />
+            <span style={{ flex: 1 }}>{p}</span>
+            <button className="secondary" onClick={()=> remove(p)}>Delete</button>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -667,8 +789,7 @@ function AdvancedTab() {
         <button onClick={async ()=>{ try { const data = JSON.parse(raw); const r = await fetch('/config/raw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); if (!r.ok) throw new Error('Save failed'); alert('Saved. Reloading...'); location.reload(); } catch (e) { console.error(e); alert(e.message);} }}>Save settings.json</button>
       </div>
       <hr />
-      <p className="muted">Saved themes</p>
-      <ThemesManager />
+      <p className="muted">Advanced settings</p>
     </div>
   );
 }
@@ -685,7 +806,7 @@ function ThemesManager() {
         <option value="">(select)</option>
         {names.map(n => (<option key={n} value={n}>{n}</option>))}
       </select>
-      <button className="secondary" onClick={async ()=>{ if (!sel) return; try { const r = await fetch(`/themes/${sel}`); if (!r.ok) throw new Error('Load failed'); const t = await r.json(); await fetch('/config', { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ theme: t }) }); alert('Theme loaded'); } catch (e) { console.error(e); alert(e.message);} }}>Load Theme</button>
+      <button className="secondary" onClick={async ()=>{ if (!sel) return; try { const r = await fetch(`/themes/${sel}`); if (!r.ok) throw new Error('Load failed'); const t = await r.json(); await fetch('/config', { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ theme: t }) }); try { const root = document.documentElement; root.style.setProperty('--primary', t.primary); root.style.setProperty('--panel', t.secondary); root.style.setProperty('--text', t.text1); root.style.setProperty('--muted', t.text2); root.style.setProperty('--assistant', t.highlight); root.style.setProperty('--bg', t.lowlight);} catch (e) { console.error(e);} alert('Theme loaded'); } catch (e) { console.error(e); alert(e.message);} }}>Load Theme</button>
       <button onClick={async ()=>{ const name = prompt('Save theme as:'); if (!name) return; try { const cfg = await getConfig(); const t = cfg.theme || {}; const r = await fetch('/themes', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, theme: t })}); if (!r.ok) throw new Error('Save theme failed'); alert('Theme saved'); load(); } catch (e) { console.error(e); alert(e.message);} }}>Save Current Theme</button>
     </div>
   );
@@ -737,6 +858,56 @@ function AppearanceTab() {
       <Color label="Text 2" keyName="text2" />
       <Color label="Highlight" keyName="highlight" />
       <Color label="Lowlight" keyName="lowlight" />
+      <hr />
+      <p className="muted">Saved themes</p>
+      <ThemesManager />
+    </div>
+  );
+}
+
+function SuggestLoreModal({ suggestions, onClose, onApply }) {
+  const [rows, setRows] = useState(() => (suggestions || []).map(s => ({ include: true, keyword: s.keyword || '', content: s.content || '' })));
+  return (
+    <section className="panel overlay">
+      <h2>Lore Suggestions</h2>
+      <div className="char-list" style={{ maxHeight: 360, overflow: 'auto' }}>
+        {rows.map((r, i) => (
+          <div key={i} className="char-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+            <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+              <input type="checkbox" checked={r.include} onChange={(e)=> setRows(arr => arr.map((x,idx)=> idx===i? { ...x, include: e.target.checked }: x))} />
+              <input placeholder="Keyword" value={r.keyword} onChange={(e)=> setRows(arr => arr.map((x,idx)=> idx===i? { ...x, keyword: e.target.value }: x))} />
+            </div>
+            <textarea rows={3} placeholder="Content" value={r.content} onChange={(e)=> setRows(arr => arr.map((x,idx)=> idx===i? { ...x, content: e.target.value }: x))} />
+          </div>
+        ))}
+      </div>
+      <div className="row" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+        <button className="secondary" onClick={onClose}>Cancel</button>
+        <button onClick={()=> onApply(rows)}>Add Selected</button>
+      </div>
+    </section>
+  );
+}
+
+function ChatManager({ sessionId, setSessionId, onClose }) {
+  const [sessions, setSessions] = useState([]);
+  const [newName, setNewName] = useState('');
+  const load = async () => { try { const d = await listChats(); setSessions(d.sessions || []);} catch (e) { console.error(e);} };
+  useEffect(() => { load(); }, []);
+  return (
+    <div className="config-form">
+      <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+        <select value={sessionId} onChange={async (e)=> { const id = e.target.value; setSessionId(id); }}>
+          {[...sessions].map(id => (<option key={id} value={id}>{id}</option>))}
+        </select>
+        <button className="secondary" onClick={load}>Refresh</button>
+        <button className="secondary" onClick={async ()=>{ try { await resetChat(sessionId); await load(); setSessionId('default'); } catch (e) { alert(e.message);} }}>Reset</button>
+        <button className="secondary" onClick={onClose}>Close</button>
+      </div>
+      <div className="row" style={{ gap: 8, marginTop: 8 }}>
+        <input placeholder="New session id (e.g., 2025-01-01T12:00)" value={newName} onChange={(e)=> setNewName(e.target.value)} />
+        <button onClick={async ()=>{ const id = (newName||'').trim() || String(Date.now()); if (!sessions.includes(id)) setSessions(s => [...s, id]); setSessionId(id); setNewName(''); }}>New</button>
+      </div>
     </div>
   );
 }
@@ -858,3 +1029,10 @@ function CharacterEditor({ character, onClose, onSave, onThink, lorebooks }) {
     </div>
   );
 }
+
+
+
+
+
+
+

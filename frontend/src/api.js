@@ -8,11 +8,11 @@ export async function checkHealth() {
   }
 }
 
-export async function sendChat(message) {
+export async function sendChat(message, sessionId = 'default') {
   const res = await fetch('/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, session_id: 'default' }),
+    body: JSON.stringify({ message, session_id: sessionId }),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -146,9 +146,9 @@ export async function getImageModels(provider) {
   return res.json();
 }
 
-export async function generateImageFromChat() {
+export async function generateImageFromChat(sessionId = 'default') {
   const res = await fetch('/images/generate_from_chat', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: 'default' }),
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId }),
   });
   if (!res.ok) throw new Error(`Generate image failed: ${res.status}`);
   return res.json();
@@ -164,6 +164,42 @@ export async function updateLorebook(id, data) {
   const res = await fetch(`/lorebooks/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
   if (!res.ok) throw new Error(`Update lorebook failed: ${res.status}`);
   return res.json();
+}
+
+// Chats
+export async function listChats() {
+  const res = await fetch('/chats');
+  if (!res.ok) throw new Error(`List chats failed: ${res.status}`);
+  return res.json(); // { sessions: string[] }
+}
+export async function getChat(sessionId) {
+  const res = await fetch(`/chats/${encodeURIComponent(sessionId)}`);
+  if (!res.ok) throw new Error(`Get chat failed: ${res.status}`);
+  return res.json(); // { messages: [{role, content}] }
+}
+export async function resetChat(sessionId) {
+  const res = await fetch(`/chats/${encodeURIComponent(sessionId)}/reset`, { method: 'POST' });
+  if (!res.ok) throw new Error(`Reset chat failed: ${res.status}`);
+  return res.json();
+}
+
+// Prompts
+export async function getPrompts() {
+  const res = await fetch('/prompts');
+  if (!res.ok) throw new Error(`Get prompts failed: ${res.status}`);
+  return res.json();
+}
+export async function savePrompts(data) {
+  const res = await fetch('/prompts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  if (!res.ok) throw new Error(`Save prompts failed: ${res.status}`);
+  return res.json();
+}
+
+// Lore suggestions
+export async function suggestLoreFromChat(sessionId = 'default') {
+  const res = await fetch('/lore/suggest_from_chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId }) });
+  if (!res.ok) throw new Error(`Suggest lore failed: ${res.status}`);
+  return res.json(); // { suggestions: [{ keyword, content }] }
 }
 
 export default { checkHealth, sendChat, getConfig, updateConfig, getModels, listCharacters, createCharacter, deleteCharacter };

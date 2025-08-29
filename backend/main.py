@@ -39,6 +39,17 @@ except Exception:
     pass
 
 
+@app.on_event("startup")
+async def _startup_load_state():
+    try:
+        _load_state()
+    except Exception as e:
+        try:
+            print("[CoolChat] startup load_state error:", e)
+        except Exception:
+            pass
+
+
 # ---------------------------------------------------------------------------
 # Models and in-memory storage
 # ---------------------------------------------------------------------------
@@ -155,6 +166,10 @@ async def create_character(payload: CharacterCreate) -> Character:
     _characters[_next_id] = char
     _next_id += 1
     _save_characters()
+    try:
+        _save_character_snapshot(char)
+    except Exception:
+        pass
     return char
 
 
@@ -188,6 +203,10 @@ async def update_character(char_id: int, payload: CharacterUpdate) -> Character:
     updated = char.model_copy(update=data)
     _characters[char_id] = updated
     _save_characters()
+    try:
+        _save_character_snapshot(updated)
+    except Exception:
+        pass
     return updated
 
 
@@ -343,6 +362,10 @@ async def create_lorebook(payload: LorebookCreate) -> Lorebook:
     _lorebooks[_next_lorebook_id] = lb
     _next_lorebook_id += 1
     _save_lorebooks(); _save_lore()
+    try:
+        _save_lorebook_snapshot(lb)
+    except Exception:
+        pass
     return lb
 
 
@@ -384,6 +407,10 @@ async def update_lorebook(lb_id: int, payload: LorebookUpdate) -> Lorebook:
     updated = Lorebook(**data)
     _lorebooks[lb_id] = updated
     _save_lorebooks()
+    try:
+        _save_lorebook_snapshot(updated)
+    except Exception:
+        pass
     return updated
 
 
@@ -430,6 +457,241 @@ def _load_state() -> None:
 
     globals_dict = load_json("histories.json", {})
     _chat_histories.clear(); _chat_histories.update(globals_dict)
+
+    # Additionally auto-load any characters/lorebooks from public folders
+    try:
+        _load_from_public_folders()
+    except Exception as e:
+        try:
+            print("[CoolChat] load_from_public_folders error:", e)
+        except Exception:
+            pass
+
+
+def _safe_name(name: str) -> str:
+    import re
+    s = re.sub(r"[^A-Za-z0-9._-]+", "_", (name or "").strip())
+    return s or "item"
+
+
+def _export_character_st_json(char: Character) -> Dict[str, object]:
+    data = char.model_dump()
+    return {
+        "name": data.get("name"),
+        "description": data.get("description", ""),
+        "first_mes": data.get("first_message"),
+        "alternate_greetings": data.get("alternate_greetings", []),
+        "scenario": data.get("scenario"),
+        "system_prompt": data.get("system_prompt"),
+        "personality": data.get("personality"),
+        "mes_example": data.get("mes_example"),
+        "creator_notes": data.get("creator_notes"),
+        "tags": data.get("tags", []),
+        # Non-standard extras
+        "avatar_url": data.get("avatar_url"),
+        "lorebook_ids": data.get("lorebook_ids", []),
+        "image_prompt_prefix": data.get("image_prompt_prefix"),
+        "image_prompt_suffix": data.get("image_prompt_suffix"),
+    }
+
+
+def _save_character_snapshot(char: Character) -> None:
+    import json as _json, os as _os
+    chars_dir = public_dir() / "characters"
+    try:
+        chars_dir.mkdir(parents=True, exist_ok=True)
+        fname = f"{char.id}_{_safe_name(char.name)}.json"
+        (chars_dir / fname).write_text(_json.dumps(_export_character_st_json(char), indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _export_lorebook_st_json(lb: "Lorebook") -> Dict[str, object]:
+    entries = []
+    for eid in lb.entry_ids:
+        e = _lore.get(eid)
+        if not e:
+            continue
+        entries.append({"keys": [e.keyword], "content": e.content})
+    return {"name": lb.name, "description": lb.description, "entries": entries}
+
+
+def _save_lorebook_snapshot(lb: "Lorebook") -> None:
+    import json as _json
+    ldir = public_dir() / "lorebooks"
+    try:
+        ldir.mkdir(parents=True, exist_ok=True)
+        fname = f"{lb.id}_{_safe_name(lb.name)}.json"
+        (ldir / fname).write_text(_json.dumps(_export_lorebook_st_json(lb), indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _parse_lorebook_data_to_entries(data: object) -> tuple[str, str, List["LoreEntryCreate"]]:
+    import os as _os
+    # Support SillyTavern World Info format and simple formats
+    def _st_to_entries(items):
+        out = []
+        for i in items or []:
+            if isinstance(i, str):
+                out.append(LoreEntryCreate(keyword=i, content=""))
+                continue
+            if not isinstance(i, dict):
+                continue
+            keys = i.get("keys") or i.get("triggers") or i.get("key") or []
+            if isinstance(keys, dict):
+                keys = list(keys.values())
+            kw = keys[0] if isinstance(keys, list) and keys else (i.get("keyword") or i.get("comment") or "")
+            content = i.get("content") or i.get("text") or i.get("entry") or ""
+            secondary = i.get("secondary_keys") or i.get("secondary_keywords") or i.get("keysecondary") or []
+            logic_map = {0: "AND ANY", 3: "AND ALL", 1: "NOT ALL", 2: "NOT ANY"}
+            logic_val = i.get("logic")
+            if logic_val is None:
+                sl = i.get("selectiveLogic")
+                if isinstance(sl, int):
+                    logic_val = logic_map.get(sl, "AND ANY")
+            if not logic_val:
+                logic_val = "AND ANY"
+            order = i.get("order") or 0
+            trigger = i.get("probability") or i.get("trigger") or 100
+            out.append(LoreEntryCreate(keyword=kw, content=content, keywords=keys if isinstance(keys, list) else [], logic=logic_val, secondary_keywords=secondary, order=order, trigger=trigger))
+        return out
+
+    name = "Imported Lorebook"
+    description = ""
+    if isinstance(data, list):
+        entries = _st_to_entries(data)
+    elif isinstance(data, dict):
+        entries_data = data.get("entries") or data.get("world_info") or []
+        if isinstance(entries_data, dict):
+            items = list(entries_data.values())
+        else:
+            items = entries_data
+        entries = _st_to_entries(items)
+        name = data.get("name") or data.get("book_name") or data.get("title") or name
+        description = data.get("description") or ""
+    else:
+        entries = []
+    return name, description, entries
+
+
+def _load_from_public_folders() -> None:
+    """Auto-import any characters and lorebooks found in public folders."""
+    import json as _json
+    import os as _os
+    # Characters
+    cdir = public_dir() / "characters"
+    if cdir.exists():
+        # Build a set of existing names (case-insensitive)
+        existing_names = {c.name.strip().lower() for c in _characters.values()}
+        for entry in sorted(cdir.iterdir()):
+            try:
+                if entry.is_file() and entry.suffix.lower() == ".png":
+                    raw = entry.read_bytes()
+                    if raw[:8] != b"\x89PNG\r\n\x1a\n":
+                        continue
+                    data = _parse_png_card(raw)
+                    name = (data.get("name") or "").strip()
+                    if not name or name.lower() in existing_names:
+                        continue
+                    payload = CharacterCreate(
+                        name=name,
+                        description=data.get("description", ""),
+                        avatar_url=f"/public/characters/{entry.name}",
+                        first_message=data.get("first_message") or data.get("first_mes"),
+                        alternate_greetings=data.get("alternate_greetings") or [],
+                        scenario=data.get("scenario"),
+                        system_prompt=data.get("system_prompt"),
+                        personality=data.get("personality"),
+                        mes_example=data.get("mes_example"),
+                        creator_notes=data.get("creator_notes"),
+                        tags=data.get("tags") or [],
+                        post_history_instructions=data.get("post_history_instructions"),
+                        extensions=data.get("extensions"),
+                        lorebook_ids=data.get("lorebook_ids") or [],
+                    )
+                    # Create directly (inline rather than HTTP)
+                    global _next_id
+                    data_c = payload.model_dump()
+                    if data_c.get("alternate_greetings") is None:
+                        data_c["alternate_greetings"] = []
+                    if data_c.get("tags") is None:
+                        data_c["tags"] = []
+                    if data_c.get("lorebook_ids") is None:
+                        data_c["lorebook_ids"] = []
+                    char = Character(id=_next_id, **data_c)
+                    _characters[_next_id] = char
+                    _next_id += 1
+                    existing_names.add(name.lower())
+                elif entry.is_file() and entry.suffix.lower() == ".json":
+                    obj = _json.loads(entry.read_text(encoding="utf-8"))
+                    name = (obj.get("name") or obj.get("title") or "").strip()
+                    if not name or name.lower() in existing_names:
+                        continue
+                    payload = CharacterCreate(
+                        name=name,
+                        description=obj.get("description", ""),
+                        avatar_url=obj.get("avatar_url"),
+                        first_message=obj.get("first_message") or obj.get("first_mes"),
+                        alternate_greetings=obj.get("alternate_greetings") or [],
+                        scenario=obj.get("scenario"),
+                        system_prompt=obj.get("system_prompt"),
+                        personality=obj.get("personality"),
+                        mes_example=obj.get("mes_example"),
+                        creator_notes=obj.get("creator_notes"),
+                        tags=obj.get("tags") or [],
+                        post_history_instructions=obj.get("post_history_instructions"),
+                        extensions=obj.get("extensions"),
+                        lorebook_ids=obj.get("lorebook_ids") or [],
+                    )
+                    data_c = payload.model_dump()
+                    if data_c.get("alternate_greetings") is None:
+                        data_c["alternate_greetings"] = []
+                    if data_c.get("tags") is None:
+                        data_c["tags"] = []
+                    if data_c.get("lorebook_ids") is None:
+                        data_c["lorebook_ids"] = []
+                    char = Character(id=_next_id, **data_c)
+                    _characters[_next_id] = char
+                    _next_id += 1
+                    existing_names.add(name.lower())
+            except Exception:
+                continue
+
+    # Lorebooks
+    ldir = public_dir() / "lorebooks"
+    if ldir.exists():
+        existing_lb_names = {lb.name.strip().lower() for lb in _lorebooks.values()}
+        for entry in sorted(ldir.iterdir()):
+            try:
+                if not (entry.is_file() and entry.suffix.lower() == ".json"):
+                    continue
+                obj = _json.loads(entry.read_text(encoding="utf-8"))
+                name, description, entries = _parse_lorebook_data_to_entries(obj)
+                if not name or name.strip().lower() in existing_lb_names:
+                    continue
+                # Create Lorebook
+                global _next_lorebook_id, _next_lore_id
+                lb = Lorebook(id=_next_lorebook_id, name=name, description=description, entry_ids=[])
+                for le in entries:
+                    entry_obj = LoreEntry(
+                        id=_next_lore_id,
+                        keyword=le.keyword,
+                        content=le.content,
+                        keywords=le.keywords or [],
+                        logic=le.logic or "AND ANY",
+                        secondary_keywords=le.secondary_keywords or [],
+                        order=le.order or 0,
+                        trigger=le.trigger or 100,
+                    )
+                    _lore[_next_lore_id] = entry_obj
+                    lb.entry_ids.append(_next_lore_id)
+                    _next_lore_id += 1
+                _lorebooks[_next_lorebook_id] = lb
+                _next_lorebook_id += 1
+                existing_lb_names.add(name.strip().lower())
+            except Exception:
+                continue
 
 
 def _save_characters() -> None:
@@ -775,6 +1037,17 @@ def _build_system_from_character(
     recent_text: str = "",
 ) -> Optional[str]:
     segments: List[str] = []
+    # Include active global prompts if any
+    try:
+        from .storage import load_json as _lj
+        prompts = _lj("prompts.json", {"active": [], "all": []})
+        for p in prompts.get("active", []) or []:
+            if isinstance(p, str) and p.strip():
+                segments.append(p.strip())
+            elif isinstance(p, dict) and p.get("text"):
+                segments.append(str(p.get("text")))
+    except Exception:
+        pass
     # Include user persona if present
     if user_persona and getattr(user_persona, "name", None):
         up = (
@@ -958,6 +1231,8 @@ async def get_config() -> ConfigResponse:
                 "lora_flux_2": getattr(cfg.images.dezgo, 'lora_flux_2', None),
                 "lora_sd1_1": getattr(cfg.images.dezgo, 'lora_sd1_1', None),
                 "lora_sd1_2": getattr(cfg.images.dezgo, 'lora_sd1_2', None),
+                "lora1_strength": getattr(cfg.images.dezgo, 'lora1_strength', None),
+                "lora2_strength": getattr(cfg.images.dezgo, 'lora2_strength', None),
                 "transparent": getattr(cfg.images.dezgo, 'transparent', False),
                 "width": getattr(cfg.images.dezgo, 'width', None),
                 "height": getattr(cfg.images.dezgo, 'height', None),
@@ -1038,12 +1313,35 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
                 imgs.pollinations.api_key = poll.get("api_key")
         dez = payload.images.get("dezgo") if isinstance(payload.images, dict) else None
         if isinstance(dez, dict):
-            for k in ("model","api_key","lora_flux_1","lora_flux_2","lora_sd1_1","lora_sd1_2"):
+            for k in ("model","api_key","lora_flux_1","lora_flux_2","lora_sd1_1","lora_sd1_2","lora1_strength","lora2_strength"):
                 if k in dez:
                     setattr(imgs.dezgo, k, dez.get(k))
-            for k in ("transparent","width","height","steps","upscale"):
-                if k in dez:
-                    setattr(imgs.dezgo, k, dez.get(k))
+            # Coerce numeric/boolean fields to correct types
+            if "transparent" in dez:
+                try:
+                    imgs.dezgo.transparent = bool(dez.get("transparent"))
+                except Exception:
+                    pass
+            if "upscale" in dez:
+                try:
+                    imgs.dezgo.upscale = bool(dez.get("upscale"))
+                except Exception:
+                    pass
+            if "width" in dez:
+                try:
+                    imgs.dezgo.width = int(dez.get("width")) if dez.get("width") not in ("", None) else None
+                except Exception:
+                    pass
+            if "height" in dez:
+                try:
+                    imgs.dezgo.height = int(dez.get("height")) if dez.get("height") not in ("", None) else None
+                except Exception:
+                    pass
+            if "steps" in dez:
+                try:
+                    imgs.dezgo.steps = int(dez.get("steps")) if dez.get("steps") not in ("", None) else None
+                except Exception:
+                    pass
         cfg.images = imgs
     if payload.theme is not None:
         if not hasattr(cfg, 'theme') or cfg.theme is None:
@@ -1110,6 +1408,8 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
                 "lora_flux_2": getattr(cfg.images.dezgo, 'lora_flux_2', None),
                 "lora_sd1_1": getattr(cfg.images.dezgo, 'lora_sd1_1', None),
                 "lora_sd1_2": getattr(cfg.images.dezgo, 'lora_sd1_2', None),
+                "lora1_strength": getattr(cfg.images.dezgo, 'lora1_strength', None),
+                "lora2_strength": getattr(cfg.images.dezgo, 'lora2_strength', None),
                 "transparent": str(getattr(cfg.images.dezgo, 'transparent', False)),
                 "width": str(getattr(cfg.images.dezgo, 'width', '')),
                 "height": str(getattr(cfg.images.dezgo, 'height', '')),
@@ -1576,22 +1876,160 @@ async def image_models(provider: str | None = None) -> ImageModelsResponse:
     if p == ImageProvider.DEZGO:
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=30.0)) as client:
-                r = await client.get("https://api.dezgo.com/models")
+                r = await client.get("https://api.dezgo.com/info")
                 if r.status_code == 200:
-                    data = r.json()
-                    if isinstance(data, list):
-                        models = []
-                        for it in data:
-                            mid = it.get("id") or it.get("name") if isinstance(it, dict) else it
+                    info = r.json()
+                    items = info.get("models") if isinstance(info, dict) else None
+                    models = []
+                    if isinstance(items, list):
+                        for it in items:
+                            if not isinstance(it, dict):
+                                continue
+                            # Only include models that support any text2image family
+                            funcs = [f.lower() for f in (it.get("functions") or []) if isinstance(f, str)]
+                            if not any("text2image" in f for f in funcs):
+                                continue
+                            mid = it.get("id")
+                            family = (it.get("family") or "zzz").lower()
                             if mid:
-                                models.append(mid)
-                        if models:
-                            return ImageModelsResponse(models=models)
+                                models.append((family, mid))
+                    if models:
+                        # Sort by family then id for stable order
+                        models.sort(key=lambda x: (x[0], x[1]))
+                        return ImageModelsResponse(models=[m[1] for m in models])
         except Exception as e:
             print("[CoolChat] dezgo models fetch failed:", e)
-        # fallback examples
-        return ImageModelsResponse(models=["sdxl-base-1.0", "anything-v4", "realistic-vision-v5", "deliberate-v2"]) 
+        # fallback minimal list (ids) by family order
+        return ImageModelsResponse(models=["flux_1_dev", "sdxl_lightning_1_0", "stablediffusion_1_5"]) 
     return ImageModelsResponse(models=[])
+
+
+# ---------------------------------------------------------------------------
+# Chats: list and load histories
+# ---------------------------------------------------------------------------
+
+
+class ChatListResponse(BaseModel):
+    sessions: List[str]
+
+
+@app.get("/chats", response_model=ChatListResponse)
+async def list_chats() -> ChatListResponse:
+    # Ensure state loaded
+    if not _chat_histories:
+        try:
+            _load_state()
+        except Exception:
+            pass
+    return ChatListResponse(sessions=list(_chat_histories.keys()))
+
+
+class ChatHistoryResponse(BaseModel):
+    messages: List[Dict[str, str]]
+
+
+@app.get("/chats/{session_id}", response_model=ChatHistoryResponse)
+async def get_chat(session_id: str) -> ChatHistoryResponse:
+    msgs = _chat_histories.get(session_id) or []
+    return ChatHistoryResponse(messages=msgs)
+
+
+@app.post("/chats/{session_id}/reset")
+async def reset_chat(session_id: str) -> Dict[str, str]:
+    _chat_histories.pop(session_id, None)
+    _save_histories()
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Lore suggestion from chat
+# ---------------------------------------------------------------------------
+
+
+class LoreSuggestResponse(BaseModel):
+    suggestions: List[Dict[str, str]]  # [{ keyword, content }]
+
+
+@app.post("/lore/suggest_from_chat", response_model=LoreSuggestResponse)
+async def lore_suggest_from_chat(payload: Dict[str, str] | None = None) -> LoreSuggestResponse:
+    cfg = load_config()
+    sid = None
+    if isinstance(payload, dict):
+        sid = payload.get("session_id")
+    sid = sid or "default"
+    # Prepare context from chat
+    hist = _chat_histories.get(sid, [])
+    convo = "\n".join([f"{m['role']}: {m.get('content','')}" for m in hist][-20:])
+    # Collect existing keywords from active lorebooks
+    existing = set()
+    active_ids = (getattr(cfg, 'active_lorebook_ids', []) or [])
+    for lb_id in active_ids:
+        lb = _lorebooks.get(lb_id)
+        if not lb:
+            continue
+        for eid in lb.entry_ids:
+            e = _lore.get(eid)
+            if e and e.keyword:
+                existing.add(e.keyword.strip().lower())
+            for k in (e.keywords or []):
+                if k:
+                    existing.add(k.strip().lower())
+    # Build prompt
+    prompt = (
+        "You are a World Info assistant. Based on the conversation below, "
+        "suggest 3-6 lore entries (keyword + one-paragraph content) that would help future replies. "
+        "Avoid duplicates of existing keywords. Output JSON with an array under key 'suggestions', "
+        "each item like {\"keyword\": string, \"content\": string}. Keep keywords concise.\n\n"
+        f"Existing keywords (lowercase): {sorted(existing)}\n\n"
+        f"Conversation:\n{convo}\n"
+    )
+    try:
+        raw = await _llm_reply(prompt, cfg)
+        import json as _json, re as _re
+        txt = raw.strip()
+        # Strip Markdown fences if present
+        if txt.startswith("```"):
+            # remove first line ```json or ``` and trailing ```
+            if "\n" in txt:
+                txt = txt.split("\n", 1)[1]
+            if txt.endswith("```"):
+                txt = txt[:-3]
+            txt = txt.strip()
+        # Try parse object or array
+        data = None
+        try:
+            data = _json.loads(txt)
+        except Exception:
+            # Extract first JSON object in text as fallback
+            m = _re.search(r"\{[\s\S]*\}", txt)
+            if m:
+                data = _json.loads(m.group(0))
+        if data is None:
+            # If the model returned a bare array, wrap it
+            try:
+                arr = _json.loads(txt)
+                if isinstance(arr, list):
+                    data = {"suggestions": arr}
+            except Exception:
+                pass
+        if data is None:
+            raise ValueError("Could not parse suggestions JSON")
+        out = []
+        for it in data.get("suggestions", []) or []:
+            if not isinstance(it, dict):
+                continue
+            kw = (it.get("keyword") or "").strip()
+            ct = (it.get("content") or "").strip()
+            if not kw or not ct:
+                continue
+            if kw.lower() in existing:
+                continue
+            out.append({"keyword": kw, "content": ct})
+        return LoreSuggestResponse(suggestions=out)
+    except Exception as e:
+        # Fallback: no suggestions
+        print("[CoolChat] lore suggest error:", e)
+        return LoreSuggestResponse(suggestions=[])
 
 
 class GenerateFromChatRequest(BaseModel):
@@ -1662,29 +2100,90 @@ async def generate_from_chat(payload: GenerateFromChatRequest) -> GenerateFromCh
         key = getattr(img_cfg.dezgo, 'api_key', None)
         if not key:
             raise HTTPException(status_code=400, detail="Missing Dezgo API key")
-        model = getattr(img_cfg.dezgo, 'model', None)
-        body = {"prompt": final_prompt}
+        model = (getattr(img_cfg.dezgo, 'model', None) or '').strip()
+
+        # Determine the correct endpoint based on model
+        endpoint = "text2image"  # SD1 default
+        mlow = model.lower()
+        if "flux" in mlow:
+            endpoint = "text2image_flux"
+        elif "lightning" in mlow:
+            endpoint = "text2image_sdxl_lightning"
+        elif "sdxl" in mlow or " xl" in f" {mlow}" or "realistic" in mlow:
+            # Heuristic for SDXL models (e.g., realistic-vision-v5)
+            endpoint = "text2image_sdxl"
+
+        form = {"prompt": final_prompt, "format": "png"}
         if model:
-            body["model"] = model
-        # LORAs
-        for k in ("lora_flux_1","lora_flux_2","lora_sd1_1","lora_sd1_2"):
-            v = getattr(img_cfg.dezgo, k, None)
-            if v:
-                body[k] = v
-        # Options
-        if getattr(img_cfg.dezgo, 'transparent', False):
-            body["transparent"] = "true"
-        for k in ("width","height","steps"):
-            v = getattr(img_cfg.dezgo, k, None)
-            if v:
-                body[k] = str(v)
-        if getattr(img_cfg.dezgo, 'upscale', None):
-            body["upscale"] = "true"
-        headers = {"Authorization": key}
-        print("[CoolChat] Dezgo headers= Authorization length:", len(key) if key else 0)
-        print("[CoolChat] Dezgo body=", body)
+            form["model"] = model
+
+        # Attach LORAs according to family
+        if endpoint == "text2image_flux":
+            for kconf, kapi in (("lora_flux_1", "lora1"), ("lora_flux_2", "lora2")):
+                v = getattr(img_cfg.dezgo, kconf, None)
+                if v:
+                    form[kapi] = v
+        elif endpoint == "text2image":
+            for kconf, kapi in (("lora_sd1_1", "lora1"), ("lora_sd1_2", "lora2")):
+                v = getattr(img_cfg.dezgo, kconf, None)
+                if v:
+                    form[kapi] = v
+        # LoRA strengths if provided
+        s1 = getattr(img_cfg.dezgo, 'lora1_strength', None)
+        s2 = getattr(img_cfg.dezgo, 'lora2_strength', None)
+        if s1 is not None:
+            form["lora1_strength"] = str(s1)
+        if s2 is not None:
+            form["lora2_strength"] = str(s2)
+        # Common options: width/height; steps only where supported
+        w = getattr(img_cfg.dezgo, 'width', None)
+        h = getattr(img_cfg.dezgo, 'height', None)
+        if w:
+            form["width"] = str(w)
+        if h:
+            form["height"] = str(h)
+        st = getattr(img_cfg.dezgo, 'steps', None)
+        if endpoint in ("text2image", "text2image_flux", "text2image_sdxl") and st:
+            form["steps"] = str(st)
+        # Transparent background supported for Flux/SDXL families; Upscale is SD1-only
+        if endpoint != "text2image":
+            if getattr(img_cfg.dezgo, 'transparent', False):
+                form["transparent_background"] = "true"
+        else:
+            if getattr(img_cfg.dezgo, 'upscale', None):
+                form["upscale"] = "true"
+
+        # Dezgo expects the API key in the X-Dezgo-Key header
+        headers = {"X-Dezgo-Key": key}
+        print("[CoolChat] Dezgo endpoint=", endpoint)
+        print("[CoolChat] Dezgo headers= X-Dezgo-Key length:", len(key) if key else 0)
+        print("[CoolChat] Dezgo body=", form)
+        # Emit a debug-friendly, curl-like summary for troubleshooting
+        try:
+            safe_key = mask_secret(key)
+            curl = [
+                "curl -X POST",
+                f"'https://api.dezgo.com/{endpoint}'",
+                "-H 'accept: */*'",
+                f"-H 'X-Dezgo-Key: {safe_key}'",
+                "-H 'Content-Type: multipart/form-data'",
+            ]
+            for k, v in form.items():
+                curl.append(f"-F '{k}={v}'")
+            print("[CoolChat] Dezgo curl:", " ".join(curl))
+        except Exception:
+            pass
+        # Force multipart/form-data per Dezgo examples
+        multipart = {k: (None, v) for k, v in form.items()}
         async with _httpx.AsyncClient(timeout=_httpx.Timeout(10.0, read=60.0)) as client:
-            r = await client.post("https://api.dezgo.com/text2image", data=body, headers=headers)
+            # Build request to inspect headers too
+            req = client.build_request("POST", f"https://api.dezgo.com/{endpoint}", files=multipart, headers=headers)
+            # Log content-type with boundary for debugging
+            try:
+                print("[CoolChat] Dezgo Content-Type:", req.headers.get("Content-Type"))
+            except Exception:
+                pass
+            r = await client.send(req)
             print("[CoolChat] Dezgo status=", r.status_code)
             if r.status_code >= 400:
                 raise HTTPException(status_code=502, detail=f"Dezgo error: {r.text}")
@@ -1745,27 +2244,18 @@ async def import_lorebook(file: UploadFile = File(...)) -> Lorebook:
             out.append(LoreEntryCreate(keyword=kw, content=content, keywords=keys if isinstance(keys, list) else [], logic=logic_val, secondary_keywords=secondary, order=order, trigger=trigger))
         return out
 
-    if isinstance(data, list):
-        entries = _st_to_entries(data)
-        fname = getattr(file, 'filename', None)
-        name = os.path.splitext(os.path.basename(fname))[0] if fname else "Imported Lorebook"
-        lb = await create_lorebook(LorebookCreate(name=name, description="", entries=entries))
-        return lb
-    elif isinstance(data, dict):
-        # SillyTavern commonly: { name, description?, entries: [...] } but may be an object mapping
+    if isinstance(data, (list, dict)):
         fname = getattr(file, 'filename', None)
         inferred = os.path.splitext(os.path.basename(fname))[0] if fname else None
-        name = data.get("name") or data.get("book_name") or data.get("title") or inferred or "Imported Lorebook"
-        description = data.get("description") or ""
-        entries_data = data.get("entries") or data.get("world_info") or []
-        if isinstance(entries_data, dict):
-            print("[CoolChat] lore import: entries dict keys:", list(entries_data.keys()))
-            items = list(entries_data.values())
-        else:
-            items = entries_data
-        entries = _st_to_entries(items)
+        name, description, entries = _parse_lorebook_data_to_entries(data)
+        if inferred and name == "Imported Lorebook":
+            name = inferred
         print("[CoolChat] lore import: parsed entries count:", len(entries))
         lb = await create_lorebook(LorebookCreate(name=name, description=description, entries=entries))
+        try:
+            _save_lorebook_snapshot(lb)
+        except Exception:
+            pass
         return lb
     else:
         raise HTTPException(status_code=400, detail="Unsupported lorebook JSON structure")
@@ -1837,6 +2327,34 @@ async def get_theme(name: str):
     if name not in data:
         raise HTTPException(status_code=404, detail="Theme not found")
     return data[name]
+
+
+# ---------------------------------------------------------------------------
+# Prompts storage (public/prompts.json)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/prompts")
+async def get_prompts():
+    data = load_json("prompts.json", {"active": [], "all": []})
+    return data
+
+
+@app.post("/prompts")
+async def save_prompts(payload: Dict[str, object]):
+    # Expect shape { active: string[] | {text}[], all: string[] | {text}[] }
+    try:
+        if not isinstance(payload, dict):
+            raise ValueError("invalid payload")
+        active = payload.get("active") or []
+        allp = payload.get("all") or []
+        if not isinstance(active, list) or not isinstance(allp, list):
+            raise ValueError("invalid prompts arrays")
+        data = {"active": active, "all": allp}
+        save_json("prompts.json", data)
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/lorebooks/{lb_id}/export")

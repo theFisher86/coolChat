@@ -109,6 +109,12 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, sans-s
 .paint { padding: 4px 8px; border-radius: 6px; background: #2563eb; color: #fff; border: none; cursor: pointer; }
 .color-swatch { width: 28px; height: 28px; border-radius: 6px; border: 1px solid #374151; background: #222; }
 .color-row input[type="color"] { width: 28px; height: 28px; padding: 0; border: none; background: transparent; }
+
+/* Cellphone side panel */
+.app.phone-open .chat { margin-left: 30vw; transition: margin-left 0.2s ease; }
+.phone-panel { position: fixed; top: 0; left: 0; width: 30vw; height: 100vh; background: var(--panel); border-right: 1px solid #374151; display: flex; flex-direction: column; z-index: 10; }
+.phone-panel .bar { padding: 8px; display: flex; gap: 6px; align-items: center; border-bottom: 1px solid #374151; }
+.phone-panel iframe { width: 100%; height: 100%; border: none; }
 .characters, .panel { background: #0a0f1e; }
 
 @keyframes breathing {

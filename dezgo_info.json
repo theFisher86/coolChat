@@ -1,0 +1,2278 @@
+{
+  "name": "Dezgo API",
+  "version": "v3.113",
+  "models": [
+    {
+      "id": "stablediffusion_1_5",
+      "name": "Stable Diffusion 1.5",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A generalist Stable Diffusion model",
+      "family": "sd1"
+    },
+    {
+      "id": "stablediffusion_1_4",
+      "name": "Stable Diffusion 1.4",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A generalist Stable Diffusion model",
+      "family": "sd1"
+    },
+    {
+      "id": "stablediffusion_2_0_512px",
+      "name": "Stable Diffusion 2.0 (512px)",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A generalist Stable Diffusion model",
+      "family": "sd2"
+    },
+    {
+      "id": "stablediffusion_2_0_768px",
+      "name": "Stable Diffusion 2.0 (768px)",
+      "nativeResolution": {
+        "width": 768,
+        "height": 768
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A generalist Stable Diffusion model tuned for images of at least 768 pixels.",
+      "family": "sd2"
+    },
+    {
+      "id": "stablediffusion_2_1_512px",
+      "name": "Stable Diffusion 2.1 (512px)",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A generalist Stable Diffusion model",
+      "family": "sd2"
+    },
+    {
+      "id": "stablediffusion_2_1_768px",
+      "name": "Stable Diffusion 2.1 (768px)",
+      "nativeResolution": {
+        "width": 768,
+        "height": 768
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A generalist Stable Diffusion model tuned for images of at least 768 pixels.",
+      "family": "sd2"
+    },
+    {
+      "id": "waifudiffusion_1_3",
+      "name": "Waifu Diffusion 1.3",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Anime images using danbooru tags",
+      "family": "sd1"
+    },
+    {
+      "id": "anything_3_0",
+      "name": "Anything 3.0",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Very versatile high-quality anime style generator",
+      "family": "sd1"
+    },
+    {
+      "id": "trinart_2_0",
+      "name": "Trinart 2.0",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate anime images",
+      "family": "sd1"
+    },
+    {
+      "id": "openjourney",
+      "name": "OpenJourney",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "mdjrny-v4 style"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Model fine tuned on the Midjourney style",
+      "family": "sd1"
+    },
+    {
+      "id": "synthwavepunk_v2",
+      "name": "Synthwavepunk v2",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "snthwve style",
+        "nvinkpunk"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "cyberpunk"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Cyperpunk / Synthwave style",
+      "family": "sd1"
+    },
+    {
+      "id": "redshift_diffusion",
+      "name": "Redshift Diffusion",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "redshift style"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "3d_render"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "High resolution 3D artworks in the style of Cinema4D’s Redshift rendering engine",
+      "family": "sd1"
+    },
+    {
+      "id": "analog_diffusion",
+      "name": "Analog Diffusion",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "analog style"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Analog photographs",
+      "family": "sd1"
+    },
+    {
+      "id": "disco_diffusion_style",
+      "name": "Disco Diffusion Style",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "a photo of ddfusion style"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "other"
+      ],
+      "license": "MIT",
+      "description": "Imitate the style of the Disco Diffusion AI",
+      "family": "sd1"
+    },
+    {
+      "id": "iconsmi_appiconsmodelforsd",
+      "name": "IconsMI App icons",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "IconsMi"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "icons"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Mobile app icons",
+      "family": "sd1"
+    },
+    {
+      "id": "lowpoly_world",
+      "name": "Lowpoly World",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "a photo of lowpoly_world"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "other"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate small low poly worlds",
+      "family": "sd1"
+    },
+    {
+      "id": "vintedois_diffusion_v0_1",
+      "name": "Vintedois Diffusion",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "estilovintedois"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "simple",
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Beautiful images with simple prompts",
+      "family": "sd1"
+    },
+    {
+      "id": "stablediffusion_inpaint_1",
+      "name": "Stable Diffusion Inpaint 1",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "inpainting",
+        "text-inpainting"
+      ],
+      "categories": [
+        "inpaint",
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A generalist inpainting model",
+      "family": "sd1"
+    },
+    {
+      "id": "stablediffusion_inpaint_2",
+      "name": "Stable Diffusion Inpaint 2",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "inpainting",
+        "text-inpainting"
+      ],
+      "categories": [
+        "inpaint",
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A generalist inpainting model",
+      "family": "sd2"
+    },
+    {
+      "id": "epic_diffusion_1_1",
+      "name": "Epîc Diffusion 1.1",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "General purpose model focused on providing high quality output in a wide range of different styles,",
+      "family": "sd1"
+    },
+    {
+      "id": "deliberate",
+      "name": "Deliberate 1",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "This model provides you the ability to create anything you want using very detailed prompts.",
+      "family": "sd1"
+    },
+    {
+      "id": "dreamshaper",
+      "name": "DreamShaper 2.52",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality digital paintings",
+      "family": "sd1"
+    },
+    {
+      "id": "realistic_vision_1_3",
+      "name": "Realistic Vision 1.3",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "RAW photo, *subject*, high detailed skin, 8k uhd, dslr, soft lighting, high quality, film grain, Fujifilm XT3"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate realistic photos",
+      "family": "sd1"
+    },
+    {
+      "id": "pastel_mix",
+      "name": "Pastel Mix",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "This model is made with the thought of imitating pastel-like art.",
+      "family": "sd1"
+    },
+    {
+      "id": "anything_4_0",
+      "name": "Anything 4.0",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "This model is intended to produce high-quality, highly detailed anime style with just a few prompts. Like other anime-style Stable Diffusion models, it also supports danbooru tags to generate images.",
+      "family": "sd1"
+    },
+    {
+      "id": "waifudiffusion_1_4",
+      "name": "Waifu Diffusion 1.4",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "High-quality anime images ",
+      "family": "sd2"
+    },
+    {
+      "id": "eimis_anime_diffusion_1",
+      "name": "Eimis Anime Diffusion",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "High-quality and detailed anime images ",
+      "family": "sd1"
+    },
+    {
+      "id": "redshift_diffusion_768px",
+      "name": "Redshift Diffusion (768px)",
+      "nativeResolution": {
+        "width": 768,
+        "height": 768
+      },
+      "triggers": [
+        "redshift style"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "3d_render"
+      ],
+      "license": "openrail++",
+      "description": "High resolution 3D artworks in the style of Cinema4D’s Redshift rendering engine",
+      "family": "sd2"
+    },
+    {
+      "id": "foto_assisted_diffusion",
+      "name": "Foto Assisted Diffusion",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Photorealistic modern HDR photography style",
+      "family": "sd1"
+    },
+    {
+      "id": "portrait_plus",
+      "name": "Portrait Plus",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "portrait+ style"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "portrait"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A model specialized to produce consistent portrait composition and consistent eyes.",
+      "family": "sd1"
+    },
+    {
+      "id": "papercut",
+      "name": "Papercut",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "mdjrny-pprct"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "other"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Images of paper cut art ",
+      "family": "sd1"
+    },
+    {
+      "id": "openjourney_2",
+      "name": "OpenJourney v2",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Model fine tuned on the Midjourney style",
+      "family": "sd1"
+    },
+    {
+      "id": "double_exposure_diffusion",
+      "name": "Double Exposure Diffusion",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "dublex style"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "other"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Creates double exposure photography",
+      "family": "sd1"
+    },
+    {
+      "id": "openniji",
+      "name": "OpenNiji",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate anime images",
+      "family": "sd1"
+    },
+    {
+      "id": "blood_orange_mix",
+      "name": "BloodOrangeMix",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality anime images",
+      "family": "sd1"
+    },
+    {
+      "id": "abyss_orange_mix_2",
+      "name": "AbyssOrangeMix 2",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "An AI model capable of generating high-quality, highly realistic illustrations. It can generate elaborate and detailed illustrations that cannot be drawn by hand. It can also be used for a variety of purposes, making it extremely useful for design and artwork. ",
+      "family": "sd1"
+    },
+    {
+      "id": "ely_orange_mix",
+      "name": "ElyOrangeMix",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality anime images",
+      "family": "sd1"
+    },
+    {
+      "id": "basil_mix",
+      "name": "Basil Mix",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "",
+      "family": "sd1"
+    },
+    {
+      "id": "inkpunk_diffusion",
+      "name": "Inkpunk Diffusion",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "nvinkpunk"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "other"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Ink drawings in cyberpunk style",
+      "family": "sd1"
+    },
+    {
+      "id": "epic_diffusion_1",
+      "name": "Epîc Diffusion 1.0",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "General purpose model focused on providing high quality output in a wide range of different styles,",
+      "family": "sd1"
+    },
+    {
+      "id": "future_diffusion",
+      "name": "Future Diffusion",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "future style"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "other"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "High quality 3D images with a futuristic Sci-Fi theme. ",
+      "family": "sd2"
+    },
+    {
+      "id": "hasdx",
+      "name": "HASDX",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "General purpose model for realistic images / photography / portraits",
+      "family": "sd1"
+    },
+    {
+      "id": "steampunk_diffusion",
+      "name": "Steampunk Diffusion",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "Steampunk-Character"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "other"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Specialized for steampunk-style images",
+      "family": "sd2"
+    },
+    {
+      "id": "emoji_diffusion",
+      "name": "Emoji Diffusion",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "emoji"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "other"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Emoji’s",
+      "family": "sd1"
+    },
+    {
+      "id": "vectorartz_diffusion",
+      "name": "Vectorartz Diffusion",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "vectorartz"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "other"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate beautiful vector illustration",
+      "family": "sd1"
+    },
+    {
+      "id": "texture_diffusion",
+      "name": "Texture Diffusion",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "pbr"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "other"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Flat diffuse textures with very little visible lighting/shadows.",
+      "family": "sd2"
+    },
+    {
+      "id": "vox_2",
+      "name": "Vox 2",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "voxel-ish"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "other"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Objects made out of voxels",
+      "family": "sd1"
+    },
+    {
+      "id": "paint_journey_2_768px",
+      "name": "Paint Journey 2",
+      "nativeResolution": {
+        "width": 768,
+        "height": 768
+      },
+      "triggers": [
+        "((oil painting))"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "painting"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Oil paintings artwork characterized by intricate details, vibrant colors, and light that brings artwork to life.",
+      "family": "sd1"
+    },
+    {
+      "id": "stable_diffusion_papercut",
+      "name": "Stable Diffusion PaperCut",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "PaperCut"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "other"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Images of paper cut art ",
+      "family": "sd1"
+    },
+    {
+      "id": "stable_diffusion_voxelart",
+      "name": "Stable Diffusion VoxelArt",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "VoxelArt"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "other"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Create images with voxel art",
+      "family": "sd1"
+    },
+    {
+      "id": "stable_diffusion_fluidart",
+      "name": "Stable Diffusion FluidArt",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "FluidArt"
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "other"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Create images with stylish fluid art",
+      "family": "sd1"
+    },
+    {
+      "id": "something_2",
+      "name": "Something 2",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "This model is intended to produce vibrant but soft anime style images.",
+      "family": "sd1"
+    },
+    {
+      "id": "tshirt_diffusion",
+      "name": "T-shirt Diffusion",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": [
+        "(as a t-shirt logo in the style of <magifactory> art) "
+      ],
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "other"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Stunning designs intended to be printed on t-shirts",
+      "family": "sd1"
+    },
+    {
+      "id": "duchaiten_darkside",
+      "name": "DucHaitenDarkside",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "DucHaitenDarkside is the dark side version of DucHaitenAIart, it does well with images with heavy atmosphere, as well as being able to create dramatic images like in the movies.  ",
+      "family": "sd1"
+    },
+    {
+      "id": "dh_classicanime",
+      "name": "DH ClassicAnime",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A model finetuned on retro anime images",
+      "family": "sd1"
+    },
+    {
+      "id": "duchaiten_dreamworld",
+      "name": "DucHaitenDreamWorld",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate anime images with a subtle 3D effect",
+      "family": "sd1"
+    },
+    {
+      "id": "duchaiten_anime",
+      "name": "DucHaitenAnime",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate anime images with a subtle 3D effect",
+      "family": "sd1"
+    },
+    {
+      "id": "anything_5_0",
+      "name": "Anything 5.0",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Very versatile high-quality anime style generator",
+      "family": "sd1"
+    },
+    {
+      "id": "cyberrealistic_1_3",
+      "name": "CyberRealistic 1.3",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate realistic photos",
+      "family": "sd1"
+    },
+    {
+      "id": "instruct_pix2pix",
+      "name": "Instruct-Pix2Pix",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "edit-image"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "MIT",
+      "description": "General instruction-following image model",
+      "family": "sd1"
+    },
+    {
+      "id": "deliberate_2",
+      "name": "Deliberate 2",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "This model provides you the ability to create anything you want using very detailed prompts.",
+      "family": "sd1"
+    },
+    {
+      "id": "dreamshaper_5",
+      "name": "DreamShaper 5",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality digital paintings",
+      "family": "sd1"
+    },
+    {
+      "id": "dreamshaper_6",
+      "name": "DreamShaper 6",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality digital paintings",
+      "family": "sd1"
+    },
+    {
+      "id": "absolute_reality_1",
+      "name": "AbsoluteReality 1.0",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality realistic pictures",
+      "family": "sd1"
+    },
+    {
+      "id": "cyberrealistic_3_1",
+      "name": "CyberRealistic 3.1",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality realistic pictures",
+      "family": "sd1"
+    },
+    {
+      "id": "icbinp",
+      "name": "ICBINP",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality realistic pictures",
+      "family": "sd1"
+    },
+    {
+      "id": "dreamshaper_7",
+      "name": "DreamShaper 7",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality digital paintings",
+      "family": "sd1"
+    },
+    {
+      "id": "absolute_reality_1_6",
+      "name": "AbsoluteReality 1.6",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality realistic pictures",
+      "family": "sd1"
+    },
+    {
+      "id": "nightmareshaper",
+      "name": "NightmareShaper",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Welcome to Unstable Diffusers a collection of checkpoints where limitations cease to exist, and creativity knows no bounds. This checkpoint defies restrictions and empowers you to generate anything your imagination desires",
+      "family": "sd1"
+    },
+    {
+      "id": "sdxl_1024px",
+      "name": "Stable Diffusion XL",
+      "nativeResolution": {
+        "width": 1024,
+        "height": 1024
+      },
+      "triggers": null,
+      "functions": [
+        "text2image_sdxl"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "High-resolution generalist model",
+      "family": "sdxl"
+    },
+    {
+      "id": "dreamshaperxl_1024px",
+      "name": "DreamShaper XL",
+      "nativeResolution": {
+        "width": 1024,
+        "height": 1024
+      },
+      "triggers": null,
+      "functions": [
+        "text2image_sdxl"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "High-resolution generalist model with the quality “dreamshaper” style",
+      "family": "sdxl"
+    },
+    {
+      "id": "dreamshaper_8",
+      "name": "DreamShaper 8",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality digital paintings",
+      "family": "sd1"
+    },
+    {
+      "id": "absolute_reality_1_8_1",
+      "name": "AbsoluteReality 1.8.1",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality realistic pictures",
+      "family": "sd1"
+    },
+    {
+      "id": "anylora",
+      "name": "AnyLora",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A model with a style neutral enough to get accurate styles with any style LoRA. ",
+      "family": "sd1"
+    },
+    {
+      "id": "kidsmix",
+      "name": "KidsMix",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "drawing"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Beautiful drawings to illustrate children's stories",
+      "family": "sd1"
+    },
+    {
+      "id": "dreamshaper_8_inpaint",
+      "name": "DreamShaper 8 Inpaint",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "inpainting",
+        "text-inpainting"
+      ],
+      "categories": [
+        "inpaint",
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A generalist inpainting model",
+      "family": "sd1"
+    },
+    {
+      "id": "absolute_reality_1_8_1_inpaint",
+      "name": "AbsoluteReality 1.8.1 Inpaint",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "inpainting",
+        "text-inpainting"
+      ],
+      "categories": [
+        "inpaint",
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A generalist inpainting model",
+      "family": "sd1"
+    },
+    {
+      "id": "juggernautxl_1024px",
+      "name": "JuggernautXL 5.0",
+      "nativeResolution": {
+        "width": 1024,
+        "height": 1024
+      },
+      "triggers": null,
+      "functions": [
+        "text2image_sdxl"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "High-resolution photorealistic pictures",
+      "family": "sdxl"
+    },
+    {
+      "id": "cyberrealistic_3_3",
+      "name": "CyberRealistic 3.3",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality realistic pictures",
+      "family": "sd1"
+    },
+    {
+      "id": "icbinp_seco",
+      "name": "ICBINP SECO",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality realistic pictures",
+      "family": "sd1"
+    },
+    {
+      "id": "realistic_vision_5_1",
+      "name": "Realistic Vision 5.1",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality realistic pictures",
+      "family": "sd1"
+    },
+    {
+      "id": "rpg_5",
+      "name": "RPG 5",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "artistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "This model focuses on stylistic RPG game portraits & characters.",
+      "family": "sd1"
+    },
+    {
+      "id": "toonify_2",
+      "name": "Toonify 2",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "drawing"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Toonify is an excellent model if you're looking for cartoonish renders. ",
+      "family": "sd1"
+    },
+    {
+      "id": "dreamix_1",
+      "name": "Dreamix 1",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "3d_render"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "This model was made to make awesome stylish 3d characters",
+      "family": "sd1"
+    },
+    {
+      "id": "cyberrealistic_3_3_inpaint",
+      "name": "CyberRealistic 3.3 Inpaint",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "inpainting",
+        "text-inpainting"
+      ],
+      "categories": [
+        "inpaint",
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A generalist inpainting model",
+      "family": "sd1"
+    },
+    {
+      "id": "icbinp_seco_inpaint",
+      "name": "ICBINP SECO Inpaint",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "inpainting",
+        "text-inpainting"
+      ],
+      "categories": [
+        "inpaint",
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A generalist inpainting model",
+      "family": "sd1"
+    },
+    {
+      "id": "realistic_vision_5_1_inpaint",
+      "name": "Realistic Vision 5.1 Inpaint",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "inpainting",
+        "text-inpainting"
+      ],
+      "categories": [
+        "inpaint",
+        "general"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A generalist inpainting model",
+      "family": "sd1"
+    },
+    {
+      "id": "anything_4_5_inpaint",
+      "name": "Anything 4.5 Inpaint",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "inpainting",
+        "text-inpainting"
+      ],
+      "categories": [
+        "inpaint",
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "An inpainting model specialized for anime",
+      "family": "sd1"
+    },
+    {
+      "id": "furrytoonmix",
+      "name": "FurryToonMix",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "drawing"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A model specialized to generate furry characters",
+      "family": "sd1"
+    },
+    {
+      "id": "tshirtdesignredmond_1024px",
+      "name": "Tshirt Design Redmond",
+      "nativeResolution": {
+        "width": 1024,
+        "height": 1024
+      },
+      "triggers": [
+        "TshirtDesignAF"
+      ],
+      "functions": [
+        "text2image_sdxl"
+      ],
+      "categories": [
+        "tshirt"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate awesome tshirt designs!",
+      "family": "sdxl"
+    },
+    {
+      "id": "juggernautxl_rundiffusion_8_1024px",
+      "name": "JuggernautXL+RunDiffusion 8.0",
+      "nativeResolution": {
+        "width": 1024,
+        "height": 1024
+      },
+      "triggers": null,
+      "functions": [
+        "text2image_sdxl"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "High-resolution photorealistic pictures",
+      "family": "sdxl"
+    },
+    {
+      "id": "bluepencilxl_1024px",
+      "name": "BluePencilXL 3.1.0",
+      "nativeResolution": {
+        "width": 1024,
+        "height": 1024
+      },
+      "triggers": null,
+      "functions": [
+        "text2image_sdxl"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "High-resolution anime pictures",
+      "family": "sdxl"
+    },
+    {
+      "id": "realcartoon3d_13",
+      "name": "RealCartoon3D 13",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "artistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality digital paintings",
+      "family": "sd1"
+    },
+    {
+      "id": "analogmadness_7",
+      "name": "Analog Madness 7",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality realistic pictures",
+      "family": "sd1"
+    },
+    {
+      "id": "yesmix_4",
+      "name": "YesMix 4",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Anime style images",
+      "family": "sd1"
+    },
+    {
+      "id": "realdream_12",
+      "name": "RealDream 12",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality realistic pictures",
+      "family": "sd1"
+    },
+    {
+      "id": "realcartoonanime_10",
+      "name": "RealCartoonAnime 10",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "High-resolution anime pictures",
+      "family": "sd1"
+    },
+    {
+      "id": "juggernautxl_9_lightning_1024px",
+      "name": "JuggernautXL 9 Lightning",
+      "nativeResolution": {
+        "width": 1024,
+        "height": 1024
+      },
+      "triggers": null,
+      "functions": [
+        "text2image_sdxl_lightning"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate stunning high-quality life-like & photorealistic visuals with this SDXL finetune.",
+      "family": "sdxl_lightning"
+    },
+    {
+      "id": "dreamshaperxl_lightning_1024px",
+      "name": "DreamshaperXL Lightning",
+      "nativeResolution": {
+        "width": 1024,
+        "height": 1024
+      },
+      "triggers": null,
+      "functions": [
+        "text2image_sdxl_lightning"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality realistic pictures",
+      "family": "sdxl_lightning"
+    },
+    {
+      "id": "envy_starlight_xl_01_lightning_1024px",
+      "name": "Envy Starlight XL 01 Lightning",
+      "nativeResolution": {
+        "width": 1024,
+        "height": 1024
+      },
+      "triggers": null,
+      "functions": [
+        "text2image_sdxl_lightning"
+      ],
+      "categories": [
+        "drawing"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality digital paintings in a variety of styles",
+      "family": "sdxl_lightning"
+    },
+    {
+      "id": "juggernaut_reborn",
+      "name": "Juggernaut Reborn",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality realistic pictures",
+      "family": "sd1"
+    },
+    {
+      "id": "0001softrealistic_v187",
+      "name": "0001SoftRealistic v187",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate high-quality realistic pictures",
+      "family": "sd1"
+    },
+    {
+      "id": "indigo_furry_mix_v120_hybrid",
+      "name": "Indigo Furry mix v120 hybrid",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "drawing"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A model specialized to generate furry characters",
+      "family": "sd1"
+    },
+    {
+      "id": "ghostmix_v2",
+      "name": "GhostMix v2",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A model specialized to generate stunning & detailed anime images",
+      "family": "sd1"
+    },
+    {
+      "id": "dark_sushi_mix_v2_25d",
+      "name": "Dark Sushi Mix v2.25D",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "anime"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A model specialized to generate stunning & detailed anime images",
+      "family": "sd1"
+    },
+    {
+      "id": "arthemy_comics_gt_beta",
+      "name": "Arthemy Comics GT ",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "drawing"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate stunning images inspired by western comics style",
+      "family": "sd1"
+    },
+    {
+      "id": "art_universe_v8",
+      "name": "Art Universe v8",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image",
+        "image2image",
+        "controlnet"
+      ],
+      "categories": [
+        "artistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "This SDXL version is a big experiment in creating checkpoints for generating creative images.",
+      "family": "sd1"
+    },
+    {
+      "id": "ponyxl_6",
+      "name": "PurpleSmart.ai’s Pony Diffusion v6 XL",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image_sdxl"
+      ],
+      "categories": [
+        "artistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Pony Diffusion V6 is a versatile SDXL finetune capable of producing stunning visuals of various anthro, feral, or humanoids species and their interactions based on simple natural language prompts.",
+      "family": "sdxl"
+    },
+    {
+      "id": "ponyxl_6_turbo_dpo",
+      "name": "PurpleSmart.ai’s Pony Diffusion v6 XL Turbo DPO",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image_sdxl_lightning"
+      ],
+      "categories": [
+        "artistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Pony Diffusion V6 is a versatile SDXL finetune capable of producing stunning visuals of various anthro, feral, or humanoids species and their interactions based on simple natural language prompts.",
+      "family": "sdxl_lightning"
+    },
+    {
+      "id": "juggernautxl_10_hyper",
+      "name": "JuggernautXL 10 Hyper",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image_sdxl_lightning"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "Generate stunning high-quality life-like & photorealistic visuals with this SDXL finetune.",
+      "family": "sdxl_lightning"
+    },
+    {
+      "id": "flux_1_schnell",
+      "name": "Flux Schnell",
+      "nativeResolution": {
+        "width": 512,
+        "height": 512
+      },
+      "triggers": null,
+      "functions": [
+        "text2image_flux"
+      ],
+      "categories": [
+        "general"
+      ],
+      "license": "Apache 2",
+      "description": "Generate impressive images with cutting-edge quality and superior prompt following",
+      "family": "flux_schnell"
+    },
+    {
+      "id": "juggernautxl_x_inpaint_1024px",
+      "name": "JuggernautXL 10 Inpainting",
+      "nativeResolution": {
+        "width": 1024,
+        "height": 1024
+      },
+      "triggers": null,
+      "functions": [
+        "inpainting_sdxl_lightning"
+      ],
+      "categories": [
+        "realistic"
+      ],
+      "license": "CreativeML OpenRAIL-M",
+      "description": "A specialized variant of the realistic JuggernautXL 10 model to inpaint high-resolution images.",
+      "family": "sdxl_inpaint"
+    }
+  ],
+  "paymentMethods": [
+    {
+      "id": "stripe",
+      "name": "Stripe",
+      "min": 10.0,
+      "max": 999999.0
+    }
+  ]
+}

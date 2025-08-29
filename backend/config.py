@@ -73,6 +73,8 @@ class DezgoConfig(BaseModel):
     lora_flux_2: Optional[str] = None
     lora_sd1_1: Optional[str] = None
     lora_sd1_2: Optional[str] = None
+    lora1_strength: Optional[float] = None
+    lora2_strength: Optional[float] = None
     transparent: bool = False
     width: Optional[int] = None
     height: Optional[int] = None

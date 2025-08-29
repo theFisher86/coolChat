@@ -18,6 +18,9 @@ export default defineConfig({
       '/lorebooks': 'http://127.0.0.1:8000',
       '/image': 'http://127.0.0.1:8000',
       '/images': 'http://127.0.0.1:8000',
+      '/prompts': 'http://127.0.0.1:8000',
+      '/chats': 'http://127.0.0.1:8000',
+      '/themes': 'http://127.0.0.1:8000',
     },
   },
   test: {
