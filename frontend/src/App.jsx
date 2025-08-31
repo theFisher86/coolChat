@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import './App.css';
 import {
   sendChat,
@@ -13,6 +13,7 @@ import {
   listLorebooks,
   getImageModels,
   generateImageFromChat,
+  generateImageDirect,
   updateLoreEntry,
   updateLorebook,
   listChats,
@@ -21,6 +22,9 @@ import {
   getPrompts,
   savePrompts,
   suggestLoreFromChat,
+  getMcpServers,
+  saveMcpServers,
+  getMcpAwesome,
 } from './api';
 
 function App() {
@@ -35,8 +39,11 @@ function App() {
   const [sessionId, setSessionId] = useState('default');
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [phoneUrl, setPhoneUrl] = useState('https://example.org');
+  const [phoneStyle, setPhoneStyle] = useState('classic');
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggests, setSuggests] = useState([]);
+  const [showTools, setShowTools] = useState(false);
+  const messagesRef = useRef(null);
 
   const [activeProvider, setActiveProvider] = useState('echo');
   const [providers, setProviders] = useState({}); // provider -> masked config
@@ -71,10 +78,18 @@ function App() {
         setDebugFlags(cfg.debug || { log_prompts: false, log_responses: false });
         setMaxTokens(cfg.max_context_tokens || 2048);
         setUserPersona(cfg.user_persona || { name: 'User', description: '' });
+        try { setPhoneStyle((cfg.theme && cfg.theme.phone_style) || 'classic'); } catch {}
       } catch (e) {
         console.warn('Could not load config', e);
       }
     })();
+  }, []);
+
+  // Listen for phone style changes from AppearanceTab
+  useEffect(() => {
+    const h = (e) => { try { if (e && e.detail) setPhoneStyle(e.detail); } catch {} };
+    window.addEventListener('coolchat:phoneStyle', h);
+    return () => window.removeEventListener('coolchat:phoneStyle', h);
   }, []);
 
   // Load chat history on session change
@@ -133,7 +148,44 @@ function App() {
     setSending(true);
     try {
       const reply = await sendChat(trimmed, sessionId);
-      setMessages((m) => [...m, { role: 'assistant', content: reply }]);
+      // Try to parse tool calls
+      let handled = false;
+      let caption = '';
+      try {
+        let obj = null;
+        try { obj = JSON.parse(reply); } catch (e) {
+          // Extract JSON object from mixed text
+          const m = reply.match(/\{[\s\S]*\}$/);
+          if (m) { obj = JSON.parse(m[0]); caption = reply.slice(0, m.index).trim(); }
+        }
+        // Structured calls preferred: toolCalls: [{type,payload}]
+        if (obj && Array.isArray(obj.toolCalls)) {
+          for (const tc of obj.toolCalls) {
+            if (!tc || !tc.type) continue;
+            if (tc.type === 'image_request' && tc.payload?.prompt) {
+              const r = await generateImageDirect(tc.payload.prompt, sessionId);
+              setMessages((m) => [...m, { role: 'assistant', image_url: r.image_url, content: caption }]);
+              handled = true;
+            } else if (tc.type === 'phone_url' && tc.payload?.url) {
+              let u = tc.payload.url; if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); setPhoneOpen(true); handled = true;
+            } else if (tc.type === 'lore_suggestions' && Array.isArray(tc.payload?.items)) {
+              setSuggests(tc.payload.items.map(x => ({ keyword: x.keyword, content: x.content })));
+              setSuggestOpen(true); handled = true;
+            }
+          }
+        } else {
+          // Flat keys fallback
+          if (obj.image_request) {
+            const prompt = typeof obj.image_request === 'string' ? obj.image_request : obj.image_request.prompt;
+            if (prompt) { const r = await generateImageDirect(prompt, sessionId); setMessages((m) => [...m, { role: 'assistant', image_url: r.image_url, content: caption }]); handled = true; }
+          }
+          if (obj.phone_url) { let u = obj.phone_url; if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); setPhoneOpen(true); handled = true; }
+          if (Array.isArray(obj.lore_suggestions)) { setSuggests(obj.lore_suggestions); setSuggestOpen(true); handled = true; }
+        }
+      } catch (e) { console.warn('Tool parse failed', e); }
+      if (!handled) {
+        setMessages((m) => [...m, { role: 'assistant', content: reply }]);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -155,6 +207,9 @@ function App() {
         <button className="secondary" onClick={() => setShowChats((s) => !s)}>
           {showChats ? 'Hide Chats' : 'Chats'}
         </button>
+        <button className="secondary" onClick={() => setShowTools((s) => !s)}>
+          {showTools ? 'Hide Tools' : 'Tools'}
+        </button>
         <button className="secondary" onClick={() => setShowLorebooks((s) => !s)}>
           {showLorebooks ? 'Hide Lorebooks' : 'Lorebooks'}
         </button>
@@ -164,12 +219,20 @@ function App() {
       </header>
 
       {phoneOpen && (
-        <div className="phone-panel">
-          <div className="bar">
-            <input style={{ flex: 1 }} placeholder="https://" value={phoneUrl} onChange={(e)=> setPhoneUrl(e.target.value)} />
-            <button className="secondary" onClick={()=> setPhoneUrl(phoneUrl)}>Go</button>
+        <div className={`phone-panel ${phoneStyle}`}>
+          <div className="skin"></div>
+          <div className="screen">
+            <div className="statusbar">
+              <span>{new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+              <span>📶 📍 🔔</span>
+            </div>
+            <div className="bar">
+              <input style={{ flex: 1 }} placeholder="https://" value={phoneUrl} onChange={(e)=> setPhoneUrl(e.target.value)} />
+              <button className="secondary" onClick={()=> { let u = phoneUrl; if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); }}>Go</button>
+              <button className="secondary" title="Open in new tab" onClick={()=> { try { let u = phoneUrl; if (!/^https?:/i.test(u)) u = 'https://' + u; window.open(u, '_blank'); } catch (e) { console.error(e);} }}>✨</button>
+            </div>
+            <iframe src={/^https?:/i.test(phoneUrl) ? phoneUrl : ('https://' + phoneUrl)} title="Phone" onLoad={()=>{ try { fetch('/phone/debug', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ event:'load', url: phoneUrl }) }); } catch (e) { console.error(e);} }} onError={()=>{ try { fetch('/phone/debug', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ event:'error', url: phoneUrl }) }); } catch (e) { console.error(e);} }} />
           </div>
-          <iframe src={phoneUrl} title="Phone" />
         </div>
       )}
       <main className="chat">
@@ -227,6 +290,13 @@ function App() {
           </section>
         )}
 
+        {showTools && (
+          <section className="panel overlay">
+            <h2>Tools</h2>
+            <ToolsOverlay onClose={() => setShowTools(false)} />
+          </section>
+        )}
+
         {showConfig && (
           <section className="panel overlay">
             <h2>Configuration</h2>
@@ -236,6 +306,7 @@ function App() {
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('appearance'); }}>Appearance</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('images'); }}>Images</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('prompts'); }}>Prompts</button>
+              <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('tools'); }}>Tools</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('advanced'); }}>Advanced</button>
             </div>
             {settingsTab === 'connection' && (
@@ -356,6 +427,10 @@ function App() {
                     onChange={(e) => setConfigDraft((d) => ({ ...d, temperature: parseFloat(e.target.value) }))}
                   />
                 </label>
+                <label>
+                  <span>Structured Output (Gemini)</span>
+                  <input type="checkbox" onChange={async (e)=>{ try { await updateConfig({ structured_output: e.target.checked }); } catch (err) { alert(err.message);} }} />
+                </label>
 
                 <div className="row">
                   <button type="submit">Save</button>
@@ -423,6 +498,9 @@ function App() {
             )}
             {settingsTab === 'prompts' && (
               <PromptsTab />
+            )}
+            {settingsTab === 'tools' && (
+              <ToolsTab />
             )}
             {settingsTab === 'advanced' && (
               <AdvancedTab />
@@ -502,10 +580,10 @@ function App() {
           </section>
         )}
 
-        <div className="messages" aria-live="polite">
+        <div className="messages" aria-live="polite" ref={messagesRef}>
           {messages.map((m, idx) => (
             <div key={idx} className={`message ${m.role}`}>
-              <div className="bubble">{m.image_url ? (<img src={m.image_url} alt="generated" style={{ maxWidth: '100%', borderRadius: 8 }} />) : m.content}</div>
+              <div className="bubble">{m.image_url ? (<div><img src={m.image_url} alt="generated" style={{ maxWidth: '100%', borderRadius: 8 }} />{m.content ? (<div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>{m.content}</div>) : null}</div>) : m.content}</div>
             </div>
           ))}
           {error && (
@@ -516,18 +594,19 @@ function App() {
         </div>
 
         <div className="input-tools">
-          <button className="secondary" title="Suggest lore entries from chat" onClick={async () => {
-            try {
-              const s = await suggestLoreFromChat(sessionId);
-              if (!s.suggestions || s.suggestions.length === 0) { alert('No suggestions'); return; }
-              setSuggests(s.suggestions);
-              setSuggestOpen(true);
-            } catch (e) { console.error(e); alert(e.message); }
-          }}>📖</button>
-          <button className="secondary" title="Generate image from chat" onClick={async () => {
-            try { const r = await generateImageFromChat(sessionId); setMessages(m => [...m, { role: 'assistant', image_url: r.image_url }]); } catch (e) { console.error(e); alert(e.message); }
-          }}>🖌️</button>
-          <button className="secondary" title="Scroll to bottom" style={{ marginLeft: 'auto' }} onClick={() => { try { const el = document.querySelector('.messages'); if (el) el.scrollTop = el.scrollHeight; } catch (e) { console.error(e); } }}>⤓</button>
+  <button className="secondary" title="Suggest lore entries from chat" onClick={async () => {
+    try {
+      const s = await suggestLoreFromChat(sessionId);
+      if (!s.suggestions || s.suggestions.length === 0) { alert('No suggestions'); return; }
+      setSuggests(s.suggestions);
+      setSuggestOpen(true);
+    } catch (e) { console.error(e); alert(e.message); }
+  }}>📖</button>
+  <button className="secondary" title="Generate image from chat" onClick={async () => {
+    try { const r = await generateImageFromChat(sessionId); setMessages(m => [...m, { role: 'assistant', image_url: r.image_url }]); } catch (e) { console.error(e); alert(e.message); }
+  }}>🎨</button>
+          <button className="secondary" title="Send URL to phone" onClick={() => { let u = prompt('Open URL on phone:'); if (u) { if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); setPhoneOpen(true); } }}>📱</button>
+          <button className="secondary" title="Scroll to bottom" style={{ marginLeft: 'auto' }} onClick={() => { try { if (messagesRef.current) { messagesRef.current.scrollTop = messagesRef.current.scrollHeight; } } catch (e) { console.error(e); } }}>⬇️</button>
         </div>
         <form className="input-row" onSubmit={onSubmit}>
           <input
@@ -603,8 +682,9 @@ export default App;
 function ImagesTab() {
   const [cfg, setCfg] = useState({ active: 'pollinations', pollinations: { api_key: '', model: '' }, dezgo: { api_key: '', model: '', lora_flux_1: '', lora_flux_2: '', lora_sd1_1: '', lora_sd1_2: '', transparent: false, width: '', height: '', steps: '', upscale: false } });
   const [models, setModels] = useState([]);
+  const [familyFilter, setFamilyFilter] = useState('');
 
-  useEffect(() => { (async () => { try { const c = await getConfig(); setCfg(c.images); const m = await getImageModels(c.images.active); setModels(m.models || []);} catch (e) { console.error(e);} })(); }, []);
+  useEffect(() => { (async () => { try { const c = await getConfig(); setCfg(c.images); const m = await getImageModels(c.images.active); setModels(m.models || []); const fam0 = modelFamily(c.images?.dezgo?.model); setFamilyFilter(fam0);} catch (e) { console.error(e);} })(); }, []);
 
   const loadModels = async (prov) => { try { const m = await getImageModels(prov); setModels(m.models || []);} catch (e) { console.error(e); setModels([]);} };
 
@@ -620,6 +700,14 @@ function ImagesTab() {
   };
 
   const fam = modelFamily(cfg.dezgo?.model);
+  const famView = familyFilter || fam;
+  const familyOptions = [
+    { id: 'flux', label: 'Flux' },
+    { id: 'sdxl', label: 'SDXL' },
+    { id: 'sdxl_lightning', label: 'SDXL Lightning' },
+    { id: 'sd1', label: 'SD1' },
+  ];
+  const filteredModels = (models||[]).filter(m => modelFamily(m) === famView);
 
   return (
     <div className="config-form">
@@ -652,6 +740,12 @@ function ImagesTab() {
             <input placeholder={cfg.dezgo.api_key_masked ? `Saved: ${cfg.dezgo.api_key_masked}` : ''} value={cfg.dezgo.api_key || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, api_key: e.target.value } }))} />
           </label>
           <label>
+            <span>Family</span>
+            <select value={famView} onChange={(e)=> setFamilyFilter(e.target.value)}>
+              {familyOptions.map(o => (<option key={o.id} value={o.id}>{o.label}</option>))}
+            </select>
+          </label>
+          <label>
             <span>Model</span>
             <select value={cfg.dezgo.model || ''} onChange={(e) => {
               const v = e.target.value; const fam = modelFamily(v);
@@ -659,41 +753,53 @@ function ImagesTab() {
               setCfg(next); saveCfg(next);
             }}>
               <option value="">(default)</option>
-              {models.map(m => (<option key={m} value={m}>{m}</option>))}
+              {filteredModels.map(m => (<option key={m} value={m}>{m}</option>))}
             </select>
           </label>
-          <div className="muted">Family: {fam.toUpperCase()}</div>
+          <div className="muted">Family: {famView.toUpperCase()}</div>
           <div className="muted">
-            {fam==='sd1' ? 'Transparent background disabled; Upscale available.' : (fam==='sdxl_lightning' ? 'Steps disabled (fixed Lightning).' : 'Transparent background available; consider steps ~30.')}
+            {famView==='sd1' ? 'Transparent background disabled; Upscale available.' : (famView==='sdxl_lightning' ? 'Steps disabled (Lightning is fixed).' : 'Transparent background available; consider steps ~30.')}
           </div>
-          <label>
-            <span>LoRA 1 Strength</span>
-            <input type="range" min="0" max="1" step="0.05" disabled={!cfg.dezgo.lora_flux_1 && !cfg.dezgo.lora_sd1_1} value={cfg.dezgo.lora1_strength ?? 0.7} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora1_strength: parseFloat(e.target.value) } }))} />
-          </label>
-          <label>
-            <span>LoRA 2 Strength</span>
-            <input type="range" min="0" max="1" step="0.05" disabled={!cfg.dezgo.lora_flux_2 && !cfg.dezgo.lora_sd1_2} value={cfg.dezgo.lora2_strength ?? 0.7} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora2_strength: parseFloat(e.target.value) } }))} />
-          </label>
-          <label>
-            <span>Flux LORA #1 (SHA256)</span>
-            <input value={cfg.dezgo.lora_flux_1 || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora_flux_1: e.target.value } }))} />
-          </label>
-          <label>
-            <span>Flux LORA #2 (SHA256)</span>
-            <input value={cfg.dezgo.lora_flux_2 || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora_flux_2: e.target.value } }))} />
-          </label>
-          <label>
-            <span>SD1 LORA #1 (SHA256)</span>
-            <input value={cfg.dezgo.lora_sd1_1 || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora_sd1_1: e.target.value } }))} />
-          </label>
-          <label>
-            <span>SD1 LORA #2 (SHA256)</span>
-            <input value={cfg.dezgo.lora_sd1_2 || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora_sd1_2: e.target.value } }))} />
-          </label>
-          <label>
-            <span>Transparent Background</span>
-            <input type="checkbox" disabled={modelFamily(cfg.dezgo.model) === 'sd1'} checked={!!cfg.dezgo.transparent} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, transparent: e.target.checked } }))} />
-          </label>
+          {famView==='flux' && (
+            <>
+              <label>
+                <span>Flux LORA #1 (SHA256)</span>
+                <input value={cfg.dezgo.lora_flux_1 || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora_flux_1: e.target.value } }))} />
+              </label>
+              <label>
+                <span>Flux LORA #2 (SHA256)</span>
+                <input value={cfg.dezgo.lora_flux_2 || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora_flux_2: e.target.value } }))} />
+              </label>
+              <label>
+                <span>LoRA 1 Strength</span>
+                <input type="range" min="0" max="1" step="0.05" disabled={!cfg.dezgo.lora_flux_1} value={cfg.dezgo.lora1_strength ?? 0.7} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora1_strength: parseFloat(e.target.value) } }))} />
+              </label>
+              <label>
+                <span>LoRA 2 Strength</span>
+                <input type="range" min="0" max="1" step="0.05" disabled={!cfg.dezgo.lora_flux_2} value={cfg.dezgo.lora2_strength ?? 0.7} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora2_strength: parseFloat(e.target.value) } }))} />
+              </label>
+            </>
+          )}
+          {famView==='sd1' && (
+            <>
+              <label>
+                <span>SD1 LORA #1 (SHA256)</span>
+                <input value={cfg.dezgo.lora_sd1_1 || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora_sd1_1: e.target.value } }))} />
+              </label>
+              <label>
+                <span>SD1 LORA #2 (SHA256)</span>
+                <input value={cfg.dezgo.lora_sd1_2 || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora_sd1_2: e.target.value } }))} />
+              </label>
+              <label>
+                <span>LoRA 1 Strength</span>
+                <input type="range" min="0" max="1" step="0.05" disabled={!cfg.dezgo.lora_sd1_1} value={cfg.dezgo.lora1_strength ?? 0.7} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora1_strength: parseFloat(e.target.value) } }))} />
+              </label>
+              <label>
+                <span>LoRA 2 Strength</span>
+                <input type="range" min="0" max="1" step="0.05" disabled={!cfg.dezgo.lora_sd1_2} value={cfg.dezgo.lora2_strength ?? 0.7} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, lora2_strength: parseFloat(e.target.value) } }))} />
+              </label>
+            </>
+          )}
           <label>
             <span>Width</span>
             <input type="number" value={cfg.dezgo.width || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, width: e.target.value } }))} />
@@ -702,13 +808,19 @@ function ImagesTab() {
             <span>Height</span>
             <input type="number" value={cfg.dezgo.height || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, height: e.target.value } }))} />
           </label>
+          {famView!=='sdxl_lightning' && (
+            <label>
+              <span>Steps</span>
+              <input type="number" value={cfg.dezgo.steps || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, steps: e.target.value } }))} />
+            </label>
+          )}
           <label>
-            <span>Steps</span>
-            <input type="number" disabled={modelFamily(cfg.dezgo.model)==='sdxl_lightning'} value={cfg.dezgo.steps || ''} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, steps: e.target.value } }))} />
+            <span>Transparent Background</span>
+            <input type="checkbox" disabled={famView === 'sd1'} checked={!!cfg.dezgo.transparent} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, transparent: e.target.checked } }))} />
           </label>
           <label>
             <span>Upscale</span>
-            <input type="checkbox" disabled={modelFamily(cfg.dezgo.model) !== 'sd1'} checked={!!cfg.dezgo.upscale} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, upscale: e.target.checked } }))} />
+            <input type="checkbox" disabled={famView !== 'sd1'} checked={!!cfg.dezgo.upscale} onChange={(e) => setCfg(c => ({ ...c, dezgo: { ...c.dezgo, upscale: e.target.checked } }))} />
           </label>
         </>
       )}
@@ -733,8 +845,11 @@ function PromptsTab() {
   const add = () => { const t = newText.trim(); if (!t) return; const na = [...all, t]; setNewText(''); save(na, active); };
   const remove = (txt) => { const na = all.filter(x=>x!==txt); const aa = active.filter(x=>x!==txt); save(na, aa); };
   return (
-    <div className="config-form">
-      <h3>System Prompts</h3>
+    <div className="config-form" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <h3>System Prompts</h3>
+        <div className="muted">These prompts guide built-in tools. Use placeholders like <code>{'{'}{'{'}conversation{'}'}{'}'}</code> and <code>{'{'}{'{'}existing_keywords{'}'}{'}'}</code>.</div>
+      </div>
       <label>
         <span>Lorebook suggestion prompt</span>
         <textarea rows={4} value={system.lore_suggest} onChange={(e)=> setSystem(s => ({ ...s, lore_suggest: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="Use {{conversation}} and {{existing_keywords}}" />
@@ -743,7 +858,10 @@ function PromptsTab() {
         <span>Image generation prompt</span>
         <textarea rows={4} value={system.image_summary} onChange={(e)=> setSystem(s => ({ ...s, image_summary: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="Use {{conversation}}" />
       </label>
-      <h3>Variables</h3>
+      <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
+        <h3>Variables</h3>
+        <div className="muted">Define reusable snippets that replace tags like <code>{'{'}{'{'}company{'}'}{'}'}</code> anywhere the LLM sees them.</div>
+      </div>
       <div className="row" style={{ gap: 8 }}>
         <input placeholder="name (e.g., site)" value={newVarName} onChange={(e)=> setNewVarName(e.target.value)} />
         <input placeholder="value" value={newVarValue} onChange={(e)=> setNewVarValue(e.target.value)} />
@@ -758,7 +876,10 @@ function PromptsTab() {
           </div>
         ))}
       </div>
-      <h3>General Prompts</h3>
+      <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
+        <h3>General Prompts</h3>
+        <div className="muted">Short, reusable prompts that can be toggled on to influence replies globally.</div>
+      </div>
       <label>
         <span>New Prompt</span>
         <div className="row" style={{ gap: 8 }}>
@@ -774,6 +895,74 @@ function PromptsTab() {
             <button className="secondary" onClick={()=> remove(p)}>Delete</button>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function ToolsTab() {
+  const [servers, setServers] = useState([]);
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
+  const [catalog, setCatalog] = useState([]);
+  const [selIdx, setSelIdx] = useState('');
+  useEffect(() => { (async () => { try { const d = await getMcpServers(); setServers(d.servers || []); const c = await getMcpAwesome(); setCatalog(c.items || []);} catch (e) { console.error(e);} })(); }, []);
+  const save = async (list) => { try { await saveMcpServers({ servers: list }); setServers(list);} catch (e) { console.error(e); alert('Save failed'); } };
+  return (
+    <div className="config-form">
+      <p className="muted">Register MCP servers the assistant can call in future sessions.</p>
+      <label>
+        <span>Catalog</span>
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <select value={selIdx} onChange={(e)=> setSelIdx(e.target.value)}>
+            <option value="">(select server)</option>
+            {catalog.map((it, i) => (<option key={i} value={i}>{it.name}</option>))}
+          </select>
+          {selIdx!=='' && (
+            <>
+              <button className="secondary" onClick={()=>{ const it=catalog[parseInt(selIdx,10)]; if (!it) return; const list=[...servers,{ name: it.name, url: it.url }]; save(list); }}>Add Server</button>
+              <a className="secondary" href={catalog[parseInt(selIdx,10)]?.url} target="_blank" rel="noreferrer">Open</a>
+            </>
+          )}
+        </div>
+        {selIdx!=='' && (
+          <div className="muted" style={{ marginTop: 6 }}>{catalog[parseInt(selIdx,10)]?.description}</div>
+        )}
+      </label>
+      <div className="row" style={{ gap: 8 }}>
+        <input placeholder="Name" value={name} onChange={(e)=> setName(e.target.value)} />
+        <input placeholder="URL or command" value={url} onChange={(e)=> setUrl(e.target.value)} />
+        <button onClick={()=>{ const n = name.trim(); const u = url.trim(); if (!n || !u) return; const list = [...servers, { name: n, url: u }]; save(list); setName(''); setUrl(''); }}>Add</button>
+      </div>
+      <div style={{ marginTop: 8 }}>
+        {servers.map((s, i) => (
+          <div key={i} className="row" style={{ gap: 8, alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ width: 180 }}>{s.name}</span>
+            <span style={{ flex: 1 }} className="muted">{s.url}</span>
+            <button className="secondary" onClick={()=>{ const list = servers.filter((_,idx)=> idx!==i); save(list); }}>Remove</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ToolsOverlay({ onClose }) {
+  const [enabled, setEnabled] = useState({ phone: false, image_gen: false, lore_suggest: false });
+  const [structured, setStructured] = useState(false);
+  const [notified, setNotified] = useState(false);
+  useEffect(() => { (async () => { try { const cfg = await getConfig(); setStructured(!!cfg.structured_output); const cid = cfg.active_character_id; const t = await (await fetch(`/tools/settings${cid?`?character_id=${cid}`:''}`)).json(); setEnabled(t.enabled || {}); } catch (e) { console.error(e);} })(); }, []);
+  const save = async (en) => { try { const cfg = await getConfig(); const cid = cfg.active_character_id; await fetch(`/tools/settings${cid?`?character_id=${cid}`:''}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: en }) }); setEnabled(en); if (!notified && (en.phone||en.image_gen||en.lore_suggest) && !structured) { alert('Enabling tools benefits from Structured Output. You can toggle it in Connection settings.'); setNotified(true);} } catch (e) { console.error(e); alert('Save failed'); } };
+  return (
+    <div className="config-form">
+      <div className="row" style={{ gap: 8 }}>
+        <label><input type="checkbox" checked={!!enabled.phone} onChange={(e)=> save({ ...enabled, phone: e.target.checked })} /> Phone Panel</label>
+        <label><input type="checkbox" checked={!!enabled.image_gen} onChange={(e)=> save({ ...enabled, image_gen: e.target.checked })} /> Image Generation</label>
+        <label><input type="checkbox" checked={!!enabled.lore_suggest} onChange={(e)=> save({ ...enabled, lore_suggest: e.target.checked })} /> Lore Suggest</label>
+      </div>
+      <p className="muted">When tools are enabled, the assistant receives concise instructions about each tool. For Gemini models, enable "Structured Output" in Connection to get reliable tool-usage responses.</p>
+      <div className="row" style={{ justifyContent: 'flex-end' }}>
+        <button className="secondary" onClick={onClose}>Close</button>
       </div>
     </div>
   );
@@ -849,7 +1038,7 @@ function ThemesManager() {
 }
 
 function AppearanceTab() {
-  const [theme, setTheme] = useState({ primary: '#2563eb', secondary: '#374151', text1: '#e5e7eb', text2: '#cbd5e1', highlight: '#10b981', lowlight: '#111827' });
+  const [theme, setTheme] = useState({ primary: '#2563eb', secondary: '#374151', text1: '#e5e7eb', text2: '#cbd5e1', highlight: '#10b981', lowlight: '#111827', phone_style: 'classic' });
   useEffect(() => { (async () => { try { const r = await getConfig(); if (r.theme) setTheme(r.theme);} catch (e) { console.error(e);} })(); }, []);
   useEffect(() => {
     const root = document.documentElement;
@@ -894,6 +1083,14 @@ function AppearanceTab() {
       <Color label="Text 2" keyName="text2" />
       <Color label="Highlight" keyName="highlight" />
       <Color label="Lowlight" keyName="lowlight" />
+      <label>
+        <span>Phone Style</span>
+        <select value={theme.phone_style || 'classic'} onChange={async (e)=> { const next = { ...theme, phone_style: e.target.value }; await save(next); try { window.dispatchEvent(new CustomEvent('coolchat:phoneStyle', { detail: next.phone_style })); } catch {} }}>
+          <option value="classic">Classic</option>
+          <option value="modern">Modern</option>
+          <option value="rounded">Rounded</option>
+        </select>
+      </label>
       <hr />
       <p className="muted">Saved themes</p>
       <ThemesManager />
@@ -1076,10 +1273,3 @@ function CharacterEditor({ character, onClose, onSave, onThink, lorebooks }) {
     </div>
   );
 }
-
-
-
-
-
-
-

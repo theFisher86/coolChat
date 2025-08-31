@@ -154,6 +154,12 @@ export async function generateImageFromChat(sessionId = 'default') {
   return res.json();
 }
 
+export async function generateImageDirect(prompt, sessionId = 'default') {
+  const res = await fetch('/images/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, session_id: sessionId }) });
+  if (!res.ok) throw new Error(`Generate image failed: ${res.status}`);
+  return res.json();
+}
+
 export async function updateLoreEntry(id, data) {
   const res = await fetch(`/lore/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
   if (!res.ok) throw new Error(`Update lore failed: ${res.status}`);
@@ -200,6 +206,36 @@ export async function suggestLoreFromChat(sessionId = 'default') {
   const res = await fetch('/lore/suggest_from_chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId }) });
   if (!res.ok) throw new Error(`Suggest lore failed: ${res.status}`);
   return res.json(); // { suggestions: [{ keyword, content }] }
+}
+
+// Tools / MCP
+export async function getMcpServers() {
+  const res = await fetch('/tools/mcp');
+  if (!res.ok) throw new Error(`Get MCP servers failed: ${res.status}`);
+  return res.json(); // { servers: [] }
+}
+export async function saveMcpServers(data) {
+  const res = await fetch('/tools/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  if (!res.ok) throw new Error(`Save MCP servers failed: ${res.status}`);
+  return res.json();
+}
+
+export async function getMcpAwesome() {
+  const res = await fetch('/tools/mcp/awesome');
+  if (!res.ok) throw new Error(`Fetch MCP awesome failed: ${res.status}`);
+  return res.json(); // { items: [{name,url,description}] }
+}
+
+// Tool settings
+export async function getToolSettings() {
+  const res = await fetch('/tools/settings');
+  if (!res.ok) throw new Error(`Get tool settings failed: ${res.status}`);
+  return res.json();
+}
+export async function saveToolSettings(data) {
+  const res = await fetch('/tools/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  if (!res.ok) throw new Error(`Save tool settings failed: ${res.status}`);
+  return res.json();
 }
 
 export default { checkHealth, sendChat, getConfig, updateConfig, getModels, listCharacters, createCharacter, deleteCharacter };

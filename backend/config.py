@@ -95,6 +95,7 @@ class AppearanceConfig(BaseModel):
     text2: str = "#cbd5e1"
     highlight: str = "#10b981"
     lowlight: str = "#111827"
+    phone_style: str = "classic"
 
 
 class AppConfig(BaseModel):
@@ -108,6 +109,7 @@ class AppConfig(BaseModel):
     theme: AppearanceConfig = AppearanceConfig()
     last_connection: Dict[str, Any] | None = None
     active_lorebook_ids: Optional[list[int]] = []
+    structured_output: bool = False
 
 
 def ensure_parent(path: Path) -> None:

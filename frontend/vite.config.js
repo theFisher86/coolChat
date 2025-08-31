@@ -21,6 +21,8 @@ export default defineConfig({
       '/prompts': 'http://127.0.0.1:8000',
       '/chats': 'http://127.0.0.1:8000',
       '/themes': 'http://127.0.0.1:8000',
+      '/phone': 'http://127.0.0.1:8000',
+      '/tools': 'http://127.0.0.1:8000',
     },
   },
   test: {

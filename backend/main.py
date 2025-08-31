@@ -39,6 +39,15 @@ except Exception:
     pass
 
 
+@app.post("/phone/debug")
+async def phone_debug(payload: Dict[str, object]):
+    try:
+        print("[CoolChat] Phone debug:", payload)
+    except Exception:
+        pass
+    return {"status": "ok"}
+
+
 @app.on_event("startup")
 async def _startup_load_state():
     try:
@@ -795,7 +804,13 @@ def _active_provider_cfg(cfg: AppConfig) -> tuple[str, ProviderConfig]:
     return p, pc
 
 
-async def _llm_reply(message: str, cfg: AppConfig, recent_text: str | None = None) -> str:
+async def _llm_reply(
+    message: str,
+    cfg: AppConfig,
+    recent_text: str | None = None,
+    system_override: str | None = None,
+    disable_system: bool = False,
+) -> str:
     # In test environments, avoid external calls unless explicitly allowed.
     def _external_enabled() -> bool:
         if os.getenv("COOLCHAT_ALLOW_EXTERNAL") == "1":
@@ -815,11 +830,13 @@ async def _llm_reply(message: str, cfg: AppConfig, recent_text: str | None = Non
 
     # Provider: openai (or compatible)
     # Build optional system message from active character and user persona, respecting token limit
-    system_msg = _build_system_from_character(
-        _characters.get(cfg.active_character_id) if hasattr(cfg, 'active_character_id') else None,
-        getattr(cfg, 'user_persona', None),
-        (getattr(cfg.providers.get(provider, ProviderConfig()), 'max_context_tokens', None) or getattr(cfg, 'max_context_tokens', 2048)),
-        recent_text or "",
+    system_msg = None if disable_system else (
+        system_override if system_override is not None else _build_system_from_character(
+            _characters.get(cfg.active_character_id) if hasattr(cfg, 'active_character_id') else None,
+            getattr(cfg, 'user_persona', None),
+            (getattr(cfg.providers.get(provider, ProviderConfig()), 'max_context_tokens', None) or getattr(cfg, 'max_context_tokens', 2048)),
+            recent_text or "",
+        )
     )
 
     # Replace tokens in messages
@@ -1059,6 +1076,16 @@ def _build_system_from_character(
                 segments.append(str(p.get("text")))
     except Exception:
         pass
+    # Add structured-output tool schema guidance for Gemini if enabled
+    try:
+        if getattr(load_config(), 'structured_output', False):
+            segments.append(
+                "When invoking tools, return JSON with key 'toolCalls' as an array of {type, payload}. "
+                "Types: 'image_request' (payload: {prompt:string}), 'phone_url' (payload:{url:string}), 'lore_suggestions' (payload:{items:[{keyword:string, content:string}]}). "
+                "Optionally include plain 'text' content outside of tool calls. Do not wrap JSON in code fences."
+            )
+    except Exception:
+        pass
     # Include user persona if present
     if user_persona and getattr(user_persona, "name", None):
         up = (
@@ -1135,6 +1162,22 @@ def _build_system_from_character(
 
     if not segments:
         return None
+    # Append active tool descriptions if any
+    try:
+        from .storage import load_json as _lj
+        _tools = _lj("tools.json", {"enabled": {}})
+        en = (_tools.get("enabled") or {}) if isinstance(_tools, dict) else {}
+        tool_lines = []
+        if en.get("phone"):
+            tool_lines.append("Tool: PhonePanel — You can propose opening a URL on the user's phone panel to present web content. Return a JSON field phone_url with https:// URL when appropriate.")
+        if en.get("image_gen"):
+            tool_lines.append("Tool: ImageGen — You can request an image from the image generator when visual output would help. Return a JSON field image_request with a concise prompt.")
+        if en.get("lore_suggest"):
+            tool_lines.append("Tool: LoreSuggest — You can suggest new lore entries as keyword+content for the active lorebooks. Return a JSON field lore_suggestions as an array of {keyword, content}.")
+        if tool_lines:
+            segments.append("\n".join(tool_lines))
+    except Exception:
+        pass
     return _truncate_to_tokens("\n\n".join(segments), max_tokens)
 
 
@@ -1177,6 +1220,7 @@ class ConfigResponse(BaseModel):
     debug: Dict[str, bool]
     user_persona: Dict[str, str]
     max_context_tokens: int
+    structured_output: bool
     class ImagesOut(BaseModel):
         active: str
         pollinations: Dict[str, object]
@@ -1203,6 +1247,7 @@ class ConfigUpdate(BaseModel):
     images: Dict[str, object] | None = None
     theme: Dict[str, str] | None = None
     active_lorebook_ids: List[int] | None = None
+    structured_output: bool | None = None
 
 
 @app.get("/config", response_model=ConfigResponse)
@@ -1229,6 +1274,7 @@ async def get_config() -> ConfigResponse:
             "tracking": getattr(cfg.user_persona, 'tracking', ''),
         },
         max_context_tokens=getattr(cfg, 'max_context_tokens', 2048),
+        structured_output=getattr(cfg, 'structured_output', False),
         images=ConfigResponse.ImagesOut(
             active=getattr(cfg.images, 'active', ImageProvider.POLLINATIONS),
             pollinations={
@@ -1310,6 +1356,11 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
             cfg.max_context_tokens = int(payload.max_context_tokens)
         except Exception:
             pass
+    if getattr(payload, 'structured_output', None) is not None:
+        try:
+            cfg.structured_output = bool(payload.structured_output)
+        except Exception:
+            pass
 
     if payload.images is not None:
         imgs = getattr(cfg, 'images', ImagesConfig())
@@ -1358,7 +1409,7 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
         if not hasattr(cfg, 'theme') or cfg.theme is None:
             from .config import AppearanceConfig
             cfg.theme = AppearanceConfig()
-        for k in ("primary","secondary","text1","text2","highlight","lowlight"):
+        for k in ("primary","secondary","text1","text2","highlight","lowlight","phone_style"):
             if k in payload.theme:
                 setattr(cfg.theme, k, payload.theme[k])
     if payload.active_lorebook_ids is not None:
@@ -1409,6 +1460,7 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
             "tracking": getattr(cfg.user_persona, 'tracking', ''),
         },
         max_context_tokens=getattr(cfg, 'max_context_tokens', 2048),
+        structured_output=getattr(cfg, 'structured_output', False),
         images=ConfigResponse.ImagesOut(
             active=getattr(cfg.images, 'active', ImageProvider.POLLINATIONS),
             pollinations={"api_key": None, "model": getattr(cfg.images.pollinations, 'model', None)},
@@ -1953,6 +2005,80 @@ async def reset_chat(session_id: str) -> Dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
+# Tools / MCP registry (storage only for now)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/tools/mcp")
+async def list_mcp_servers():
+    data = load_json("mcp.json", {"servers": []})
+    return data
+
+
+@app.post("/tools/mcp")
+async def save_mcp_servers(payload: Dict[str, object]):
+    if not isinstance(payload, dict) or "servers" not in payload or not isinstance(payload["servers"], list):
+        raise HTTPException(status_code=400, detail="invalid payload")
+    save_json("mcp.json", {"servers": payload["servers"]})
+    return {"status": "ok"}
+
+
+@app.get("/tools/mcp/awesome")
+async def list_mcp_awesome():
+    """Fetch and parse the Awesome MCP Servers list into a lightweight catalog.
+
+    Returns: { items: [{ name, url, description }] }
+    """
+    import httpx
+    import re
+    url = "https://raw.githubusercontent.com/punkpeye/awesome-mcp-servers/refs/heads/main/README.md"
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=30.0)) as client:
+            r = await client.get(url)
+            if r.status_code != 200:
+                raise HTTPException(status_code=502, detail="Failed to fetch awesome list")
+            md = r.text
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    items = []
+    # Parse lines like: - [Name](https://link) - description
+    for line in md.splitlines():
+        m = re.match(r"^\s*[-*]\s*\[(.+?)\]\((https?://[^\)]+)\)\s*-\s*(.+)$", line.strip())
+        if m:
+            name, link, desc = m.group(1).strip(), m.group(2).strip(), m.group(3).strip()
+            items.append({"name": name, "url": link, "description": desc})
+    return {"items": items}
+
+
+# Store tool enablement (public/tools.json)
+@app.get("/tools/settings")
+async def get_tool_settings(character_id: int | None = None):
+    data = load_json("tools.json", {"enabled": {"phone": False, "image_gen": False, "lore_suggest": False}, "per_character": {}})
+    if character_id is not None:
+        en = (data.get("per_character", {}).get(str(character_id)) if isinstance(data.get("per_character"), dict) else None)
+        if isinstance(en, dict):
+            return {"enabled": en}
+    return {"enabled": data.get("enabled", {})}
+
+
+@app.post("/tools/settings")
+async def save_tool_settings(payload: Dict[str, object], character_id: int | None = None):
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="invalid payload")
+    en = payload.get("enabled") if isinstance(payload.get("enabled"), dict) else None
+    if en is None:
+        raise HTTPException(status_code=400, detail="missing enabled map")
+    data = load_json("tools.json", {"enabled": {"phone": False, "image_gen": False, "lore_suggest": False}, "per_character": {}})
+    if character_id is not None:
+        data.setdefault("per_character", {})
+        data["per_character"][str(character_id)] = en
+    else:
+        data["enabled"] = en
+    save_json("tools.json", data)
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
 # Lore suggestion from chat
 # ---------------------------------------------------------------------------
 
@@ -2072,7 +2198,7 @@ async def generate_from_chat(payload: GenerateFromChatRequest) -> GenerateFromCh
             "Focus on salient visual elements and avoid names, extra quotes, or brackets.\n\nConversation:\n{{conversation}}"
         )
     scene_req = sys_p.replace("{{conversation}}", convo)
-    desc = await _llm_reply(scene_req, cfg)
+    desc = await _llm_reply(scene_req, cfg, recent_text=None, disable_system=True)
     # Clean JSON-string replies
     try:
         import json as _json
@@ -2252,6 +2378,126 @@ async def generate_from_chat(payload: GenerateFromChatRequest) -> GenerateFromCh
             _save_histories()
         except Exception:
             pass
+        return GenerateFromChatResponse(image_url=url, prompt=final_prompt)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported image provider: {active}")
+
+
+# Direct image generation with explicit prompt
+class GenerateImageRequest(BaseModel):
+    prompt: str
+    session_id: str | None = None
+
+
+@app.post("/images/generate", response_model=GenerateFromChatResponse)
+async def generate_image(payload: GenerateImageRequest) -> GenerateFromChatResponse:
+    cfg = load_config()
+    final_prompt = payload.prompt.strip()
+    # Reuse provider dispatch from generate_from_chat
+    class _P(BaseModel):
+        session_id: str | None = None
+    dummy = _P(session_id=payload.session_id)
+    # Hack: call generate_from_chat-like flow but bypass LLM summary; duplicate minimal dispatch
+    img_cfg: ImagesConfig = getattr(cfg, 'images', ImagesConfig())
+    active = getattr(img_cfg, 'active', ImageProvider.POLLINATIONS)
+    if active == ImageProvider.POLLINATIONS:
+        import httpx as _httpx, urllib.parse as _urlp, os as _os, time as _time
+        poll_url = f"https://image.pollinations.ai/prompt/{_urlp.quote(final_prompt)}"
+        timeout = _httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+        async with _httpx.AsyncClient(timeout=timeout) as client:
+            r = await client.get(poll_url)
+            if r.status_code >= 400:
+                raise HTTPException(status_code=502, detail="Pollinations image fetch failed")
+            img = r.content
+        images_root = _os.path.join(_os.path.dirname(__file__), "..", "public", "images")
+        _os.makedirs(images_root, exist_ok=True)
+        try:
+            cname = _characters.get(getattr(cfg, 'active_character_id', None)).name if getattr(cfg, 'active_character_id', None) in _characters else "default"
+        except Exception:
+            cname = "default"
+        from pathlib import Path as _Path
+        cdir = _Path(images_root) / (_safe_name(cname))
+        cdir.mkdir(parents=True, exist_ok=True)
+        images_dir = str(cdir)
+        fname = f"scene_{int(_time.time()*1000)}.png"
+        fpath = _os.path.join(images_dir, fname)
+        with open(fpath, "wb") as fh:
+            fh.write(img)
+        sub = images_dir.replace(images_root, "").strip("/\\")
+        url = f"/public/images/{(sub + '/' if sub else '')}{fname}"
+        return GenerateFromChatResponse(image_url=url, prompt=final_prompt)
+    elif active == ImageProvider.DEZGO:
+        # Reuse Dezgo branch with provided final_prompt
+        import httpx as _httpx, os as _os, time as _time
+        key = getattr(img_cfg.dezgo, 'api_key', None)
+        if not key:
+            raise HTTPException(status_code=400, detail="Missing Dezgo API key")
+        model = (getattr(img_cfg.dezgo, 'model', None) or '').strip()
+        endpoint = "text2image"
+        mlow = model.lower()
+        if "flux" in mlow:
+            endpoint = "text2image_flux"
+        elif "lightning" in mlow:
+            endpoint = "text2image_sdxl_lightning"
+        elif "sdxl" in mlow or " xl" in f" {mlow}" or "realistic" in mlow:
+            endpoint = "text2image_sdxl"
+        form = {"prompt": final_prompt, "format": "png"}
+        if model:
+            form["model"] = model
+        if endpoint == "text2image_flux":
+            for kconf, kapi in (("lora_flux_1", "lora1"), ("lora_flux_2", "lora2")):
+                v = getattr(img_cfg.dezgo, kconf, None)
+                if v:
+                    form[kapi] = v
+        elif endpoint == "text2image":
+            for kconf, kapi in (("lora_sd1_1", "lora1"), ("lora_sd1_2", "lora2")):
+                v = getattr(img_cfg.dezgo, kconf, None)
+                if v:
+                    form[kapi] = v
+        s1 = getattr(img_cfg.dezgo, 'lora1_strength', None)
+        s2 = getattr(img_cfg.dezgo, 'lora2_strength', None)
+        if s1 is not None:
+            form["lora1_strength"] = str(s1)
+        if s2 is not None:
+            form["lora2_strength"] = str(s2)
+        w = getattr(img_cfg.dezgo, 'width', None)
+        h = getattr(img_cfg.dezgo, 'height', None)
+        if w:
+            form["width"] = str(w)
+        if h:
+            form["height"] = str(h)
+        st = getattr(img_cfg.dezgo, 'steps', None)
+        if endpoint in ("text2image", "text2image_flux", "text2image_sdxl") and st:
+            form["steps"] = str(st)
+        if endpoint != "text2image":
+            if getattr(img_cfg.dezgo, 'transparent', False):
+                form["transparent_background"] = "true"
+        else:
+            if getattr(img_cfg.dezgo, 'upscale', None):
+                form["upscale"] = "true"
+        headers = {"X-Dezgo-Key": key}
+        multipart = {k: (None, v) for k, v in form.items()}
+        async with _httpx.AsyncClient(timeout=_httpx.Timeout(10.0, read=60.0)) as client:
+            r = await client.post(f"https://api.dezgo.com/{endpoint}", files=multipart, headers=headers)
+            if r.status_code >= 400:
+                raise HTTPException(status_code=502, detail=f"Dezgo error: {r.text}")
+            img = r.content
+        images_root = _os.path.join(_os.path.dirname(__file__), "..", "public", "images")
+        _os.makedirs(images_root, exist_ok=True)
+        try:
+            cname = _characters.get(getattr(cfg, 'active_character_id', None)).name if getattr(cfg, 'active_character_id', None) in _characters else "default"
+        except Exception:
+            cname = "default"
+        from pathlib import Path as _Path
+        cdir = _Path(images_root) / (_safe_name(cname))
+        cdir.mkdir(parents=True, exist_ok=True)
+        images_dir = str(cdir)
+        fname = f"scene_{int(_time.time()*1000)}.png"
+        fpath = _os.path.join(images_dir, fname)
+        with open(fpath, "wb") as fh:
+            fh.write(img)
+        sub = images_dir.replace(images_root, "").strip("/\\")
+        url = f"/public/images/{(sub + '/' if sub else '')}{fname}"
         return GenerateFromChatResponse(image_url=url, prompt=final_prompt)
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported image provider: {active}")
