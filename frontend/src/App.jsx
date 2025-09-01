@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import './App.css';
+import { getBackgroundAnimations } from './pluginHost';
 import {
   sendChat,
   getConfig,
@@ -25,6 +26,9 @@ import {
   getMcpServers,
   saveMcpServers,
   getMcpAwesome,
+  renderPhoneTemplate,
+  addPhoneAllowlist,
+  createPhoneTemplate,
 } from './api';
 
 function App() {
@@ -185,6 +189,15 @@ function App() {
               handled = true;
             } else if (tc.type === 'phone_url' && tc.payload?.url) {
               let u = tc.payload.url; if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); setPhoneOpen(true); handled = true;
+            } else if (tc.type === 'phone_template' && tc.payload?.template) {
+              try {
+                const { url } = await renderPhoneTemplate(tc.payload.template, tc.payload.data || {});
+                setPhoneUrl(url); setPhoneOpen(true); handled = true;
+              } catch (e) { console.error(e); }
+            } else if (tc.type === 'phone_allowlist_add' && tc.payload?.url) {
+              try { await addPhoneAllowlist(tc.payload.url); } catch (e) { console.error(e); }
+            } else if (tc.type === 'phone_create_template' && tc.payload?.name && tc.payload?.html) {
+              try { await createPhoneTemplate({ name: tc.payload.name, html: tc.payload.html, css: tc.payload.css, overwrite: !!tc.payload.overwrite, title: tc.payload.title }); } catch (e) { console.error(e); }
             } else if (tc.type === 'lore_suggestions' && Array.isArray(tc.payload?.items)) {
               setSuggests(tc.payload.items.map(x => ({ keyword: x.keyword, content: x.content })));
               setSuggestOpen(true); handled = true;
@@ -197,8 +210,12 @@ function App() {
             if (prompt) { const r = await generateImageDirect(prompt, sessionId); setMessages((m) => [...m, { role: 'assistant', image_url: r.image_url, content: prompt }]); handled = true; }
           }
           if (obj && obj.phone_url) { let u = obj.phone_url; if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); setPhoneOpen(true); handled = true; }
+          if (obj && obj.phone_template) {
+            try { const { url } = await renderPhoneTemplate(obj.phone_template, obj.phone_template_data || {}); setPhoneUrl(url); setPhoneOpen(true); handled = true; } catch (e) { console.error(e);} }
+          if (obj && obj.phone_allowlist_add) { try { await addPhoneAllowlist(obj.phone_allowlist_add); } catch (e) { console.error(e);} }
+          if (obj && obj.phone_create_template) { try { await createPhoneTemplate(obj.phone_create_template); } catch (e) { console.error(e);} }
           if (obj && Array.isArray(obj.lore_suggestions)) { setSuggests(obj.lore_suggestions); setSuggestOpen(true); handled = true; }
-          if (!cfgForSO.structured_output && !suppressSOHint && /toolCalls\s*:|image_request|phone_url|lore_suggestions/.test(reply) && !handled) {
+          if (!cfgForSO.structured_output && !suppressSOHint && /toolCalls\s*:|image_request|phone_url|phone_template|phone_allowlist_add|phone_create_template|lore_suggestions/.test(reply) && !handled) {
             setShowSOHint(true);
           }
         }
@@ -879,23 +896,27 @@ function PromptsTab() {
   const [all, setAll] = useState([]);
   const [active, setActive] = useState([]);
   const [newText, setNewText] = useState('');
-  const [system, setSystem] = useState({ lore_suggest: '', image_summary: '', main: '', tool_call: '' });
+  const [system, setSystem] = useState({ lore_suggest: '', image_summary: '', main: '', tool_call: '', phone_templates: '', phone_allowlist: '', phone_create_template: '' });
   const [vars, setVars] = useState({});
   const [newVarName, setNewVarName] = useState('');
   const [newVarValue, setNewVarValue] = useState('');
   const [showPH, setShowPH] = useState(false);
-  useEffect(() => { (async () => { try { const d = await getPrompts(); setAll(d.all || []); setActive(d.active || []); setSystem(d.system || { lore_suggest: '', image_summary: '' }); setVars(d.variables || {});} catch (e) { console.error(e);} })(); }, []);
+  useEffect(() => { (async () => { try { const d = await getPrompts(); setAll(d.all || []); setActive(d.active || []); setSystem({ ...{ lore_suggest: '', image_summary: '', main: '', tool_call: '', phone_templates: '', phone_allowlist: '', phone_create_template: '' }, ...(d.system||{}) }); setVars(d.variables || {});} catch (e) { console.error(e);} })(); }, []);
   const save = async (na = all, aa = active, sys = system, vs = vars) => { try { await savePrompts({ all: na, active: aa, system: sys, variables: vs }); setAll(na); setActive(aa); setSystem(sys); setVars(vs);} catch (e) { console.error(e); alert(e.message);} };
   const toggleActive = (txt) => { const aa = active.includes(txt) ? active.filter(x=>x!==txt) : [...active, txt]; save(all, aa); };
   const add = () => { const t = newText.trim(); if (!t) return; const na = [...all, t]; setNewText(''); save(na, active); };
   const remove = (txt) => { const na = all.filter(x=>x!==txt); const aa = active.filter(x=>x!==txt); save(na, aa); };
+  const [showSys, setShowSys] = useState(true);
+  const [showVars, setShowVars] = useState(true);
+  const [showGen, setShowGen] = useState(true);
   return (
     <>
     <div className="config-form" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
       <div style={{ gridColumn: '1 / -1' }}>
-        <h3>System Prompts</h3>
+        <h3 style={{ display:'inline-flex', alignItems:'center', gap:8 }}>System Prompts <button className="secondary" onClick={()=> setShowSys(s=>!s)}>{showSys?'Hide':'Show'}</button></h3>
         <div className="muted">These prompts guide built-in tools. <a href="#" onClick={(e)=>{ e.preventDefault(); setShowPH(true); }}>Use placeholders</a>.</div>
       </div>
+      {showSys && (<>
       <label>
         <span>Main System Prompt</span>
         <textarea rows={4} value={system.main || ''} onChange={(e)=> setSystem(s => ({ ...s, main: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="{{tool_call_prompt}}, {{user_persona}}, {{character_description}}, {{tool_list}}, {{conversation}}" />
@@ -905,6 +926,19 @@ function PromptsTab() {
         <textarea rows={4} value={system.tool_call || ''} onChange={(e)=> setSystem(s => ({ ...s, tool_call: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="Describe structured output JSON with toolCalls array." />
       </label>
       <label>
+        <span>Phone Templates guide</span>
+        <textarea rows={4} value={system.phone_templates || ''} onChange={(e)=> setSystem(s => ({ ...s, phone_templates: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="How and when to use phone_template with variables." />
+      </label>
+      <label>
+        <span>Phone Allowlist guide</span>
+        <textarea rows={4} value={system.phone_allowlist || ''} onChange={(e)=> setSystem(s => ({ ...s, phone_allowlist: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="When to add sites to the iframe allowlist using phone_allowlist_add." />
+      </label>
+      <label>
+        <span>Create Phone Template guide</span>
+        <textarea rows={4} value={system.phone_create_template || ''} onChange={(e)=> setSystem(s => ({ ...s, phone_create_template: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="How to use phone_create_template to define new templates." />
+      </label>
+      </>)}
+      <label>
         <span>Lorebook suggestion prompt</span>
         <textarea rows={4} value={system.lore_suggest} onChange={(e)=> setSystem(s => ({ ...s, lore_suggest: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="Use {{conversation}} and {{existing_keywords}}" />
       </label>
@@ -913,9 +947,10 @@ function PromptsTab() {
         <textarea rows={4} value={system.image_summary} onChange={(e)=> setSystem(s => ({ ...s, image_summary: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="Use {{conversation}}" />
       </label>
       <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
-        <h3>Variables</h3>
+        <h3 style={{ display:'inline-flex', alignItems:'center', gap:8 }}>Variables <button className="secondary" onClick={()=> setShowVars(s=>!s)}>{showVars?'Hide':'Show'}</button></h3>
         <div className="muted">Define reusable snippets that replace tags like <code>{'{'}{'{'}company{'}'}{'}'}</code> anywhere the LLM sees them.</div>
       </div>
+      {showVars && (<>
       <div className="row" style={{ gap: 8 }}>
         <input placeholder="name (e.g., site)" value={newVarName} onChange={(e)=> setNewVarName(e.target.value)} />
         <input placeholder="value" value={newVarValue} onChange={(e)=> setNewVarValue(e.target.value)} />
@@ -930,10 +965,12 @@ function PromptsTab() {
           </div>
         ))}
       </div>
+      </>)}
       <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
-        <h3>General Prompts</h3>
+        <h3 style={{ display:'inline-flex', alignItems:'center', gap:8 }}>General Prompts <button className="secondary" onClick={()=> setShowGen(s=>!s)}>{showGen?'Hide':'Show'}</button></h3>
         <div className="muted">Short, reusable prompts that can be toggled on to influence replies globally.</div>
       </div>
+      {showGen && (<>
       <label>
         <span>New Prompt</span>
         <div className="row" style={{ gap: 8 }}>
@@ -950,6 +987,7 @@ function PromptsTab() {
           </div>
         ))}
       </div>
+      </>)}
     </div>
     {showPH && (
       <section className="panel overlay" onClick={()=> setShowPH(false)}>
@@ -984,6 +1022,8 @@ function ToolsTab() {
   const save = async (list) => { try { await saveMcpServers({ servers: list }); setServers(list);} catch (e) { console.error(e); alert('Save failed'); } };
   return (
     <div className="config-form">
+      <h3>Tool Settings</h3>
+      <ToolToggles />
       <p className="muted">Register MCP servers the assistant can call in future sessions.</p>
       <label>
         <span>Catalog</span>
@@ -1021,8 +1061,26 @@ function ToolsTab() {
   );
 }
 
+function ToolToggles() {
+  const [enabled, setEnabled] = useState({ phone: false, phone_template: false, phone_allowlist_add: false, phone_create_template: false, image_gen: false, lore_suggest: false });
+  const [structured, setStructured] = useState(false);
+  const [notified, setNotified] = useState(false);
+  useEffect(() => { (async () => { try { const cfg = await getConfig(); setStructured(!!cfg.structured_output); const cid = cfg.active_character_id; const t = await (await fetch(`/tools/settings${cid?`?character_id=${cid}`:''}`)).json(); setEnabled(t.enabled || {}); } catch (e) { console.error(e);} })(); }, []);
+  const save = async (en) => { try { const cfg = await getConfig(); const cid = cfg.active_character_id; await fetch(`/tools/settings${cid?`?character_id=${cid}`:''}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: en }) }); setEnabled(en); if (!notified && (en.phone||en.phone_template||en.phone_allowlist_add||en.phone_create_template||en.image_gen||en.lore_suggest) && !structured) { alert('Enabling tools benefits from Structured Output. You can toggle it in Connection settings.'); setNotified(true);} } catch (e) { console.error(e); alert('Save failed'); } };
+  return (
+    <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+      <label><input type="checkbox" checked={!!enabled.phone} onChange={(e)=> save({ ...enabled, phone: e.target.checked })} /> Phone Panel <em>(phone_url)</em></label>
+      <label><input type="checkbox" checked={!!enabled.phone_template} onChange={(e)=> save({ ...enabled, phone_template: e.target.checked })} /> Phone Templates <em>(phone_template)</em></label>
+      <label><input type="checkbox" checked={!!enabled.phone_allowlist_add} onChange={(e)=> save({ ...enabled, phone_allowlist_add: e.target.checked })} /> Phone Allowlist <em>(phone_allowlist_add)</em></label>
+      <label><input type="checkbox" checked={!!enabled.phone_create_template} onChange={(e)=> save({ ...enabled, phone_create_template: e.target.checked })} /> Create Template <em>(phone_create_template)</em></label>
+      <label><input type="checkbox" checked={!!enabled.image_gen} onChange={(e)=> save({ ...enabled, image_gen: e.target.checked })} /> Image Generation <em>(image_request)</em></label>
+      <label><input type="checkbox" checked={!!enabled.lore_suggest} onChange={(e)=> save({ ...enabled, lore_suggest: e.target.checked })} /> Lore Suggest <em>(lore_suggestions)</em></label>
+    </div>
+  );
+}
+
 function ToolsOverlay({ onClose }) {
-  const [enabled, setEnabled] = useState({ phone: false, image_gen: false, lore_suggest: false });
+  const [enabled, setEnabled] = useState({ phone: false, phone_template: false, phone_allowlist_add: false, phone_create_template: false, image_gen: false, lore_suggest: false });
   const [structured, setStructured] = useState(false);
   const [notified, setNotified] = useState(false);
   const [servers, setServers] = useState([]);
@@ -1031,13 +1089,16 @@ function ToolsOverlay({ onClose }) {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   useEffect(() => { (async () => { try { const cfg = await getConfig(); setStructured(!!cfg.structured_output); const cid = cfg.active_character_id; const t = await (await fetch(`/tools/settings${cid?`?character_id=${cid}`:''}`)).json(); setEnabled(t.enabled || {}); } catch (e) { console.error(e);} })(); }, []);
-  const save = async (en) => { try { const cfg = await getConfig(); const cid = cfg.active_character_id; await fetch(`/tools/settings${cid?`?character_id=${cid}`:''}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: en }) }); setEnabled(en); if (!notified && (en.phone||en.image_gen||en.lore_suggest) && !structured) { alert('Enabling tools benefits from Structured Output. You can toggle it in Connection settings.'); setNotified(true);} } catch (e) { console.error(e); alert('Save failed'); } };
+  const save = async (en) => { try { const cfg = await getConfig(); const cid = cfg.active_character_id; await fetch(`/tools/settings${cid?`?character_id=${cid}`:''}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: en }) }); setEnabled(en); if (!notified && (en.phone||en.phone_template||en.phone_allowlist_add||en.phone_create_template||en.image_gen||en.lore_suggest) && !structured) { alert('Enabling tools benefits from Structured Output. You can toggle it in Connection settings.'); setNotified(true);} } catch (e) { console.error(e); alert('Save failed'); } };
   useEffect(() => { (async () => { try { const d = await getMcpServers(); setServers(d.servers || []); const c = await getMcpAwesome(); setCatalog(c.items || []);} catch (e) { console.error(e);} })(); }, []);
   const saveServers = async (list) => { try { await saveMcpServers({ servers: list }); setServers(list);} catch (e) { console.error(e); alert('Save failed'); } };
   return (
     <div className="config-form">
       <div className="row" style={{ gap: 8 }}>
         <label><input type="checkbox" checked={!!enabled.phone} onChange={(e)=> save({ ...enabled, phone: e.target.checked })} /> Phone Panel <em>(phone_url)</em></label>
+        <label><input type="checkbox" checked={!!enabled.phone_template} onChange={(e)=> save({ ...enabled, phone_template: e.target.checked })} /> Phone Templates <em>(phone_template)</em></label>
+        <label><input type="checkbox" checked={!!enabled.phone_allowlist_add} onChange={(e)=> save({ ...enabled, phone_allowlist_add: e.target.checked })} /> Phone Allowlist <em>(phone_allowlist_add)</em></label>
+        <label><input type="checkbox" checked={!!enabled.phone_create_template} onChange={(e)=> save({ ...enabled, phone_create_template: e.target.checked })} /> Create Template <em>(phone_create_template)</em></label>
         <label><input type="checkbox" checked={!!enabled.image_gen} onChange={(e)=> save({ ...enabled, image_gen: e.target.checked })} /> Image Generation <em>(image_request)</em></label>
         <label><input type="checkbox" checked={!!enabled.lore_suggest} onChange={(e)=> save({ ...enabled, lore_suggest: e.target.checked })} /> Lore Suggest <em>(lore_suggestions)</em></label>
       </div>
@@ -1154,6 +1215,7 @@ function ThemesManager() {
 
 function AppearanceTab() {
   const [theme, setTheme] = useState({ primary: '#2563eb', secondary: '#374151', text1: '#e5e7eb', text2: '#cbd5e1', highlight: '#10b981', lowlight: '#111827', phone_style: 'classic' });
+  const [animOptions, setAnimOptions] = useState(() => getBackgroundAnimations());
   useEffect(() => { (async () => { try { const r = await getConfig(); if (r.theme) setTheme(r.theme);} catch (e) { console.error(e);} })(); }, []);
   useEffect(() => {
     const root = document.documentElement;
@@ -1164,6 +1226,15 @@ function AppearanceTab() {
     root.style.setProperty('--assistant', theme.highlight);
     root.style.setProperty('--bg', theme.lowlight);
   }, [theme]);
+
+  // Listen for plugin updates so the dropdown repopulates when plugins load
+  useEffect(() => {
+    const h = () => { try { setAnimOptions(getBackgroundAnimations()); } catch (e) { console.error(e);} };
+    window.addEventListener('coolchat:pluginsUpdated', h);
+    // initial refresh in case plugins finished before mount
+    h();
+    return () => window.removeEventListener('coolchat:pluginsUpdated', h);
+  }, []);
 
   const save = async (next) => { setTheme(next); try { await updateConfig({ theme: next }); try { window.dispatchEvent(new CustomEvent('coolchat:themeUpdate', { detail: next })); } catch {} } catch (e) { console.error(e); alert(e.message);} };
 
@@ -1211,16 +1282,14 @@ function AppearanceTab() {
         <span>Background Animations</span>
         <div className="row" style={{ gap: 8, alignItems: 'center' }}>
           <select id="anim-select">
-            <option value="gradient_flow">Gradient Flow</option>
-            <option value="floating_squares">Floating Squares</option>
-            <option value="waves">Waves</option>
-            <option value="neon_rain">Neon Rain</option>
-            <option value="matrix">Matrix</option>
+            {animOptions.map((a) => (
+              <option key={a.id} value={a.id}>{a.label || a.id}</option>
+            ))}
           </select>
           <button className="secondary" onClick={() => {
             try {
               const sel = document.getElementById('anim-select');
-              const id = sel.value;
+              const id = sel?.value;
               if (!id) return;
               const list = Array.isArray(theme.background_animations) ? [...theme.background_animations] : [];
               if (!list.includes(id)) { save({ ...theme, background_animations: [...list, id] }); }

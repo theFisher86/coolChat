@@ -23,6 +23,7 @@ export default defineConfig({
       '/themes': 'http://127.0.0.1:8000',
       '/phone': 'http://127.0.0.1:8000',
       '/tools': 'http://127.0.0.1:8000',
+      '/plugins': 'http://127.0.0.1:8000',
     },
   },
   test: {
