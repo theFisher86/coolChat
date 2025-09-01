@@ -1068,7 +1068,8 @@ def _build_system_from_character(
     # Include active global prompts if any
     try:
         from .storage import load_json as _lj
-        prompts = _lj("prompts.json", {"active": [], "all": []})
+        prompts = _lj("prompts.json", {"active": [], "all": [], "system": {}})
+        system_prompts = prompts.get("system", {}) if isinstance(prompts, dict) else {}
         for p in prompts.get("active", []) or []:
             if isinstance(p, str) and p.strip():
                 segments.append(p.strip())
@@ -1076,14 +1077,61 @@ def _build_system_from_character(
                 segments.append(str(p.get("text")))
     except Exception:
         pass
-    # Add structured-output tool schema guidance for Gemini if enabled
+    # Build pieces for template variables
+    persona_text = None
+    if user_persona and getattr(user_persona, "name", None):
+        persona_text = (f"User Persona: {user_persona.name}\n{getattr(user_persona, 'description', '')}").strip()
+    char_text = None
+    if char:
+        ch_parts = []
+        if char.system_prompt: ch_parts.append(char.system_prompt)
+        if char.personality: ch_parts.append(f"Personality: {char.personality}")
+        if char.scenario: ch_parts.append(f"Scenario: {char.scenario}")
+        if char.description: ch_parts.append(f"Description: {char.description}")
+        char_text = "\n".join(ch_parts) if ch_parts else None
+
+    # Tools list and tool_call prompt
+    tools_lines = []
     try:
-        if getattr(load_config(), 'structured_output', False):
-            segments.append(
-                "When invoking tools, return JSON with key 'toolCalls' as an array of {type, payload}. "
-                "Types: 'image_request' (payload: {prompt:string}), 'phone_url' (payload:{url:string}), 'lore_suggestions' (payload:{items:[{keyword:string, content:string}]}). "
-                "Optionally include plain 'text' content outside of tool calls. Do not wrap JSON in code fences."
-            )
+        from .storage import load_json as _lj2
+        _tools = _lj2("tools.json", {"enabled": {}})
+        en = (_tools.get("enabled") or {}) if isinstance(_tools, dict) else {}
+        if en.get("phone"): tools_lines.append("PhonePanel: Open a URL on the user's phone panel.")
+        if en.get("image_gen"): tools_lines.append("ImageGen: Request an image with a concise prompt.")
+        if en.get("lore_suggest"): tools_lines.append("LoreSuggest: Suggest new lore entries (keyword + content).")
+    except Exception:
+        pass
+    tool_list_text = "\n".join(tools_lines)
+    # tool_call prompt from user settings or default
+    tool_call_prompt = None
+    if isinstance(system_prompts, dict) and system_prompts.get("tool_call"):
+        tool_call_prompt = str(system_prompts.get("tool_call"))
+    else:
+        try:
+            if getattr(load_config(), 'structured_output', False):
+                tool_call_prompt = (
+                    "When invoking tools, return JSON with key 'toolCalls' as an array of {type, payload}. "
+                    "Types: 'image_request' (payload: {prompt:string}), 'phone_url' (payload:{url:string}), 'lore_suggestions' (payload:{items:[{keyword:string, content:string}]}). "
+                    "Optionally include plain 'text' content outside of tool calls. Do not wrap JSON in code fences."
+                )
+        except Exception:
+            pass
+
+    # If main template provided, use it
+    main_tpl = system_prompts.get("main") if isinstance(system_prompts, dict) else None
+    if main_tpl and isinstance(main_tpl, str) and main_tpl.strip():
+        tpl = main_tpl
+        tpl = tpl.replace("{{tool_call_prompt}}", tool_call_prompt or "")
+        tpl = tpl.replace("{{user_persona}}", persona_text or "")
+        tpl = tpl.replace("{{character_description}}", char_text or "")
+        tpl = tpl.replace("{{tool_list}}", tool_list_text or "")
+        tpl = tpl.replace("{{conversation}}", recent_text or "")
+        return _truncate_to_tokens(tpl, max_tokens)
+
+    # Otherwise keep legacy behavior + tool schema guidance
+    try:
+        if tool_call_prompt:
+            segments.append(tool_call_prompt)
     except Exception:
         pass
     # Include user persona if present
@@ -1226,7 +1274,7 @@ class ConfigResponse(BaseModel):
         pollinations: Dict[str, object]
         dezgo: Dict[str, object]
     images: ImagesOut
-    theme: Dict[str, str] | None = None
+    theme: Dict[str, object] | None = None
     active_lorebook_ids: List[int] | None = None
 
 
@@ -1245,7 +1293,7 @@ class ConfigUpdate(BaseModel):
     user_persona: Dict[str, str] | None = None
     max_context_tokens: int | None = None
     images: Dict[str, object] | None = None
-    theme: Dict[str, str] | None = None
+    theme: Dict[str, object] | None = None
     active_lorebook_ids: List[int] | None = None
     structured_output: bool | None = None
 
@@ -1409,7 +1457,7 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
         if not hasattr(cfg, 'theme') or cfg.theme is None:
             from .config import AppearanceConfig
             cfg.theme = AppearanceConfig()
-        for k in ("primary","secondary","text1","text2","highlight","lowlight","phone_style"):
+        for k in ("primary","secondary","text1","text2","highlight","lowlight","phone_style","background_animations"):
             if k in payload.theme:
                 setattr(cfg.theme, k, payload.theme[k])
     if payload.active_lorebook_ids is not None:

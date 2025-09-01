@@ -44,6 +44,7 @@ function App() {
   const [suggests, setSuggests] = useState([]);
   const [showSOHint, setShowSOHint] = useState(false);
   const [suppressSOHint, setSuppressSOHint] = useState(false);
+  const [appTheme, setAppTheme] = useState({ background_animations: [] });
   const [showTools, setShowTools] = useState(false);
   const messagesRef = useRef(null);
 
@@ -81,6 +82,7 @@ function App() {
         setMaxTokens(cfg.max_context_tokens || 2048);
         setUserPersona(cfg.user_persona || { name: 'User', description: '' });
         try { setPhoneStyle((cfg.theme && cfg.theme.phone_style) || 'classic'); } catch {}
+        try { setAppTheme(cfg.theme || { background_animations: [] }); } catch {}
       } catch (e) {
         console.warn('Could not load config', e);
       }
@@ -92,6 +94,13 @@ function App() {
     const h = (e) => { try { if (e && e.detail) setPhoneStyle(e.detail); } catch {} };
     window.addEventListener('coolchat:phoneStyle', h);
     return () => window.removeEventListener('coolchat:phoneStyle', h);
+  }, []);
+
+  // Listen for theme updates (background animations, colors, etc.)
+  useEffect(() => {
+    const h = (e) => { try { if (e && e.detail) setAppTheme(e.detail); } catch {} };
+    window.addEventListener('coolchat:themeUpdate', h);
+    return () => window.removeEventListener('coolchat:themeUpdate', h);
   }, []);
 
   // Load chat history on session change
@@ -206,25 +215,30 @@ function App() {
 
   return (
     <div className={`app ${phoneOpen ? 'phone-open' : ''}`}>
+      <div className="bg-animations">
+        {(appTheme.background_animations||[]).map((id, idx) => (
+          <div key={idx} className={`anim-${id}`} />
+        ))}
+      </div>
       <header className="header">
         <h1>CoolChat</h1>
         <div className="spacer" />
-        <button className="secondary" onClick={() => setShowCharacters((s) => !s)}>
+        <button className="secondary" onClick={() => { const next = !showCharacters; setShowCharacters(next); if (next) { setShowChats(false); setShowTools(false); setShowLorebooks(false); setShowConfig(false); } }}>
           {showCharacters ? 'Hide Characters' : 'Characters'}
+        </button>
+        <button className="secondary" onClick={() => { const next = !showChats; setShowChats(next); if (next) { setShowCharacters(false); setShowTools(false); setShowLorebooks(false); setShowConfig(false); } }}>
+          {showChats ? 'Hide Chats' : 'Chats'}
+        </button>
+        <button className="secondary" onClick={() => { const next = !showTools; setShowTools(next); if (next) { setShowCharacters(false); setShowChats(false); setShowLorebooks(false); setShowConfig(false); } }}>
+          {showTools ? 'Hide Tools' : 'Tools'}
+        </button>
+        <button className="secondary" onClick={() => { const next = !showLorebooks; setShowLorebooks(next); if (next) { setShowCharacters(false); setShowChats(false); setShowTools(false); setShowConfig(false); } }}>
+          {showLorebooks ? 'Hide Lorebooks' : 'Lorebooks'}
         </button>
         <button className="secondary" onClick={() => setPhoneOpen(o => !o)}>
           {phoneOpen ? 'Close Phone' : 'Phone'}
         </button>
-        <button className="secondary" onClick={() => setShowChats((s) => !s)}>
-          {showChats ? 'Hide Chats' : 'Chats'}
-        </button>
-        <button className="secondary" onClick={() => setShowTools((s) => !s)}>
-          {showTools ? 'Hide Tools' : 'Tools'}
-        </button>
-        <button className="secondary" onClick={() => setShowLorebooks((s) => !s)}>
-          {showLorebooks ? 'Hide Lorebooks' : 'Lorebooks'}
-        </button>
-        <button className="secondary" onClick={() => setShowConfig((s) => !s)}>
+        <button className="secondary" onClick={() => { const next = !showConfig; setShowConfig(next); if (next) { setShowCharacters(false); setShowChats(false); setShowTools(false); setShowLorebooks(false); } }}>
           {showConfig ? 'Close Settings' : 'Settings'}
         </button>
       </header>
@@ -327,7 +341,6 @@ function App() {
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('appearance'); }}>Appearance</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('images'); }}>Images</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('prompts'); }}>Prompts</button>
-              <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('tools'); }}>Tools</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('advanced'); }}>Advanced</button>
             </div>
             {settingsTab === 'connection' && (
@@ -519,11 +532,7 @@ function App() {
             )}
             {settingsTab === 'prompts' && (
               <PromptsTab />
-            )}
-            {settingsTab === 'tools' && (
-              <ToolsTab />
-            )}
-            {settingsTab === 'advanced' && (
+            )}\n            {settingsTab === 'advanced' && (
               <AdvancedTab />
             )}
 
@@ -870,21 +879,31 @@ function PromptsTab() {
   const [all, setAll] = useState([]);
   const [active, setActive] = useState([]);
   const [newText, setNewText] = useState('');
-  const [system, setSystem] = useState({ lore_suggest: '', image_summary: '' });
+  const [system, setSystem] = useState({ lore_suggest: '', image_summary: '', main: '', tool_call: '' });
   const [vars, setVars] = useState({});
   const [newVarName, setNewVarName] = useState('');
   const [newVarValue, setNewVarValue] = useState('');
+  const [showPH, setShowPH] = useState(false);
   useEffect(() => { (async () => { try { const d = await getPrompts(); setAll(d.all || []); setActive(d.active || []); setSystem(d.system || { lore_suggest: '', image_summary: '' }); setVars(d.variables || {});} catch (e) { console.error(e);} })(); }, []);
   const save = async (na = all, aa = active, sys = system, vs = vars) => { try { await savePrompts({ all: na, active: aa, system: sys, variables: vs }); setAll(na); setActive(aa); setSystem(sys); setVars(vs);} catch (e) { console.error(e); alert(e.message);} };
   const toggleActive = (txt) => { const aa = active.includes(txt) ? active.filter(x=>x!==txt) : [...active, txt]; save(all, aa); };
   const add = () => { const t = newText.trim(); if (!t) return; const na = [...all, t]; setNewText(''); save(na, active); };
   const remove = (txt) => { const na = all.filter(x=>x!==txt); const aa = active.filter(x=>x!==txt); save(na, aa); };
   return (
+    <>
     <div className="config-form" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
       <div style={{ gridColumn: '1 / -1' }}>
         <h3>System Prompts</h3>
-        <div className="muted">These prompts guide built-in tools. Use placeholders like <code>{'{'}{'{'}conversation{'}'}{'}'}</code> and <code>{'{'}{'{'}existing_keywords{'}'}{'}'}</code>.</div>
+        <div className="muted">These prompts guide built-in tools. <a href="#" onClick={(e)=>{ e.preventDefault(); setShowPH(true); }}>Use placeholders</a>.</div>
       </div>
+      <label>
+        <span>Main System Prompt</span>
+        <textarea rows={4} value={system.main || ''} onChange={(e)=> setSystem(s => ({ ...s, main: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="{{tool_call_prompt}}, {{user_persona}}, {{character_description}}, {{tool_list}}, {{conversation}}" />
+      </label>
+      <label>
+        <span>Tool Call Prompt</span>
+        <textarea rows={4} value={system.tool_call || ''} onChange={(e)=> setSystem(s => ({ ...s, tool_call: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="Describe structured output JSON with toolCalls array." />
+      </label>
       <label>
         <span>Lorebook suggestion prompt</span>
         <textarea rows={4} value={system.lore_suggest} onChange={(e)=> setSystem(s => ({ ...s, lore_suggest: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="Use {{conversation}} and {{existing_keywords}}" />
@@ -932,6 +951,26 @@ function PromptsTab() {
         ))}
       </div>
     </div>
+    {showPH && (
+      <section className="panel overlay" onClick={()=> setShowPH(false)}>
+        <div className="dialog" onClick={(e)=> e.stopPropagation()}>
+          <h3>Available placeholders</h3>
+          <ul className="muted">
+            <li><code>{'{{conversation}}'}</code>: recent conversation window</li>
+            <li><code>{'{{existing_keywords}}'}</code>: active lore keywords</li>
+            <li><code>{'{{tool_call_prompt}}'}</code>: tool call guidance</li>
+            <li><code>{'{{user_persona}}'}</code>: user persona summary</li>
+            <li><code>{'{{character_description}}'}</code>: character description/personality</li>
+            <li><code>{'{{tool_list}}'}</code>: enabled tools list</li>
+            {Object.keys(vars).map(k => (<li key={k}><code>{`{{${k}}}`}</code>: variable</li>))}
+          </ul>
+          <div className="row" style={{ justifyContent: 'flex-end' }}>
+            <button className="secondary" onClick={()=> setShowPH(false)}>Close</button>
+          </div>
+        </div>
+      </section>
+    )}
+    </>
   );
 }
 
@@ -986,16 +1025,57 @@ function ToolsOverlay({ onClose }) {
   const [enabled, setEnabled] = useState({ phone: false, image_gen: false, lore_suggest: false });
   const [structured, setStructured] = useState(false);
   const [notified, setNotified] = useState(false);
+  const [servers, setServers] = useState([]);
+  const [catalog, setCatalog] = useState([]);
+  const [selIdx, setSelIdx] = useState('');
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
   useEffect(() => { (async () => { try { const cfg = await getConfig(); setStructured(!!cfg.structured_output); const cid = cfg.active_character_id; const t = await (await fetch(`/tools/settings${cid?`?character_id=${cid}`:''}`)).json(); setEnabled(t.enabled || {}); } catch (e) { console.error(e);} })(); }, []);
   const save = async (en) => { try { const cfg = await getConfig(); const cid = cfg.active_character_id; await fetch(`/tools/settings${cid?`?character_id=${cid}`:''}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: en }) }); setEnabled(en); if (!notified && (en.phone||en.image_gen||en.lore_suggest) && !structured) { alert('Enabling tools benefits from Structured Output. You can toggle it in Connection settings.'); setNotified(true);} } catch (e) { console.error(e); alert('Save failed'); } };
+  useEffect(() => { (async () => { try { const d = await getMcpServers(); setServers(d.servers || []); const c = await getMcpAwesome(); setCatalog(c.items || []);} catch (e) { console.error(e);} })(); }, []);
+  const saveServers = async (list) => { try { await saveMcpServers({ servers: list }); setServers(list);} catch (e) { console.error(e); alert('Save failed'); } };
   return (
     <div className="config-form">
       <div className="row" style={{ gap: 8 }}>
-        <label><input type="checkbox" checked={!!enabled.phone} onChange={(e)=> save({ ...enabled, phone: e.target.checked })} /> Phone Panel</label>
-        <label><input type="checkbox" checked={!!enabled.image_gen} onChange={(e)=> save({ ...enabled, image_gen: e.target.checked })} /> Image Generation</label>
-        <label><input type="checkbox" checked={!!enabled.lore_suggest} onChange={(e)=> save({ ...enabled, lore_suggest: e.target.checked })} /> Lore Suggest</label>
+        <label><input type="checkbox" checked={!!enabled.phone} onChange={(e)=> save({ ...enabled, phone: e.target.checked })} /> Phone Panel <em>(phone_url)</em></label>
+        <label><input type="checkbox" checked={!!enabled.image_gen} onChange={(e)=> save({ ...enabled, image_gen: e.target.checked })} /> Image Generation <em>(image_request)</em></label>
+        <label><input type="checkbox" checked={!!enabled.lore_suggest} onChange={(e)=> save({ ...enabled, lore_suggest: e.target.checked })} /> Lore Suggest <em>(lore_suggestions)</em></label>
       </div>
       <p className="muted">When tools are enabled, the assistant receives concise instructions about each tool. For Gemini models, enable "Structured Output" in Connection to get reliable tool-usage responses.</p>
+      <hr />
+      <h3>MCP Servers</h3>
+      <label>
+        <span>Catalog</span>
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <select value={selIdx} onChange={(e)=> setSelIdx(e.target.value)}>
+            <option value="">(select server)</option>
+            {catalog.map((it, i) => (<option key={i} value={i}>{it.name}</option>))}
+          </select>
+          {selIdx!=='' && (
+            <>
+              <button className="secondary" onClick={()=>{ const it=catalog[parseInt(selIdx,10)]; if (!it) return; const list=[...servers,{ name: it.name, url: it.url }]; saveServers(list); }}>Add Server</button>
+              <a className="secondary" href={catalog[parseInt(selIdx,10)]?.url} target="_blank" rel="noreferrer">Open</a>
+            </>
+          )}
+        </div>
+        {selIdx!=='' && (
+          <div className="muted" style={{ marginTop: 6 }}>{catalog[parseInt(selIdx,10)]?.description}</div>
+        )}
+      </label>
+      <div className="row" style={{ gap: 8 }}>
+        <input placeholder="Name" value={name} onChange={(e)=> setName(e.target.value)} />
+        <input placeholder="URL or command" value={url} onChange={(e)=> setUrl(e.target.value)} />
+        <button onClick={()=>{ const n = name.trim(); const u = url.trim(); if (!n || !u) return; const list = [...servers, { name: n, url: u }]; saveServers(list); setName(''); setUrl(''); }}>Add</button>
+      </div>
+      <div style={{ marginTop: 8 }}>
+        {servers.map((s, i) => (
+          <div key={i} className="row" style={{ gap: 8, alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ width: 180 }}>{s.name}</span>
+            <span style={{ flex: 1 }} className="muted">{s.url}</span>
+            <button className="secondary" onClick={()=>{ const list = servers.filter((_,idx)=> idx!==i); saveServers(list); }}>Remove</button>
+          </div>
+        ))}
+      </div>
       <div className="row" style={{ justifyContent: 'flex-end' }}>
         <button className="secondary" onClick={onClose}>Close</button>
       </div>
@@ -1085,7 +1165,7 @@ function AppearanceTab() {
     root.style.setProperty('--bg', theme.lowlight);
   }, [theme]);
 
-  const save = async (next) => { setTheme(next); try { await updateConfig({ theme: next }); } catch (e) { console.error(e); alert(e.message);} };
+  const save = async (next) => { setTheme(next); try { await updateConfig({ theme: next }); try { window.dispatchEvent(new CustomEvent('coolchat:themeUpdate', { detail: next })); } catch {} } catch (e) { console.error(e); alert(e.message);} };
 
   const suggest = async () => {
     try {
@@ -1126,6 +1206,32 @@ function AppearanceTab() {
           <option value="iphone">iPhone</option>
           <option value="cyberpunk">Cyberpunk</option>
         </select>
+      </label>
+      <label>
+        <span>Background Animations</span>
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <select id="anim-select">
+            <option value="gradient_flow">Gradient Flow</option>
+            <option value="floating_squares">Floating Squares</option>
+            <option value="waves">Waves</option>
+            <option value="neon_rain">Neon Rain</option>
+            <option value="matrix">Matrix</option>
+          </select>
+          <button className="secondary" onClick={() => {
+            try {
+              const sel = document.getElementById('anim-select');
+              const id = sel.value;
+              if (!id) return;
+              const list = Array.isArray(theme.background_animations) ? [...theme.background_animations] : [];
+              if (!list.includes(id)) { save({ ...theme, background_animations: [...list, id] }); }
+            } catch (e) { console.error(e); }
+          }}>+</button>
+        </div>
+        <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+          {(theme.background_animations||[]).map((id, i) => (
+            <span key={i} className="secondary" style={{ padding: '4px 8px', borderRadius: 6 }}>{id} <button className="secondary" onClick={() => { const list = (theme.background_animations||[]).filter(x => x!==id); save({ ...theme, background_animations: list }); }}>-</button></span>
+          ))}
+        </div>
       </label>
       <hr />
       <p className="muted">Saved themes</p>
@@ -1309,3 +1415,5 @@ function CharacterEditor({ character, onClose, onSave, onThink, lorebooks }) {
     </div>
   );
 }
+
+

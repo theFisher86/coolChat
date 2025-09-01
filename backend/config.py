@@ -96,6 +96,7 @@ class AppearanceConfig(BaseModel):
     highlight: str = "#10b981"
     lowlight: str = "#111827"
     phone_style: str = "classic"
+    background_animations: list[str] = []
 
 
 class AppConfig(BaseModel):

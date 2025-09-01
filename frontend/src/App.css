@@ -143,6 +143,31 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, sans-s
 
 /* Image caption styling */
 .img-caption { margin-top: 6px; font-size: 12px; opacity: 0.85; font-style: italic; }
+
+/* Background animations container */
+.bg-animations { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.bg-animations > * { position: absolute; inset: 0; }
+
+/* Gradient flow */
+.anim-gradient_flow { background: linear-gradient(120deg, var(--bg), var(--panel), var(--assistant)); background-size: 200% 200%; animation: gradflow 20s ease infinite; opacity: 0.15; }
+@keyframes gradflow { 0% { background-position: 0% 50% } 50% { background-position: 100% 50% } 100% { background-position: 0% 50% } }
+
+/* Floating squares */
+.anim-floating_squares::before { content: ""; position: absolute; width: 200%; height: 200%; background-image: radial-gradient(rgba(255,255,255,0.06) 2px, transparent 2px); background-size: 30px 30px; animation: floatsq 30s linear infinite; }
+@keyframes floatsq { from { transform: translate(-10%, -10%) rotate(0deg); } to { transform: translate(0%, 0%) rotate(360deg); } }
+
+/* Waves */
+.anim-waves::before, .anim-waves::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at bottom, rgba(255,255,255,0.06), transparent 60%); animation: wave 8s ease-in-out infinite; opacity: 0.2; }
+.anim-waves::after { animation-delay: -4s; }
+@keyframes wave { 0%,100% { transform: translateY(0) } 50% { transform: translateY(10px) } }
+
+/* Neon rain */
+.anim-neon_rain::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient( to bottom, rgba(0,255,255,0.12), rgba(0,255,255,0.12) 2px, transparent 2px, transparent 6px); animation: rain 1.2s linear infinite; }
+@keyframes rain { from { background-position: 0 -20px } to { background-position: 0 0 } }
+
+/* Matrix */
+.anim-matrix::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient( to bottom, rgba(0,255,0,0.08), rgba(0,255,0,0.08) 2px, transparent 2px, transparent 10px); animation: matrix 1.4s linear infinite; }
+@keyframes matrix { from { background-position: 0 -30px } to { background-position: 0 0 } }
 .characters, .panel { background: #0a0f1e; }
 
 @keyframes breathing {
@@ -151,3 +176,7 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, sans-s
   100% { transform: scale(1); }
 }
 .thinking { animation: breathing 1.2s ease-in-out infinite; }
+
+a { color: var(--muted); }
+ a:hover { text-decoration: underline; }
+
