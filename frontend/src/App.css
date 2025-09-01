@@ -113,6 +113,7 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, sans-s
 /* Cellphone side panel */
 .app.phone-open .chat { margin-left: 30vw; transition: margin-left 0.2s ease; }
 .phone-panel { position: fixed; top: 64px; left: 0; width: 30vw; height: calc(100vh - 64px); background: transparent; z-index: 10; }
+.phone-panel::before { content: ""; position: absolute; top: 2px; left: 2px; right: 2px; bottom: 2px; border: 3px solid #000; border-radius: 34px; pointer-events: none; z-index: 2; }
 .phone-panel .bar { padding: 6px 8px; display: flex; gap: 6px; align-items: center; border-bottom: 1px solid #374151; background: rgba(0,0,0,0.35); }
 .phone-panel .statusbar { height: 18px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; font-size: 12px; background: rgba(0,0,0,0.5); color: #ddd; }
 .phone-panel .screen { position: absolute; top: 8px; left: 8px; right: 8px; bottom: 8px; border-radius: 26px; overflow: hidden; background: #0b1220; display: flex; flex-direction: column; }
@@ -124,7 +125,24 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, sans-s
 .phone-panel.classic .skin::before { content: ""; position: absolute; top: 6px; left: 50%; transform: translateX(-50%); width: 120px; height: 18px; border-radius: 12px; background: #222; }
 .phone-panel.modern .skin { border: 12px solid #0d0d0d; border-radius: 40px; box-shadow: inset 0 0 0 2px #1a1a1a; }
 .phone-panel.modern .skin::after { content: ""; position: absolute; top: 10px; right: 24px; width: 10px; height: 10px; border-radius: 50%; background: #333; }
-.phone-panel.rounded .skin { border: 16px solid #0e0e0e; border-radius: 48px; box-shadow: inset 0 0 0 1px #1f2937; }
+.phone-panel.iphone .skin { border: 14px solid #0e0e0e; border-radius: 42px; box-shadow: inset 0 0 0 1px #1f2937; }
+.phone-panel.iphone .skin::before { content: ""; position: absolute; top: 6px; left: 50%; transform: translateX(-50%); width: 140px; height: 28px; border-radius: 14px; background: #0e0e0e; }
+
+/* Cyberpunk theme */
+.phone-panel.cyberpunk .skin { border: 14px solid #0b0b0f; border-radius: 36px; box-shadow: 0 0 12px rgba(0,255,255,0.2), 0 0 18px rgba(255,0,180,0.2), inset 0 0 0 2px #141421; }
+.phone-panel.cyberpunk .skin::before { content: ""; position: absolute; top: 12px; left: 12px; right: 12px; bottom: 12px; border: 2px dashed rgba(0,255,255,0.2); border-radius: 28px; box-shadow: 0 0 18px rgba(255,0,180,0.3), inset 0 0 24px rgba(0,255,255,0.1); }
+.phone-panel.cyberpunk .statusbar { background: linear-gradient(90deg, rgba(255,0,180,0.15), rgba(0,255,255,0.15)); color: #e5e7eb; text-shadow: 0 0 4px rgba(0,255,255,0.6); }
+.phone-panel.cyberpunk .bar { background: rgba(10,10,20,0.6); }
+.phone-panel.cyberpunk .screen { background: #03040a; }
+
+/* iPhone-like status bar (centered time) */
+.phone-panel.iphone .statusbar { display: grid; grid-template-columns: 1fr 1fr 1fr; background: rgba(0,0,0,0.6); color: #ddd; }
+.phone-panel.iphone .statusbar span.time { text-align: center; }
+.phone-panel.iphone .statusbar span.left { text-align: left; }
+.phone-panel.iphone .statusbar span.right { text-align: right; }
+
+/* Image caption styling */
+.img-caption { margin-top: 6px; font-size: 12px; opacity: 0.85; font-style: italic; }
 .characters, .panel { background: #0a0f1e; }
 
 @keyframes breathing {

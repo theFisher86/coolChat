@@ -42,6 +42,8 @@ function App() {
   const [phoneStyle, setPhoneStyle] = useState('classic');
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggests, setSuggests] = useState([]);
+  const [showSOHint, setShowSOHint] = useState(false);
+  const [suppressSOHint, setSuppressSOHint] = useState(false);
   const [showTools, setShowTools] = useState(false);
   const messagesRef = useRef(null);
 
@@ -147,16 +149,22 @@ function App() {
     setInput('');
     setSending(true);
     try {
+      const cfgForSO = await getConfig();
       const reply = await sendChat(trimmed, sessionId);
       // Try to parse tool calls
       let handled = false;
-      let caption = '';
+      let captionText = '';
       try {
         let obj = null;
         try { obj = JSON.parse(reply); } catch (e) {
           // Extract JSON object from mixed text
           const m = reply.match(/\{[\s\S]*\}$/);
-          if (m) { obj = JSON.parse(m[0]); caption = reply.slice(0, m.index).trim(); }
+          if (m) { obj = JSON.parse(m[0]); captionText = reply.slice(0, m.index).trim(); }
+          // Also support array after 'toolCalls:' when SO is off
+          if (!obj) {
+            const a = reply.match(/toolCalls\s*:\s*(\[[\s\S]*\])/);
+            if (a) { try { obj = { toolCalls: JSON.parse(a[1]) }; } catch {} if (!cfgForSO.structured_output && !suppressSOHint) setShowSOHint(true); }
+          }
         }
         // Structured calls preferred: toolCalls: [{type,payload}]
         if (obj && Array.isArray(obj.toolCalls)) {
@@ -164,7 +172,7 @@ function App() {
             if (!tc || !tc.type) continue;
             if (tc.type === 'image_request' && tc.payload?.prompt) {
               const r = await generateImageDirect(tc.payload.prompt, sessionId);
-              setMessages((m) => [...m, { role: 'assistant', image_url: r.image_url, content: caption }]);
+              setMessages((m) => [...m, { role: 'assistant', image_url: r.image_url, content: tc.payload.prompt }]);
               handled = true;
             } else if (tc.type === 'phone_url' && tc.payload?.url) {
               let u = tc.payload.url; if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); setPhoneOpen(true); handled = true;
@@ -175,12 +183,15 @@ function App() {
           }
         } else {
           // Flat keys fallback
-          if (obj.image_request) {
+          if (obj && obj.image_request) {
             const prompt = typeof obj.image_request === 'string' ? obj.image_request : obj.image_request.prompt;
-            if (prompt) { const r = await generateImageDirect(prompt, sessionId); setMessages((m) => [...m, { role: 'assistant', image_url: r.image_url, content: caption }]); handled = true; }
+            if (prompt) { const r = await generateImageDirect(prompt, sessionId); setMessages((m) => [...m, { role: 'assistant', image_url: r.image_url, content: prompt }]); handled = true; }
           }
-          if (obj.phone_url) { let u = obj.phone_url; if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); setPhoneOpen(true); handled = true; }
-          if (Array.isArray(obj.lore_suggestions)) { setSuggests(obj.lore_suggestions); setSuggestOpen(true); handled = true; }
+          if (obj && obj.phone_url) { let u = obj.phone_url; if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); setPhoneOpen(true); handled = true; }
+          if (obj && Array.isArray(obj.lore_suggestions)) { setSuggests(obj.lore_suggestions); setSuggestOpen(true); handled = true; }
+          if (!cfgForSO.structured_output && !suppressSOHint && /toolCalls\s*:|image_request|phone_url|lore_suggestions/.test(reply) && !handled) {
+            setShowSOHint(true);
+          }
         }
       } catch (e) { console.warn('Tool parse failed', e); }
       if (!handled) {
@@ -223,8 +234,18 @@ function App() {
           <div className="skin"></div>
           <div className="screen">
             <div className="statusbar">
-              <span>{new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
-              <span>📶 📍 🔔</span>
+              {phoneStyle === 'iphone' ? (
+                <>
+                  <span className="left">📶</span>
+                  <span className="time">{new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                  <span className="right">🔊 📶</span>
+                </>
+              ) : (
+                <>
+                  <span>{new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                  <span>📶 📍 🔔</span>
+                </>
+              )}
             </div>
             <div className="bar">
               <input style={{ flex: 1 }} placeholder="https://" value={phoneUrl} onChange={(e)=> setPhoneUrl(e.target.value)} />
@@ -583,7 +604,7 @@ function App() {
         <div className="messages" aria-live="polite" ref={messagesRef}>
           {messages.map((m, idx) => (
             <div key={idx} className={`message ${m.role}`}>
-              <div className="bubble">{m.image_url ? (<div><img src={m.image_url} alt="generated" style={{ maxWidth: '100%', borderRadius: 8 }} />{m.content ? (<div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>{m.content}</div>) : null}</div>) : m.content}</div>
+              <div className="bubble">{m.image_url ? (<div><img src={m.image_url} alt="generated" style={{ maxWidth: '100%', borderRadius: 8 }} />{m.content ? (<div className="img-caption">{m.content}</div>) : null}</div>) : m.content}</div>
             </div>
           ))}
           {error && (
@@ -671,6 +692,20 @@ function App() {
               }
               setSuggestOpen(false);
             } catch (e) { console.error(e); alert(e.message);} }} />
+        )}
+        {showSOHint && (
+          <section className="panel overlay" onClick={()=> setShowSOHint(false)}>
+            <div className="dialog" onClick={(e)=> e.stopPropagation()}>
+              <h3>Enable Structured Output?</h3>
+              <p className="muted">The assistant attempted to call a tool. Structured Output improves tool reliability on Gemini models.</p>
+              <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                <label><input type="checkbox" onChange={(e)=> setSuppressSOHint(e.target.checked)} /> Don't show again (this session)</label>
+                <span style={{ flex: 1 }} />
+                <button className="secondary" onClick={()=> setShowSOHint(false)}>Cancel</button>
+                <button onClick={async ()=>{ try { await updateConfig({ structured_output: true }); setShowSOHint(false); } catch (e) { alert(String(e)); } }}>Enable</button>
+              </div>
+            </div>
+          </section>
         )}
       </main>
     </div>
@@ -1088,7 +1123,8 @@ function AppearanceTab() {
         <select value={theme.phone_style || 'classic'} onChange={async (e)=> { const next = { ...theme, phone_style: e.target.value }; await save(next); try { window.dispatchEvent(new CustomEvent('coolchat:phoneStyle', { detail: next.phone_style })); } catch {} }}>
           <option value="classic">Classic</option>
           <option value="modern">Modern</option>
-          <option value="rounded">Rounded</option>
+          <option value="iphone">iPhone</option>
+          <option value="cyberpunk">Cyberpunk</option>
         </select>
       </label>
       <hr />
