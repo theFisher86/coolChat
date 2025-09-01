@@ -649,6 +649,34 @@ _memory: Dict[int, MemoryEntry] = {}
 _next_memory_id: int = 1
 
 
+def _st_to_entries(items):
+    out = []
+    for i in items or []:
+        if isinstance(i, str):
+            out.append(LoreEntryCreate(keyword=i, content=""))
+            continue
+        if not isinstance(i, dict):
+            continue
+        keys = i.get("keys") or i.get("triggers") or i.get("key") or []
+        if isinstance(keys, dict):
+            keys = list(keys.values())
+        kw = keys[0] if isinstance(keys, list) and keys else (i.get("keyword") or i.get("comment") or "")
+        content = i.get("content") or i.get("text") or i.get("entry") or ""
+        secondary = i.get("secondary_keys") or i.get("secondary_keywords") or i.get("keysecondary") or []
+        logic_map = {0: "AND ANY", 3: "AND ALL", 1: "NOT ALL", 2: "NOT ANY"}
+        logic_val = i.get("logic")
+        if logic_val is None:
+            sl = i.get("selectiveLogic")
+            if isinstance(sl, int):
+                logic_val = logic_map.get(sl, "AND ANY")
+        if not logic_val:
+            logic_val = "AND ANY"
+        order = i.get("order") or 0
+        trigger = i.get("probability") or i.get("trigger") or 100
+        out.append(LoreEntryCreate(keyword=kw, content=content, keywords=keys if isinstance(keys, list) else [], logic=logic_val, secondary_keywords=secondary, order=order, trigger=trigger))
+    return out
+
+
 def _load_state() -> None:
     global _characters, _next_id, _lore, _next_lore_id, _lorebooks, _next_lorebook_id, _memory, _next_memory_id, _chat_histories
     data = load_json("characters.json", {"next_id": 1, "items": []})
@@ -742,32 +770,6 @@ def _save_lorebook_snapshot(lb: "Lorebook") -> None:
 def _parse_lorebook_data_to_entries(data: object) -> tuple[str, str, List["LoreEntryCreate"]]:
     import os as _os
     # Support SillyTavern World Info format and simple formats
-    def _st_to_entries(items):
-        out = []
-        for i in items or []:
-            if isinstance(i, str):
-                out.append(LoreEntryCreate(keyword=i, content=""))
-                continue
-            if not isinstance(i, dict):
-                continue
-            keys = i.get("keys") or i.get("triggers") or i.get("key") or []
-            if isinstance(keys, dict):
-                keys = list(keys.values())
-            kw = keys[0] if isinstance(keys, list) and keys else (i.get("keyword") or i.get("comment") or "")
-            content = i.get("content") or i.get("text") or i.get("entry") or ""
-            secondary = i.get("secondary_keys") or i.get("secondary_keywords") or i.get("keysecondary") or []
-            logic_map = {0: "AND ANY", 3: "AND ALL", 1: "NOT ALL", 2: "NOT ANY"}
-            logic_val = i.get("logic")
-            if logic_val is None:
-                sl = i.get("selectiveLogic")
-                if isinstance(sl, int):
-                    logic_val = logic_map.get(sl, "AND ANY")
-            if not logic_val:
-                logic_val = "AND ANY"
-            order = i.get("order") or 0
-            trigger = i.get("probability") or i.get("trigger") or 100
-            out.append(LoreEntryCreate(keyword=kw, content=content, keywords=keys if isinstance(keys, list) else [], logic=logic_val, secondary_keywords=secondary, order=order, trigger=trigger))
-        return out
 
     name = "Imported Lorebook"
     description = ""
@@ -2788,35 +2790,6 @@ async def import_lorebook(file: UploadFile = File(...)) -> Lorebook:
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid lorebook file: {e}")
     # Support SillyTavern World Info format and simple formats
-    def _st_to_entries(items):
-        out = []
-        for i in items or []:
-            # Accept either dict entries or simple strings
-            if isinstance(i, str):
-                out.append(LoreEntryCreate(keyword=i, content=""))
-                continue
-            if not isinstance(i, dict):
-                continue
-            # Map Eldoria-like schema
-            keys = i.get("keys") or i.get("triggers") or i.get("key") or []
-            if isinstance(keys, dict):
-                keys = list(keys.values())
-            kw = keys[0] if isinstance(keys, list) and keys else (i.get("keyword") or i.get("comment") or "")
-            content = i.get("content") or i.get("text") or i.get("entry") or ""
-            secondary = i.get("secondary_keys") or i.get("secondary_keywords") or i.get("keysecondary") or []
-            # Logic mapping: selectiveLogic numeric -> string
-            logic_map = {0: "AND ANY", 3: "AND ALL", 1: "NOT ALL", 2: "NOT ANY"}
-            logic_val = i.get("logic")
-            if logic_val is None:
-                sl = i.get("selectiveLogic")
-                if isinstance(sl, int):
-                    logic_val = logic_map.get(sl, "AND ANY")
-            if not logic_val:
-                logic_val = "AND ANY"
-            order = i.get("order") or 0
-            trigger = i.get("probability") or i.get("trigger") or 100
-            out.append(LoreEntryCreate(keyword=kw, content=content, keywords=keys if isinstance(keys, list) else [], logic=logic_val, secondary_keywords=secondary, order=order, trigger=trigger))
-        return out
 
     if isinstance(data, (list, dict)):
         fname = getattr(file, 'filename', None)
