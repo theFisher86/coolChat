@@ -47,6 +47,8 @@ function App() {
   const [suppressSOHint, setSuppressSOHint] = useState(false);
   const [suggests, setSuggests] = useState([]);
   const [phoneUrl, setPhoneUrl] = useState('https://example.org');
+  const [toasts, setToasts] = useState([]);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Load config on mount
   useEffect(() => {
@@ -81,6 +83,26 @@ function App() {
     applyPluginAnims();
     return () => { try { pluginHost.offUpdate(applyPluginAnims); } catch (e) {} };
   }, []);
+
+  // Toast notification function
+  const showToast = (message, type = 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  };
+
+  // Close menu on mobile when clicking outside or on a button
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (window.innerWidth <= 768 && !e.target.closest('.header')) {
+        setMenuOpen(false);
+      }
+    };
+    if (menuOpen) {
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
+    }
+  }, [menuOpen]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -179,7 +201,7 @@ function App() {
         }
       } catch (e) { console.warn('Tool parse failed', e); }
     } catch (err) {
-      chat.setError(err.message);
+      showToast(err.message, 'error');
     }
   };
 
@@ -224,33 +246,38 @@ function App() {
 
   return (
     <div className={`app ${uiStore.phoneOpen ? 'phone-open' : ''}`}>
-      <div className="bg-animations">
-        {(uiStore.appTheme?.background_animations||[]).map((id, idx) => (
-          <div key={idx} className={`anim-${id}`} />
-        ))}
-      </div>
-      <header className="header">
-        <h1>CoolChat</h1>
-        <div className="spacer" />
-        <button className="secondary" onClick={() => uiStore.setShowCharacters(!uiStore.showCharacters)}>
-          {uiStore.showCharacters ? 'Hide Characters' : 'Characters'}
-        </button>
-        <button className="secondary" onClick={() => uiStore.setShowChats(!uiStore.showChats)}>
-          {uiStore.showChats ? 'Hide Chats' : 'Chats'}
-        </button>
-        <button className="secondary" onClick={() => uiStore.setShowTools(!uiStore.showTools)}>
-          {uiStore.showTools ? 'Hide Tools' : 'Tools'}
-        </button>
-        <button className="secondary" onClick={() => uiStore.setShowLorebooks(!uiStore.showLorebooks)}>
-          {uiStore.showLorebooks ? 'Hide Lorebooks' : 'Lorebooks'}
-        </button>
-        <button className="secondary" onClick={() => uiStore.setPhoneOpen(!uiStore.phoneOpen)}>
-          {uiStore.phoneOpen ? 'Close Phone' : 'Phone'}
-        </button>
-        <button className="secondary" onClick={() => uiStore.setShowConfig(!uiStore.showConfig)}>
-          {uiStore.showConfig ? 'Close Settings' : 'Settings'}
-        </button>
-      </header>
+     <div className="bg-animations">
+       {(uiStore.appTheme?.background_animations||[]).map((id, idx) => (
+         <div key={idx} className={`anim-${id}`} />
+       ))}
+     </div>
+     <header className={`header ${menuOpen ? 'menu-open' : ''}`} role="banner">
+       <h1>CoolChat</h1>
+       <div className="spacer" />
+       <div className="header-buttons">
+         <button className="secondary" aria-label={uiStore.showCharacters ? 'Hide characters panel' : 'Show characters panel'} aria-expanded={uiStore.showCharacters} onClick={() => uiStore.setShowCharacters(!uiStore.showCharacters)}>
+           {uiStore.showCharacters ? 'Hide Characters' : 'Characters'}
+         </button>
+         <button className="secondary" aria-label={uiStore.showChats ? 'Hide chats panel' : 'Show chats panel'} aria-expanded={uiStore.showChats} onClick={() => uiStore.setShowChats(!uiStore.showChats)}>
+           {uiStore.showChats ? 'Hide Chats' : 'Chats'}
+         </button>
+         <button className="secondary" aria-label={uiStore.showTools ? 'Hide tools panel' : 'Show tools panel'} aria-expanded={uiStore.showTools} onClick={() => uiStore.setShowTools(!uiStore.showTools)}>
+           {uiStore.showTools ? 'Hide Tools' : 'Tools'}
+         </button>
+         <button className="secondary" aria-label={uiStore.showLorebooks ? 'Hide lorebooks panel' : 'Show lorebooks panel'} aria-expanded={uiStore.showLorebooks} onClick={() => uiStore.setShowLorebooks(!uiStore.showLorebooks)}>
+           {uiStore.showLorebooks ? 'Hide Lorebooks' : 'Lorebooks'}
+         </button>
+         <button className="secondary" aria-label={uiStore.phoneOpen ? 'Close phone simulator' : 'Open phone simulator'} aria-expanded={uiStore.phoneOpen} onClick={() => uiStore.setPhoneOpen(!uiStore.phoneOpen)}>
+           {uiStore.phoneOpen ? 'Close Phone' : 'Phone'}
+         </button>
+         <button className="secondary" aria-label={uiStore.showConfig ? 'Close settings' : 'Open settings'} aria-expanded={uiStore.showConfig} onClick={() => uiStore.setShowConfig(!uiStore.showConfig)}>
+           {uiStore.showConfig ? 'Close Settings' : 'Settings'}
+         </button>
+       </div>
+       <button className="menu-toggle" aria-label="Toggle menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>
+         ☰
+       </button>
+     </header>
 
       {uiStore.phoneOpen && (
         <div className={`phone-panel ${uiStore.phoneStyle}`}>
@@ -698,42 +725,42 @@ function App() {
          </div>
 
         <div className="input-tools">
-   <button className="secondary" title="Suggest lore entries from chat" onClick={async () => {
-     try {
-       const result = await suggestLore(chat.sessionId);
-       if (!result.suggestions || result.suggestions.length === 0) { alert('No suggestions'); return; }
-       setSuggests(result.suggestions);
-       uiStore.setSuggestOpen(true);
-     } catch (e) { console.error(e); alert(e.message); }
-   }}>📖</button>
-   <button className="secondary" title="Generate image from chat" onClick={generateImageFromLastMessage}>🎨</button>
-           <button className="secondary" title="Send URL to phone" onClick={() => { let u = prompt('Open URL on phone:'); if (u) { if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); uiStore.setPhoneOpen(true); } }}>📱</button>
-          <button className="secondary" title="Scroll to bottom" style={{ marginLeft: 'auto' }} onClick={() => {
-            try {
-              // Find all assistant message elements
-              const assistantMessages = document.querySelectorAll('.message.assistant');
+    <button className="secondary" aria-label="Suggest lore entries from chat" title="Suggest lore entries from chat" onClick={async () => {
+      try {
+        const result = await suggestLore(chat.sessionId);
+        if (!result.suggestions || result.suggestions.length === 0) { alert('No suggestions'); return; }
+        setSuggests(result.suggestions);
+        uiStore.setSuggestOpen(true);
+      } catch (e) { console.error(e); alert(e.message); }
+    }}>📖</button>
+    <button className="secondary" aria-label="Generate image from chat" title="Generate image from chat" onClick={generateImageFromLastMessage}>🎨</button>
+            <button className="secondary" aria-label="Send URL to phone simulator" title="Send URL to phone" onClick={() => { let u = prompt('Open URL on phone:'); if (u) { if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); uiStore.setPhoneOpen(true); } }}>📱</button>
+           <button className="secondary" aria-label="Scroll to bottom of messages" title="Scroll to bottom" style={{ marginLeft: 'auto' }} onClick={() => {
+             try {
+               // Find all assistant message elements
+               const assistantMessages = document.querySelectorAll('.message.assistant');
 
-              if (assistantMessages.length > 0) {
-                // Get the last assistant message and scroll to it
-                const lastMessage = assistantMessages[assistantMessages.length - 1];
-                lastMessage.scrollIntoView({
-                  behavior: 'smooth',
-                  block: 'end',
-                  inline: 'nearest'
-                });
-              } else {
-                // Fallback to scrolling the messages container to bottom
-                if (messagesRef.current) {
-                  messagesRef.current.scrollTo({
-                    top: messagesRef.current.scrollHeight,
-                    behavior: 'smooth'
-                  });
-                }
-              }
-            } catch (error) {
-              console.error('Error scrolling to last message:', error);
-            }
-          }}>⬇️</button>
+               if (assistantMessages.length > 0) {
+                 // Get the last assistant message and scroll to it
+                 const lastMessage = assistantMessages[assistantMessages.length - 1];
+                 lastMessage.scrollIntoView({
+                   behavior: 'smooth',
+                   block: 'end',
+                   inline: 'nearest'
+                 });
+               } else {
+                 // Fallback to scrolling the messages container to bottom
+                 if (messagesRef.current) {
+                   messagesRef.current.scrollTo({
+                     top: messagesRef.current.scrollHeight,
+                     behavior: 'smooth'
+                   });
+                 }
+               }
+             } catch (error) {
+               console.error('Error scrolling to last message:', error);
+             }
+           }}>⬇️</button>
         </div>
         <form className="input-row" onSubmit={onSubmit}>
            <input
@@ -741,10 +768,18 @@ function App() {
              placeholder="Type your message"
              value={chat.input}
              onChange={(e) => chat.setInput(e.target.value)}
+             onKeyDown={(e) => { if (e.ctrlKey && e.key === 'Enter') onSubmit(e); }}
              disabled={chat.sending}
+             aria-label="Message input (Ctrl+Enter to send)"
+             aria-describedby="send-button"
            />
-           <button type="submit" disabled={chat.sending || !chat.input.trim()}>
-             {chat.sending ? 'Sending…' : 'Send'}
+           <button type="submit" id="send-button" disabled={chat.sending || !chat.input.trim()}>
+             {chat.sending ? (
+               <span className="loading-text">
+                 <div className="spinner"></div>
+                 Sending…
+               </span>
+             ) : 'Send'}
            </button>
          </form>
 
@@ -814,6 +849,16 @@ function App() {
           </section>
         )}
       </main>
+
+      {/* Toast Notifications */}
+      <div className="toast-container" aria-live="assertive" aria-atomic="true">
+        {toasts.map(toast => (
+          <div key={toast.id} className={`toast toast-${toast.type}`}>
+            {toast.message}
+            <button className="toast-close" onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} aria-label="Dismiss notification">×</button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1279,6 +1324,15 @@ function ThemesManager() {
 
 function AppearanceTab() {
   const [theme, setTheme] = useState({ primary: '#2563eb', secondary: '#374151', text1: '#e5e7eb', text2: '#cbd5e1', highlight: '#10b981', lowlight: '#111827', phone_style: 'classic' });
+  const [presetThemes, setPresetThemes] = useState([
+    { name: 'Default', theme: { primary: '#2563eb', secondary: '#374151', text1: '#e5e7eb', text2: '#cbd5e1', highlight: '#10b981', lowlight: '#111827' } },
+    { name: 'Dark', theme: { primary: '#8b5cf6', secondary: '#1f2937', text1: '#f9fafb', text2: '#d1d5db', highlight: '#f59e0b', lowlight: '#111827' } },
+    { name: 'Light', theme: { primary: '#3b82f6', secondary: '#f3f4f6', text1: '#111827', text2: '#6b7280', highlight: '#059669', lowlight: '#f9fafb' } },
+    { name: 'Forest', theme: { primary: '#059669', secondary: '#064e3b', text1: '#ecfdf5', text2: '#a7f3d0', highlight: '#f59e0b', lowlight: '#022c22' } },
+    { name: 'Ocean', theme: { primary: '#0891b2', secondary: '#164e63', text1: '#ecfeff', text2: '#a5f3fc', highlight: '#f97316', lowlight: '#0c4a6e' } },
+    { name: 'Rose', theme: { primary: '#db2777', secondary: '#5b21b6', text1: '#fef2f2', text2: '#fecaca', highlight: '#eab308', lowlight: '#581c87' } }
+  ]);
+
   useEffect(() => { (async () => { try { const r = await getConfig(); if (r.theme) setTheme(r.theme);} catch (e) { console.error(e);} })(); }, []);
   useEffect(() => {
     const root = document.documentElement;
@@ -1301,7 +1355,22 @@ function AppearanceTab() {
         const next = { ...theme, secondary: colors[0], text1: colors[1], text2: colors[2], highlight: colors[3], lowlight: colors[4] };
         await save(next);
       }
-    } catch (e) { console.error(e); alert(e.message);} 
+    } catch (e) { console.error(e); alert(e.message);}
+  };
+
+  const applyPreset = async (preset) => {
+    await save({ ...theme, ...preset.theme });
+  };
+
+  const swapBGColors = async () => {
+    const inverted = {
+      ...theme,
+      secondary: theme.lowlight,
+      lowlight: theme.secondary,
+      text1: theme.text1,
+      text2: theme.text2
+    };
+    await save(inverted);
   };
 
   const Color = ({ label, keyName, withThink }) => (
@@ -1309,20 +1378,75 @@ function AppearanceTab() {
       <span>{label}</span>
       <div className="row color-row" style={{ gap: 8, alignItems: 'center' }}>
         <input className="color-swatch" type="color" value={theme[keyName]} onChange={async (e) => { await save({ ...theme, [keyName]: e.target.value }); }} />
-        <input value={theme[keyName]} onChange={async (e) => { await save({ ...theme, [keyName]: e.target.value }); }} />
-        {withThink && (<button className="think" title="Have the AI suggest a color theme based on your chosen primary color. This will overwrite your current theme configuration." onClick={suggest}>💭</button>)}
+        <input style={{ flex: 1 }} value={theme[keyName]} onChange={async (e) => { await save({ ...theme, [keyName]: e.target.value }); }} />
+        {withThink && (<button className="think" title="AI suggests complementary colors for this primary" onClick={suggest}>💭</button>)}
       </div>
     </label>
   );
 
   return (
     <div className="config-form">
-      <Color label="Primary" keyName="primary" withThink />
+      <div className="theme-preview" style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: 12,
+        marginBottom: 16,
+        padding: 12,
+        background: 'var(--panel)',
+        borderRadius: 8,
+        border: '1px solid var(--muted)'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ background: 'var(--primary)', width: 40, height: 20, borderRadius: 4, margin: '0 auto 8px' }}></div>
+          <small style={{ color: 'var(--text)' }}>Primary</small>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ background: 'var(--bg)', width: 40, height: 20, borderRadius: 4, border: '1px solid var(--secondary)', margin: '0 auto 8px' }}></div>
+          <small style={{ color: 'var(--text)' }}>Background</small>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ background: 'var(--panel)', width: 40, height: 20, borderRadius: 4, border: '1px solid var(--muted)', margin: '0 auto 8px' }}></div>
+          <small style={{ color: 'var(--text)' }}>Panel</small>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ background: 'var(--assistant)', width: 40, height: 20, borderRadius: 4, margin: '0 auto 8px' }}></div>
+          <small style={{ color: 'var(--text)' }}>Assistant</small>
+        </div>
+      </div>
+
+      <label style={{ gridColumn: '1 / -1' }}>
+        <span>Preset Themes</span>
+        <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+          {presetThemes.map((preset, index) => (
+            <button
+              key={index}
+              className="secondary theme-btn"
+              style={{
+                background: `linear-gradient(45deg, ${preset.theme.primary}, ${preset.theme.secondary})`,
+                color: preset.theme.text1,
+                border: 'none',
+                borderRadius: 6,
+                padding: '6px 12px',
+                fontSize: 12,
+                cursor: 'pointer'
+              }}
+              onClick={() => applyPreset(preset)}
+              title={`Apply ${preset.name} theme`}
+            >
+              {preset.name}
+            </button>
+          ))}
+          <button className="secondary" onClick={swapBGColors} title="Swap background colors for high contrast">🔄 Invert BG</button>
+        </div>
+      </label>
+
+      <Color label="Primary" keyName="primary" withThink={true} />
       <Color label="Secondary" keyName="secondary" />
       <Color label="Text 1" keyName="text1" />
       <Color label="Text 2" keyName="text2" />
       <Color label="Highlight" keyName="highlight" />
       <Color label="Lowlight" keyName="lowlight" />
+
       <label>
         <span>Phone Style</span>
         <select value={theme.phone_style || 'classic'} onChange={async (e)=> { const next = { ...theme, phone_style: e.target.value }; await save(next); try { window.dispatchEvent(new CustomEvent('coolchat:phoneStyle', { detail: next.phone_style })); } catch {} }}>
@@ -1332,35 +1456,81 @@ function AppearanceTab() {
           <option value="cyberpunk">Cyberpunk</option>
         </select>
       </label>
-      <label>
-        <span>Background Animations</span>
-        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-          <select id="anim-select">
+
+      <label style={{ gridColumn: '1 / -1' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          Background Animations
+          <small style={{ color: 'var(--muted)', fontWeight: 'normal' }}>(Multiple allowed)</small>
+        </span>
+        <div className="row" style={{ gap: 8, alignItems: 'center', marginBottom: 6 }}>
+          <select id="anim-select" style={{ flex: 1 }}>
             <option value="gradient_flow">Gradient Flow</option>
             <option value="floating_squares">Floating Squares</option>
-            <option value="waves">Waves</option>
+            <option value="waves">Ocean Waves</option>
             <option value="neon_rain">Neon Rain</option>
-            <option value="matrix">Matrix</option>
+            <option value="matrix">Matrix Code</option>
+            <option value="particles">Floating Particles</option>
+            <option value="geometric">Geometric Shapes</option>
           </select>
           <button className="secondary" onClick={() => {
             try {
-              const sel = document.getElementById('anim-select');
-              const id = sel.value;
-              if (!id) return;
+              const sel = document.querySelector('#anim-select');
+              const id = sel?.value;
+              if (!id || id === '') return;
               const list = Array.isArray(theme.background_animations) ? [...theme.background_animations] : [];
-              if (!list.includes(id)) { save({ ...theme, background_animations: [...list, id] }); }
+              if (!list.includes(id) && list.length < 3) { // Limit to 3 animations max
+                save({ ...theme, background_animations: [...list, id] });
+              } else if (list.length >= 3) {
+                alert('Maximum 3 background animations allowed');
+              }
             } catch (e) { console.error(e); }
-          }}>+</button>
+          }}>+ Add</button>
         </div>
-        <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+        <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
           {(theme.background_animations||[]).map((id, i) => (
-            <span key={i} className="secondary" style={{ padding: '4px 8px', borderRadius: 6 }}>{id} <button className="secondary" onClick={() => { const list = (theme.background_animations||[]).filter(x => x!==id); save({ ...theme, background_animations: list }); }}>-</button></span>
+            <span key={i} className="tag" style={{
+              padding: '4px 8px',
+              borderRadius: 12,
+              background: 'var(--panel)',
+              border: '1px solid var(--muted)',
+              fontSize: 12,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4
+            }}>
+              {id}
+              <button className="remove-tag" onClick={() => {
+                const list = (theme.background_animations||[]).filter(x => x!==id);
+                save({ ...theme, background_animations: list });
+              }} style={{
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--muted)',
+                cursor: 'pointer',
+                fontSize: 14,
+                lineHeight: 1
+              }}>×</button>
+            </span>
           ))}
         </div>
       </label>
+
       <hr />
-      <p className="muted">Saved themes</p>
-      <ThemesManager />
+      <div style={{ gridColumn: '1 / -1' }}>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <span><strong>Saved Themes</strong></span>
+          <button className="secondary" onClick={async () => {
+            const name = prompt('Export current theme as:');
+            if (name && name.trim()) {
+              await fetch('/themes', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: name.trim(), theme: { ...theme } })});
+              alert('Theme exported: ' + name.trim());
+            }
+          }} title="Export current theme to saved themes">📤 Export</button>
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <ThemesManager />
+        </div>
+      </div>
     </div>
   );
 }

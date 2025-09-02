@@ -26,6 +26,9 @@ export const useChat = () => {
     // Actions
     sendMessage: sendChatMessage,
     setInput: chatStore.setInput,
+    setError: chatStore.setError,
+    setMessages: chatStore.setMessages,
+    setSending: chatStore.setSending,
     switchSession,
     resetChat: chatStore.resetChatSession,
     loadSessions: chatStore.loadSessions,
