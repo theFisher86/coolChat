@@ -38,6 +38,15 @@ try:
 except Exception:
     pass
 
+# Serve extensions folder (manifests and client code)
+try:
+    _ext_dir = _os.path.join(_os.path.dirname(__file__), "..", "extensions")
+    _ext_dir = _os.path.abspath(_ext_dir)
+    _os.makedirs(_ext_dir, exist_ok=True)
+    app.mount("/plugins/static", StaticFiles(directory=_ext_dir), name="plugins_static")
+except Exception:
+    pass
+
 
 @app.post("/phone/debug")
 async def phone_debug(payload: Dict[str, object]):
@@ -57,6 +66,50 @@ async def _startup_load_state():
             print("[CoolChat] startup load_state error:", e)
         except Exception:
             pass
+
+
+# Extensions API: list available extensions and manage enabled map
+@app.get("/plugins")
+async def list_plugins():
+    # Read manifests from extensions folder
+    out = {"plugins": [], "enabled": {}}
+    cfg = load_config()
+    try:
+        base = _ext_dir
+        for name in sorted(os.listdir(base)):
+            mpath = os.path.join(base, name, "manifest.json")
+            if os.path.isfile(mpath):
+                try:
+                    with open(mpath, 'r', encoding='utf-8') as f:
+                        import json as _json
+                        data = _json.load(f)
+                        data['id'] = data.get('id') or name
+                        out['plugins'].append(data)
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    # Enabled map from config
+    try:
+        out['enabled'] = cfg.extensions if isinstance(cfg.extensions, dict) else {}
+    except Exception:
+        out['enabled'] = {}
+    return out
+
+
+@app.post('/plugins/enabled')
+async def set_enabled_extensions(payload: Dict[str, bool]):
+    try:
+        cfg = load_config()
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=400, detail='Invalid payload')
+        cfg.extensions = payload
+        save_config(cfg)
+        return {'status': 'ok'}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ---------------------------------------------------------------------------

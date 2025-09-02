@@ -111,6 +111,8 @@ class AppConfig(BaseModel):
     last_connection: Dict[str, Any] | None = None
     active_lorebook_ids: Optional[list[int]] = []
     structured_output: bool = False
+    # Extension enabled state: { extension_id: true/false }
+    extensions: Dict[str, bool] = {}
 
 
 def ensure_parent(path: Path) -> None:

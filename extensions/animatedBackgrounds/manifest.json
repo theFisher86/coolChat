@@ -1,0 +1,7 @@
+{
+  "id": "animatedBackgrounds",
+  "name": "Animated Backgrounds",
+  "client": {
+    "entry": "client.js"
+  }
+}

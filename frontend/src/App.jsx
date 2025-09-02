@@ -26,6 +26,7 @@ import {
   saveMcpServers,
   getMcpAwesome,
 } from './api';
+import * as pluginHost from './pluginHost';
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -101,6 +102,25 @@ function App() {
     const h = (e) => { try { if (e && e.detail) setAppTheme(e.detail); } catch {} };
     window.addEventListener('coolchat:themeUpdate', h);
     return () => window.removeEventListener('coolchat:themeUpdate', h);
+  }, []);
+
+  // Subscribe to pluginHost updates so plugin-registered animations update the theme
+  useEffect(() => {
+    const applyPluginAnims = () => {
+      try {
+        const anims = pluginHost.getBackgroundAnimations();
+        // Preserve existing theme fields but replace background_animations with plugin ones if present
+        if (anims && anims.length) {
+          setAppTheme((t) => ({ ...t, background_animations: anims.map(a => a.id) }));
+        } else {
+          setAppTheme((t) => ({ ...t, background_animations: [] }));
+        }
+      } catch (e) { console.error(e); }
+    };
+    try { pluginHost.onUpdate(applyPluginAnims); } catch (e) {}
+    // initial apply
+    applyPluginAnims();
+    return () => { try { pluginHost.offUpdate(applyPluginAnims); } catch (e) {} };
   }, []);
 
   // Load chat history on session change
@@ -181,10 +201,14 @@ function App() {
             if (!tc || !tc.type) continue;
             if (tc.type === 'image_request' && tc.payload?.prompt) {
               const r = await generateImageDirect(tc.payload.prompt, sessionId);
-              setMessages((m) => [...m, { role: 'assistant', image_url: r.image_url, content: tc.payload.prompt }]);
+              setMessages((m) => [...m, { role: 'assistant', image_url: r.image_url, content: captionText || tc.payload.prompt }]);
               handled = true;
             } else if (tc.type === 'phone_url' && tc.payload?.url) {
-              let u = tc.payload.url; if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); setPhoneOpen(true); handled = true;
+              let u = tc.payload.url; if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); setPhoneOpen(true);
+              if (captionText) {
+                setMessages((m) => [...m, { role: 'assistant', content: captionText }]);
+              }
+              handled = true;
             } else if (tc.type === 'lore_suggestions' && Array.isArray(tc.payload?.items)) {
               setSuggests(tc.payload.items.map(x => ({ keyword: x.keyword, content: x.content })));
               setSuggestOpen(true); handled = true;
@@ -194,9 +218,15 @@ function App() {
           // Flat keys fallback
           if (obj && obj.image_request) {
             const prompt = typeof obj.image_request === 'string' ? obj.image_request : obj.image_request.prompt;
-            if (prompt) { const r = await generateImageDirect(prompt, sessionId); setMessages((m) => [...m, { role: 'assistant', image_url: r.image_url, content: prompt }]); handled = true; }
+            if (prompt) { const r = await generateImageDirect(prompt, sessionId); setMessages((m) => [...m, { role: 'assistant', image_url: r.image_url, content: captionText || prompt }]); handled = true; }
           }
-          if (obj && obj.phone_url) { let u = obj.phone_url; if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); setPhoneOpen(true); handled = true; }
+          if (obj && obj.phone_url) {
+            let u = obj.phone_url; if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); setPhoneOpen(true);
+            if (captionText) {
+              setMessages((m) => [...m, { role: 'assistant', content: captionText }]);
+            }
+            handled = true;
+          }
           if (obj && Array.isArray(obj.lore_suggestions)) { setSuggests(obj.lore_suggestions); setSuggestOpen(true); handled = true; }
           if (!cfgForSO.structured_output && !suppressSOHint && /toolCalls\s*:|image_request|phone_url|lore_suggestions/.test(reply) && !handled) {
             setShowSOHint(true);
@@ -204,13 +234,55 @@ function App() {
         }
       } catch (e) { console.warn('Tool parse failed', e); }
       if (!handled) {
-        setMessages((m) => [...m, { role: 'assistant', content: reply }]);
+        // Only display the reply if it is not a toolCalls JSON
+        if (!(reply && typeof reply === 'string' && reply.trim().startsWith('{') && reply.includes('"toolCalls"'))) {
+          setMessages((m) => [...m, { role: 'assistant', content: reply }]);
+        }
       }
     } catch (err) {
       setError(err.message);
     } finally {
       setSending(false);
     }
+  };
+
+  // Load extensions state on mount
+  const [extensions, setExtensions] = useState([]);
+  const [extensionsEnabled, setExtensionsEnabled] = useState({});
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch('/plugins');
+        if (r.ok) {
+          const data = await r.json();
+          console.log('Fetched plugins from /plugins:', data);
+          setExtensions(data.plugins || []);
+          setExtensionsEnabled(data.enabled || {});
+          // Let pluginHost know about enabled map
+          try { pluginHost.setEnabledExtensions(data.enabled || {}); } catch (e) {}
+          // Attempt to load enabled plugins
+          try { await pluginHost.loadPlugins(); } catch (e) { console.error(e); }
+        }
+      } catch (e) { console.error('Failed to load plugins', e); }
+    })();
+  }, []);
+
+  const saveExtensionsEnabled = async (map) => {
+    try {
+      const r = await fetch('/plugins/enabled', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(map) });
+      if (!r.ok) throw new Error('Save failed');
+      setExtensionsEnabled(map);
+      try {
+        pluginHost.setEnabledExtensions(map);
+        // Give pluginHost the already-fetched manifest so it can reload deterministically
+        const manifestResp = await fetch('/plugins');
+        const manifestData = manifestResp.ok ? await manifestResp.json() : null;
+        if (manifestData) pluginHost.setExtensionsList(manifestData.plugins || []);
+        await pluginHost.loadPlugins(manifestData);
+      } catch (e) { console.error(e); }
+      // Also persist to the main settings.json via updateConfig
+      try { await updateConfig({ extensions: map }); } catch (e) { console.error('Failed to persist extensions to config', e); }
+    } catch (e) { console.error(e); alert(e.message); }
   };
 
   return (
@@ -342,6 +414,7 @@ function App() {
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('images'); }}>Images</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('prompts'); }}>Prompts</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('advanced'); }}>Advanced</button>
+              <button className="secondary" onClick={(e) => { e.preventDefault(); setSettingsTab('extensions'); }}>Extensions</button>
             </div>
             {settingsTab === 'connection' && (
               <form
@@ -532,15 +605,41 @@ function App() {
             )}
             {settingsTab === 'prompts' && (
               <PromptsTab />
-            )}\n            {settingsTab === 'advanced' && (
+            )}
+            {settingsTab === 'advanced' && (
               <AdvancedTab />
             )}
+            {settingsTab === 'extensions' && (
+              <div className="config-form">
+                <h3>Extensions</h3>
+                <p className="muted">Detected extensions found under /extensions. Enable ones you trust.</p>
+                <div style={{ marginTop: 8 }}>
+                    {extensions.length === 0 ? (
+                      <div className="muted">No extensions detected. If you expect extensions, verify the backend is running and that <code>/plugins</code> returns manifests.</div>
+                    ) : null}
+                    {extensions.map((ext) => (
+                    <div key={ext.id} className="row" style={{ gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                      <div style={{ flex: 1 }}>
+                        <strong>{ext.name || ext.id}</strong>
+                        <div className="muted">{ext.description || ''}</div>
+                      </div>
+                      <label><input type="checkbox" checked={!!extensionsEnabled[ext.id]} onChange={(e) => {
+                        const next = { ...extensionsEnabled, [ext.id]: e.target.checked };
+                        saveExtensionsEnabled(next);
+                      }} /> Enabled</label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-            {settingsTab === 'connection' && (<div className="hint">)
-              <p className="muted">
-                OpenRouter uses OpenAI-compatible endpoints. You can set API Base to https://openrouter.ai/api/v1. Gemini uses the OpenAI-compatible base at https://generativelanguage.googleapis.com/v1beta/openai.
-              </p>
-            </div>)}
+            {settingsTab === 'connection' && (
+              <div className="hint">
+                <p className="muted">
+                  OpenRouter uses OpenAI-compatible endpoints. You can set API Base to https://openrouter.ai/api/v1. Gemini uses the OpenAI-compatible base at https://generativelanguage.googleapis.com/v1beta/openai.
+                </p>
+              </div>
+            )}
           </section>
         )}
 
@@ -757,7 +856,7 @@ function ImagesTab() {
     <div className="config-form">
       <label>
         <span>Active Provider</span>
-        <select value={cfg.active} onChange={async (e) => { const v = e.target.value; const next = { ...cfg, active: v }; setCfg(next); await saveCfg(next); await loadModels(v); }}>
+        <select value={cfg.active} onChange={async (e) => { const v = e.target.value; const next = { ...cfg, active: v }; setCfg(next); await saveCfg(next); }}>
           <option value="pollinations">Pollinations</option>
           <option value="dezgo">Dezgo</option>
         </select>
@@ -1108,11 +1207,28 @@ function ActiveLorebooks({ lorebooks }) {
 
 function AdvancedTab() {
   const [raw, setRaw] = useState('');
-  useEffect(() => { (async () => { try { const r = await fetch('/config/raw'); if (r.ok) setRaw(JSON.stringify(await r.json(), null, 2)); } catch (e) { console.error(e);} })(); }, []);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  useEffect(() => { (async () => {
+    try {
+      setLoading(true);
+      const r = await fetch('/config/raw');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      setRaw(JSON.stringify(data, null, 2));
+    } catch (e) { console.error(e); setError(String(e)); setRaw(''); }
+    finally { setLoading(false); }
+  })(); }, []);
   return (
     <div>
       <p className="muted">Full settings.json (copy/share):</p>
-      <textarea rows={16} style={{ width: '100%' }} value={raw} onChange={(e)=>setRaw(e.target.value)} />
+      {loading ? (
+        <div className="muted">Loading settings…</div>
+      ) : error ? (
+        <div className="muted">Unable to load settings: {error}</div>
+      ) : (
+        <textarea rows={16} style={{ width: '100%' }} value={raw} onChange={(e)=>setRaw(e.target.value)} />
+      )}
       <div className="row" style={{ marginTop: 8 }}>
         <button className="secondary" onClick={() => {
           const blob = new Blob([raw], { type: 'application/json' });
