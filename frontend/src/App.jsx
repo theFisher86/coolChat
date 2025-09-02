@@ -85,7 +85,7 @@ function App() {
         try { setPhoneStyle((cfg.theme && cfg.theme.phone_style) || 'classic'); } catch {}
         try { setAppTheme(cfg.theme || { background_animations: [] }); } catch {}
       } catch (e) {
-        console.warn('Could not load config', e);
+        // Config load failed silently
       }
     })();
   }, []);
@@ -127,6 +127,19 @@ function App() {
   useEffect(() => {
     (async () => { try { const { messages: msgs } = await getChat(sessionId); setMessages(msgs || []);} catch {} })();
   }, [sessionId]);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (messagesRef.current) {
+      setTimeout(() => {
+        try {
+          messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+        } catch (e) {
+          // Silently handle scroll errors
+        }
+      }, 0);
+    }
+  }, [messages]);
 
   // Characters and lorebooks
   useEffect(() => {
@@ -255,7 +268,7 @@ function App() {
         const r = await fetch('/plugins');
         if (r.ok) {
           const data = await r.json();
-          console.log('Fetched plugins from /plugins:', data);
+          // Plugins loaded successfully
           setExtensions(data.plugins || []);
           setExtensionsEnabled(data.enabled || {});
           // Let pluginHost know about enabled map
@@ -735,7 +748,32 @@ function App() {
     try { const r = await generateImageFromChat(sessionId); setMessages(m => [...m, { role: 'assistant', image_url: r.image_url }]); } catch (e) { console.error(e); alert(e.message); }
   }}>🎨</button>
           <button className="secondary" title="Send URL to phone" onClick={() => { let u = prompt('Open URL on phone:'); if (u) { if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); setPhoneOpen(true); } }}>📱</button>
-          <button className="secondary" title="Scroll to bottom" style={{ marginLeft: 'auto' }} onClick={() => { try { if (messagesRef.current) { messagesRef.current.scrollTop = messagesRef.current.scrollHeight; } } catch (e) { console.error(e); } }}>⬇️</button>
+          <button className="secondary" title="Scroll to bottom" style={{ marginLeft: 'auto' }} onClick={() => {
+            try {
+              // Find all assistant message elements
+              const assistantMessages = document.querySelectorAll('.message.assistant');
+
+              if (assistantMessages.length > 0) {
+                // Get the last assistant message and scroll to it
+                const lastMessage = assistantMessages[assistantMessages.length - 1];
+                lastMessage.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'end',
+                  inline: 'nearest'
+                });
+              } else {
+                // Fallback to scrolling the messages container to bottom
+                if (messagesRef.current) {
+                  messagesRef.current.scrollTo({
+                    top: messagesRef.current.scrollHeight,
+                    behavior: 'smooth'
+                  });
+                }
+              }
+            } catch (error) {
+              console.error('Error scrolling to last message:', error);
+            }
+          }}>⬇️</button>
         </div>
         <form className="input-row" onSubmit={onSubmit}>
           <input
