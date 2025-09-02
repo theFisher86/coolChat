@@ -26,6 +26,8 @@ export default defineConfig({
       '/phone': 'http://127.0.0.1:8000',
       '/tools': 'http://127.0.0.1:8000',
     },
+    host: '0.0.0.0',
+    allowedHosts: ['fisher7865.ddns.net']
   },
   test: {
     environment: 'jsdom',
