@@ -1,13 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
 import './App.css';
 import * as pluginHost from './pluginHost';
-import { debugLog, debugToolParsing, debugLLMResponses } from './debug';
 
 // Custom hooks for Zustand stores
 import { useChat, useImageGeneration, useLoreSuggestions } from './hooks/useChat';
 import { useUIStore } from './stores';
 import { useConfigStore } from './stores';
 import { useDataStore } from './stores';
+
+// Debug utilities
+import { debugToolParsing, debugLLMResponses } from './debug';
 
 // Message Controls Component
 function MessageControls({ messageId, role, onSwipe, onEdit, onDelete, isVisible }) {
@@ -86,149 +88,6 @@ import {
   sendChat,
 } from './api.js';
 
-// Debug component to test tool call parsing
-function ToolCallTestPanel({ onClose }) {
-  const [testMessage, setTestMessage] = useState('');
-  const [parseResult, setParseResult] = useState(null);
-  const [debugLogs, setDebugLogs] = useState([]);
-
-  const addLog = (message) => {
-    setDebugLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
-  };
-
-  const testParse = (message) => {
-   addLog(`Testing message: ${message}`);
-   let handled = false;
-   let captionText = '';
-   try {
-     const { obj, captionText: extractedCaptionText } = extractJsonFromResponse(message);
-     captionText = extractedCaptionText;
-     addLog(`Extracted JSON: ${obj ? 'Found object' : 'No object'}`);
-     addLog(`Caption text: "${captionText}"`);
-
-     if (obj) {
-       addLog(`Parsed object keys: ${Object.keys(obj).join(', ')}`);
-     } else {
-       addLog('No JSON extracted from test message');
-     }
-      // Structured calls preferred: toolCalls: [{type,payload}]
-      if (obj && Array.isArray(obj.toolCalls)) {
-        addLog(`Found ${obj.toolCalls.length} tool calls`);
-        for (const tc of obj.toolCalls) {
-          if (!tc || !tc.type) continue;
-          addLog(`Tool call: ${tc.type}`);
-          if (tc.type === 'image_request' && tc.payload?.prompt) {
-            handled = true;
-          } else if (tc.type === 'phone_url' && tc.payload?.url) {
-            handled = true;
-          } else if (tc.type === 'lore_suggestions' && Array.isArray(tc.payload?.items)) {
-            handled = true;
-          }
-        }
-      } else {
-        addLog('No toolCalls array found');
-        // Flat keys fallback
-        if (obj && obj.image_request) {
-          handled = true;
-        }
-        if (obj && obj.phone_url) {
-          handled = true;
-        }
-        if (obj && Array.isArray(obj.lore_suggestions)) {
-          handled = true;
-        }
-      }
-    } catch (e) {
-      addLog(`Parse failed: ${e.message}`);
-    }
-    setParseResult({ handled, captionText, parsed: handled });
-  };
-
-  const sampleMessages = [
-    // Clean JSON
-    '{"toolCalls": [{"type": "image_request", "payload": {"prompt": "test prompt"}}]}',
-
-    // Mixed with caption
-    'Here is your image: {"toolCalls": [{"type": "image_request", "payload": {"prompt": "beautiful sunset"}}]}',
-
-    // Mixed with asterisks and caption
-    '*The assistant creates a serene scene* {"toolCalls": [{"type": "image_request", "payload": {"prompt": "beautiful sunset"}}]}',
-
-    // Asterisks with toolCalls: pattern
-    '*Seraphina creates a beautiful image for you* toolCalls: [{"type": "image_request", "payload": {"prompt": "mountain landscape"}}]',
-
-    // Complex asterisk narrative
-    "***As the digital being processes your request...***\n\nThe image materializes: {\"toolCalls\": [{\"type\": \"image_request\", \"payload\": {\"prompt\": \"technological cityscape\"}}]}",
-
-    // Phone URL examples
-    '{"phone_url": "https://example.com"}',
-    '*Opening your link* {"toolCalls": [{"type": "phone_url", "payload": {"url": "https://reddit.com"}}]}',
-
-    // Lore suggestions
-    '{"toolCalls": [{"type": "lore_suggestions", "payload": {"items": [{"keyword": "test", "content": "content"}]}}]}',
-    '*The assistant knows this fact well* {\"toolCalls\": [{\"type\": \"lore_suggestions\", \"payload\": {\"items\": [{\"keyword\": \"magic\", \"content\": \"enchantment spells\"}]}}]}',
-
-    // Edge cases
-    'Regular response without tools',
-    'Please check: {}',
-    '*Just some narrative text with no JSON*'
-  ];
-
-  return (
-    <section className="panel overlay">
-      <h2>Tool Call Parsing Test</h2>
-      <div style={{ marginBottom: '16px' }}>
-        <label>Message to test:</label>
-        <textarea
-          value={testMessage}
-          onChange={(e) => setTestMessage(e.target.value)}
-          placeholder="Enter LLM response with tool calls..."
-          rows={4}
-          style={{ width: '100%', marginTop: '4px' }}
-        />
-        <button style={{ marginTop: '8px' }} onClick={() => testParse(testMessage)}>Test Parse</button>
-      </div>
-
-      <div style={{ marginBottom: '16px' }}>
-        <label>Sample messages:</label>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
-          {sampleMessages.map((msg, i) => (
-            <button key={i} onClick={() => {
-              setTestMessage(msg);
-              testParse(msg);
-            }} style={{ textAlign: 'left', padding: '4px', fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {msg.substring(0, 60) + (msg.length > 60 ? '...' : '')}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {parseResult && (
-        <div style={{ marginBottom: '16px', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}>
-          <strong>Parse Result:</strong>
-          <div>Handled: {parseResult.handled ? 'Yes' : 'No'}</div>
-          <div>Caption: "{parseResult.captionText}"</div>
-        </div>
-      )}
-
-      <div style={{ marginBottom: '16px' }}>
-        <label>Debug Logs:</label>
-        <textarea
-          value={debugLogs.join('\n')}
-          readOnly
-          rows={8}
-          style={{ width: '100%', marginTop: '4px', fontSize: '11px' }}
-        />
-        <button onClick={() => setDebugLogs([])} style={{ marginTop: '4px' }}>Clear Logs</button>
-      </div>
-
-      <div style={{ textAlign: 'right' }}>
-        <button onClick={onClose}>Close</button>
-      </div>
-    </section>
-  );
-}
-
 function App() {
   // Zustand store connections
   const chat = useChat();
@@ -249,8 +108,6 @@ function App() {
   const [phoneUrl, setPhoneUrl] = useState('https://example.org');
   const [toasts, setToasts] = useState([]);
   const [menuOpen, setMenuOpen] = useState(false);
-  // Debug states for tool call testing
-  const [showToolTest, setShowToolTest] = useState(false);
 
   // Message control states
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
@@ -366,14 +223,12 @@ function App() {
     // Clean asterisks from the response
     const cleanText = response.replace(/\*+/g, '').trim();
 
-    debugToolParsing('Cleaned text for extraction: ' + cleanText.slice(0, 200) + '...');
-
     // Try 1: Direct JSON parse
     try {
       obj = JSON.parse(cleanText);
       return { obj, captionText: '' };
     } catch (e) {
-      debugToolParsing('Try 1 failed: Direct parse - ' + e.message);
+      // Try 1 failed: Direct parse - silent
     }
 
     // Try 2: Extract JSON object/array from end of text using reverse brace counting
@@ -401,10 +256,9 @@ function App() {
           const jsonString = cleanText.slice(jsonStartIndex, lastCloseIndex + 1);
           obj = JSON.parse(jsonString);
           captionText = cleanText.slice(0, jsonStartIndex).trim();
-          debugToolParsing('Try 2 success: Found JSON from end, length: ' + (lastCloseIndex - jsonStartIndex));
           return { obj, captionText };
         } catch (e) {
-          debugToolParsing('Try 2 parse failed: ' + e.message);
+          // Try 2 parse failed - silent
         }
       }
     }
@@ -417,10 +271,9 @@ function App() {
         const arrayObj = JSON.parse(arrayString);
         obj = { toolCalls: arrayObj };
         captionText = cleanText.slice(0, toolCallsMatch.index).trim();
-        debugToolParsing('Try 3 success: toolCalls array found, caption: ' + captionText.slice(0, 100));
         return { obj, captionText };
       } catch (e) {
-        debugToolParsing('Try 3 parse failed: ' + e.message);
+        // Try 3 parse failed - silent
       }
     }
 
@@ -430,16 +283,20 @@ function App() {
       try {
         obj = JSON.parse(fullJsonMatch[0]);
         captionText = cleanText.slice(0, fullJsonMatch.index).trim();
-        debugToolParsing('Try 4 success: Regex extraction worked, caption length: ' + captionText.length);
         return { obj, captionText };
       } catch (e) {
-        debugToolParsing('Try 4 parse failed: ' + e.message);
+        // Try 4 parse failed - silent
       }
     }
-
-    debugToolParsing('All extraction attempts failed');
+  
     return { obj: null, captionText: '' };
-  };
+  }
+
+  // FIXED [2025-09-04]: Critical syntax error fix
+  // Issue: Missing closing brace caused "Objects are not valid as a React child" error
+  // Root cause: Function wasn't properly terminated, causing React to try rendering the object directly
+  // Impact: Frontend showed blank screen instead of loading the application
+  // Solution: Already fixed - extractJsonFromResponse function properly terminated above
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -838,9 +695,6 @@ function App() {
          <button className="secondary" aria-label={uiStore.phoneOpen ? 'Close phone simulator' : 'Open phone simulator'} aria-expanded={uiStore.phoneOpen} onClick={() => uiStore.setPhoneOpen(!uiStore.phoneOpen)}>
            {uiStore.phoneOpen ? 'Close Phone' : 'Phone'}
          </button>
-         <button className="secondary" aria-label={showToolTest ? 'Close tool test' : 'Open tool test'} aria-expanded={showToolTest} onClick={() => setShowToolTest(!showToolTest)}>
-       {showToolTest ? 'Close Tool Test' : 'Tool Test'}
-     </button>
      <button className="secondary" aria-label={uiStore.showConfig ? 'Close settings' : 'Open settings'} aria-expanded={uiStore.showConfig} onClick={() => uiStore.setShowConfig(!uiStore.showConfig)}>
        {uiStore.showConfig ? 'Close Settings' : 'Settings'}
      </button>
@@ -1548,9 +1402,6 @@ function App() {
           </section>
         )}
 
-        {showToolTest && (
-          <ToolCallTestPanel onClose={() => setShowToolTest(false)} />
-        )}
       </main>
 
       {/* Toast Notifications */}

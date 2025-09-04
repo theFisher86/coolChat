@@ -1447,6 +1447,19 @@ def _migrate_chat_histories_to_sqlite() -> None:
     if not _chat_histories:
         return
 
+    # Check if migration has already been completed by looking for existing sessions in SQLite
+    db = SessionLocal()
+    try:
+        from .models import ChatSession
+        existing_sessions = db.query(ChatSession).count()
+        if existing_sessions > 0:
+            print(f"[CoolChat] Migration appears complete ({existing_sessions} sessions in SQLite), skipping remigration")
+            return
+    except Exception as e:
+        print(f"[CoolChat] Error checking migration status: {e}")
+    finally:
+        db.close()
+
     print(f"[CoolChat] Migrating {_chat_histories} chat sessions to SQLite...")
 
     for session_id, chat_history in _chat_histories.items():
