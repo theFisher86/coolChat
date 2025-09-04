@@ -1,6 +1,6 @@
 from pathlib import Path
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 DB_PATH = Path(__file__).resolve().parent / "app.db"
 SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
@@ -10,4 +10,23 @@ engine = create_engine(
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-Base = declarative_base()
+# Import Base from models
+from .models import Base
+
+def create_tables():
+    """Create all database tables."""
+
+    # Ensure models are imported
+    from .models import ChatSession, ChatMessage
+    print("[CoolChat] Models loaded for table creation")
+
+    Base.metadata.create_all(bind=engine)
+    print("[CoolChat] Tables created successfully")
+
+def get_db():
+    """Dependency function to get database session."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 import asyncio
 import httpx
 import json
@@ -85,7 +85,17 @@ async def phone_debug(payload: Dict[str, object]):
 @app.on_event("startup")
 async def _startup_load_state():
     try:
+        # Create SQLite tables if they don't exist
+        from .database import create_tables
+        create_tables()
+        print("[CoolChat] SQLite tables created/verified")
+
+        # Load existing JSON state
         _load_state()
+
+        # Migrate existing chat histories to SQLite
+        _migrate_chat_histories_to_sqlite()
+
     except Exception as e:
         try:
             print("[CoolChat] startup load_state error:", e)
@@ -1109,8 +1119,19 @@ async def chat_endpoint(payload: ChatRequest) -> ChatResponse:
     # Chat history per session
     session_id = payload.session_id or "default"
     if payload.reset:
-        _chat_histories.pop(session_id, None)
-    history = _chat_histories.setdefault(session_id, [])
+        # Clear chat history from SQLite
+        from .database import SessionLocal
+        from .models import ChatMessage
+        db = SessionLocal()
+        try:
+            db.query(ChatMessage).filter(ChatMessage.chat_id == session_id).delete()
+            db.commit()
+        except Exception as e:
+            print(f"[CoolChat] Error resetting chat {session_id}: {e}")
+            db.rollback()
+        finally:
+            db.close()
+    history = _load_chat_session(session_id)
     # Build recent text window for lore triggers
     recent_text = "\n".join([m.get("content", "") for m in history[-6:]] + [payload.message])
     try:
@@ -1120,11 +1141,10 @@ async def chat_endpoint(payload: ChatRequest) -> ChatResponse:
     except Exception as exc:  # pragma: no cover - safety net
         raise HTTPException(status_code=500, detail=str(exc))
 
-    # Record history and trim by rough token budget
-    history.append({"role": "user", "content": payload.message})
-    history.append({"role": "assistant", "content": reply})
+    # Record history and trim by rough token budget using SQLite
+    _save_chat_message(session_id, "user", payload.message)
+    _save_chat_message(session_id, "assistant", reply)
     _trim_history(session_id, cfg)
-    _save_histories()
 
     # Log the reply for tool calling debugging
     from .debug import get_debug_logger
@@ -1351,16 +1371,143 @@ Include optional caption text before the JSON when appropriate.'''
 _chat_histories: Dict[str, List[Dict[str, str]]] = {}
 
 
-def _trim_history(session_id: str, cfg: AppConfig) -> None:
-    hist = _chat_histories.get(session_id)
-    if not hist:
+# SQLite chat storage functions
+def _create_chat_session(session_id: str, name: str = "Chat") -> None:
+    """Create a new chat session in SQLite."""
+    from .database import SessionLocal
+    from .models import ChatSession
+
+    db = SessionLocal()
+    try:
+        # Check if session already exists
+        existing = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        if not existing:
+            chat_session = ChatSession(id=session_id, name=name)
+            db.add(chat_session)
+            db.commit()
+    except Exception as e:
+        print(f"[CoolChat] Error creating chat session: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+def _save_chat_message(session_id: str, role: str, content: str, image_url: str = None) -> None:
+    """Save a chat message to SQLite."""
+    from .database import SessionLocal
+    from .models import ChatSession, ChatMessage
+
+    db = SessionLocal()
+    try:
+        # Ensure chat session exists
+        _create_chat_session(session_id)
+
+        # Create message
+        message = ChatMessage(
+            chat_id=session_id,
+            role=role,
+            content=content,
+            image_url=image_url
+        )
+        db.add(message)
+        db.commit()
+    except Exception as e:
+        print(f"[CoolChat] Error saving chat message: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+def _load_chat_session(session_id: str) -> List[Dict[str, str]]:
+    """Load all messages for a chat session from SQLite."""
+    from .database import SessionLocal
+    from .models import ChatMessage
+
+    db = SessionLocal()
+    try:
+        messages = db.query(ChatMessage).filter(ChatMessage.chat_id == session_id).order_by(ChatMessage.created_at).all()
+        return [
+            {
+                "role": msg.role,
+                "content": msg.content,
+                "image_url": msg.image_url
+            } for msg in messages
+        ]
+    except Exception as e:
+        print(f"[CoolChat] Error loading chat session: {e}")
+        return []
+    finally:
+        db.close()
+
+
+def _migrate_chat_histories_to_sqlite() -> None:
+    """Migrate existing in-memory chat histories to SQLite."""
+    from .database import SessionLocal
+
+    if not _chat_histories:
         return
-    # Leave last N messages within budget (approx)
+
+    print(f"[CoolChat] Migrating {_chat_histories} chat sessions to SQLite...")
+
+    for session_id, chat_history in _chat_histories.items():
+        try:
+            # Create session (if not exists)
+            _create_chat_session(session_id, f"Session {session_id}")
+
+            # Save all messages
+            for msg in chat_history:
+                _save_chat_message(
+                    session_id=session_id,
+                    role=msg.get("role", "assistant"),
+                    content=msg.get("content", ""),
+                    image_url=msg.get("image_url")
+                )
+
+            print(f"[CoolChat] Migrated {len(chat_history)} messages for session {session_id}")
+
+        except Exception as e:
+            print(f"[CoolChat] Error migrating session {session_id}: {e}")
+
+    # Clear in-memory histories to prevent dual writes
+    _chat_histories.clear()
+
+
+def _trim_history(session_id: str, cfg: AppConfig) -> None:
+    """Trim chat history to stay within token budget in SQLite."""
+    from .database import SessionLocal
+    from .models import ChatMessage
+
+    # Get recent messages count for trimming
     budget = max(512, getattr(cfg, "max_context_tokens", 2048))
-    total = sum(_estimate_tokens(m.get("content", "")) for m in hist)
-    while hist and total > budget * 2:
-        removed = hist.pop(0)
-        total -= _estimate_tokens(removed.get("content", ""))
+
+    db = SessionLocal()
+    try:
+        # Get all messages for this session
+        messages = db.query(ChatMessage).filter(ChatMessage.chat_id == session_id).order_by(ChatMessage.created_at).all()
+
+        if len(messages) <= 20:  # Keep at least last 20 messages
+            return
+
+        # Calculate token usage from recent messages
+        total = sum(_estimate_tokens(m.content or "") for m in messages[len(messages)-20:])
+        k = len(messages)
+
+        # Remove oldest messages if over budget
+        while messages and total > budget * 2 and k > 20:
+            removed = messages.pop(0)
+            total -= _estimate_tokens(removed.content or "")
+            db.delete(removed)
+            k -= 1
+
+        if messages:
+            db.commit()
+            print(f"[CoolChat] Trimmed chat {session_id} to {k} messages")
+
+    except Exception as e:
+        print(f"[CoolChat] Error trimming history for {session_id}: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 
 def _inject_persona(user_message: str, char: Optional[Character]) -> str:
@@ -2145,36 +2292,56 @@ class ChatListResponse(BaseModel):
 
 @app.get("/chats", response_model=ChatListResponse)
 async def list_chats() -> ChatListResponse:
-    # Ensure state loaded
-    if not _chat_histories:
-        try:
-            _load_state()
-        except Exception:
-            pass
-    return ChatListResponse(sessions=list(_chat_histories.keys()))
+    """List all chat sessions from SQLite."""
+    from .database import SessionLocal
+    from .models import ChatSession
+
+    db = SessionLocal()
+    try:
+        sessions = db.query(ChatSession).all()
+        session_ids = [s.id for s in sessions]
+        return ChatListResponse(sessions=session_ids)
+    except Exception as e:
+        print(f"[CoolChat] Error listing chats: {e}")
+        return ChatListResponse(sessions=[])
+    finally:
+        db.close()
 
 
 class ChatHistoryResponse(BaseModel):
-    messages: List[Dict[str, str]]
+    messages: List[Dict[str, Union[str, None]]]
 
 
 @app.get("/chats/{session_id}", response_model=ChatHistoryResponse)
 async def get_chat(session_id: str) -> ChatHistoryResponse:
-    msgs = _chat_histories.get(session_id) or []
-    return ChatHistoryResponse(messages=msgs)
+    """Return all messages for a chat session from SQLite."""
+    messages = _load_chat_session(session_id)
+    return ChatHistoryResponse(messages=messages)
 
 
 @app.post("/chats/{session_id}/reset")
 async def reset_chat(session_id: str) -> Dict[str, str]:
-    _chat_histories.pop(session_id, None)
-    _save_histories()
-    return {"status": "ok"}
+    """Delete all messages for a chat session (keep the session)."""
+    from .database import SessionLocal
+    from .models import ChatMessage
+
+    db = SessionLocal()
+    try:
+        db.query(ChatMessage).filter(ChatMessage.chat_id == session_id).delete()
+        db.commit()
+        return {"status": "ok"}
+    except Exception as e:
+        print(f"[CoolChat] Error resetting chat {session_id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error resetting chat: {e}")
+    finally:
+        db.close()
 
 
 @app.get("/chats/{session_id}/export/jsonl")
 async def export_chat_jsonl(session_id: str):
     """Export chat history as SillyTavern-compatible JSONL file."""
-    hist = _chat_histories.get(session_id, [])
+    hist = _load_chat_session(session_id)
     if not hist:
         raise HTTPException(status_code=404, detail="Chat session not found or empty")
 
@@ -2372,7 +2539,7 @@ async def lore_suggest_from_chat(payload: Dict[str, str] | None = None) -> LoreS
         sid = payload.get("session_id")
     sid = sid or "default"
     # Prepare context from chat
-    hist = _chat_histories.get(sid, [])
+    hist = _load_chat_session(sid)
     convo = "\n".join([f"{m['role']}: {m.get('content','')}" for m in hist][-20:])
     # Collect existing keywords from active lorebooks
     existing = set()
@@ -2459,7 +2626,7 @@ class GenerateFromChatResponse(BaseModel):
 async def generate_from_chat(payload: GenerateFromChatRequest) -> GenerateFromChatResponse:
     cfg = load_config()
     sid = payload.session_id or "default"
-    hist = _chat_histories.get(sid, [])
+    hist = _load_chat_session(sid)
     convo = "\n".join([f"{m['role']}: {m['content']}" for m in hist][-10:])
     # Ask LLM for a one-line scene prompt
     # Scene summary prompt (user-editable system prompt)
@@ -2531,9 +2698,7 @@ async def generate_from_chat(payload: GenerateFromChatRequest) -> GenerateFromCh
         url = f"/public/images/{(sub + '/' if sub else '')}{fname}"
         # Append to chat history for persistence
         try:
-            hist = _chat_histories.setdefault(sid, [])
-            hist.append({"role": "assistant", "image_url": url, "content": final_prompt})
-            _save_histories()
+            _save_chat_message(sid, "assistant", final_prompt, image_url)
         except Exception:
             pass
         return GenerateFromChatResponse(image_url=url, prompt=final_prompt)
@@ -2650,9 +2815,7 @@ async def generate_from_chat(payload: GenerateFromChatRequest) -> GenerateFromCh
         sub = images_dir.replace(images_root, "").strip("/\\")
         url = f"/public/images/{(sub + '/' if sub else '')}{fname}"
         try:
-            hist = _chat_histories.setdefault(sid, [])
-            hist.append({"role": "assistant", "image_url": url, "content": final_prompt})
-            _save_histories()
+            _save_chat_message(sid, "assistant", final_prompt, image_url)
         except Exception:
             pass
         return GenerateFromChatResponse(image_url=url, prompt=final_prompt)

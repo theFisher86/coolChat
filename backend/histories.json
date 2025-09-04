@@ -1,0 +1,36 @@
+{
+  "default": [
+    {
+      "role": "user",
+      "content": "Hello, this is a test message from the previous chat data.",
+      "image_url": null
+    },
+    {
+      "role": "assistant",
+      "content": "Hello! This is a test response from the assistant with some imagined context.",
+      "image_url": null
+    }
+  ],
+  "session_2025_01": [
+    {
+      "role": "user",
+      "content": "Can you help me with a programming question?",
+      "image_url": null
+    },
+    {
+      "role": "assistant",
+      "content": "Of course! I'd be happy to help you with any programming questions you have.",
+      "image_url": null
+    },
+    {
+      "role": "user",
+      "content": "How do I create a SQLite database connection in Python?",
+      "image_url": null
+    },
+    {
+      "role": "assistant",
+      "content": "To create a SQLite database connection in Python, you can use the sqlite3 module which comes with Python's standard library. Here's a basic example:\n\n```python\nimport sqlite3\n\n# Create or connect to database\nconn = sqlite3.connect('example.db')\n\n# Create cursor\ncursor = conn.cursor()\n\n# Execute SQL\ncursor.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER, name TEXT)')\n```\n\nWould you like me to explain any specific part in more detail?",
+      "image_url": null
+    }
+  ]
+}
