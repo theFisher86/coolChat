@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import './App.css';
 import * as pluginHost from './pluginHost';
+import { debugLog, debugToolParsing, debugLLMResponses } from './debug';
 
 // Custom hooks for Zustand stores
 import { useChat, useImageGeneration, useLoreSuggestions } from './hooks/useChat';
@@ -29,6 +30,132 @@ import {
   getImageModels,
 } from './api.js';
 
+// Debug component to test tool call parsing
+function ToolCallTestPanel({ onClose }) {
+  const [testMessage, setTestMessage] = useState('');
+  const [parseResult, setParseResult] = useState(null);
+  const [debugLogs, setDebugLogs] = useState([]);
+
+  const addLog = (message) => {
+    setDebugLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
+  };
+
+  const testParse = (message) => {
+    addLog(`Testing message: ${message}`);
+    let handled = false;
+    let captionText = '';
+    try {
+      let obj = null;
+      try { obj = JSON.parse(message); } catch (e) {
+        addLog('Failed to parse as JSON directly');
+        // Extract JSON object from mixed text
+        const m = message.match(/\{[\s\S]*\}$/);
+        if (m) {
+          addLog(`Found JSON at end: ${m[0].substring(0, 100)}...`);
+          obj = JSON.parse(m[0]);
+          captionText = message.slice(0, m.index).trim();
+          addLog(`Caption text: "${captionText}"`);
+        }
+      }
+      // Structured calls preferred: toolCalls: [{type,payload}]
+      if (obj && Array.isArray(obj.toolCalls)) {
+        addLog(`Found ${obj.toolCalls.length} tool calls`);
+        for (const tc of obj.toolCalls) {
+          if (!tc || !tc.type) continue;
+          addLog(`Tool call: ${tc.type}`);
+          if (tc.type === 'image_request' && tc.payload?.prompt) {
+            handled = true;
+          } else if (tc.type === 'phone_url' && tc.payload?.url) {
+            handled = true;
+          } else if (tc.type === 'lore_suggestions' && Array.isArray(tc.payload?.items)) {
+            handled = true;
+          }
+        }
+      } else {
+        addLog('No toolCalls array found');
+        // Flat keys fallback
+        if (obj && obj.image_request) {
+          handled = true;
+        }
+        if (obj && obj.phone_url) {
+          handled = true;
+        }
+        if (obj && Array.isArray(obj.lore_suggestions)) {
+          handled = true;
+        }
+      }
+    } catch (e) {
+      addLog(`Parse failed: ${e.message}`);
+    }
+    setParseResult({ handled, captionText, parsed: handled });
+  };
+
+  const sampleMessages = [
+    '{"toolCalls": [{"type": "image_request", "payload": {"prompt": "test prompt"}}]}',
+    'Here is your image: {"toolCalls": [{"type": "image_request", "payload": {"prompt": "beautiful sunset"}}]}',
+    '{"image_request": "test request"}',
+    '{"phone_url": "https://example.com"}',
+    '{"toolCalls": [{"type": "phone_url", "payload": {"url": "https://reddit.com"}}]}',
+    '{"toolCalls": [{"type": "lore_suggestions", "payload": {"items": [{"keyword": "test", "content": "content"}]}}]}',
+    'Regular response without tools',
+    'Please check: {}'
+  ];
+
+  return (
+    <section className="panel overlay">
+      <h2>Tool Call Parsing Test</h2>
+      <div style={{ marginBottom: '16px' }}>
+        <label>Message to test:</label>
+        <textarea
+          value={testMessage}
+          onChange={(e) => setTestMessage(e.target.value)}
+          placeholder="Enter LLM response with tool calls..."
+          rows={4}
+          style={{ width: '100%', marginTop: '4px' }}
+        />
+        <button style={{ marginTop: '8px' }} onClick={() => testParse(testMessage)}>Test Parse</button>
+      </div>
+
+      <div style={{ marginBottom: '16px' }}>
+        <label>Sample messages:</label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+          {sampleMessages.map((msg, i) => (
+            <button key={i} onClick={() => {
+              setTestMessage(msg);
+              testParse(msg);
+            }} style={{ textAlign: 'left', padding: '4px', fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {msg.substring(0, 60) + (msg.length > 60 ? '...' : '')}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {parseResult && (
+        <div style={{ marginBottom: '16px', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}>
+          <strong>Parse Result:</strong>
+          <div>Handled: {parseResult.handled ? 'Yes' : 'No'}</div>
+          <div>Caption: "{parseResult.captionText}"</div>
+        </div>
+      )}
+
+      <div style={{ marginBottom: '16px' }}>
+        <label>Debug Logs:</label>
+        <textarea
+          value={debugLogs.join('\n')}
+          readOnly
+          rows={8}
+          style={{ width: '100%', marginTop: '4px', fontSize: '11px' }}
+        />
+        <button onClick={() => setDebugLogs([])} style={{ marginTop: '4px' }}>Clear Logs</button>
+      </div>
+
+      <div style={{ textAlign: 'right' }}>
+        <button onClick={onClose}>Close</button>
+      </div>
+    </section>
+  );
+}
+
 function App() {
   // Zustand store connections
   const chat = useChat();
@@ -49,6 +176,8 @@ function App() {
   const [phoneUrl, setPhoneUrl] = useState('https://example.org');
   const [toasts, setToasts] = useState([]);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Debug states for tool call testing
+  const [showToolTest, setShowToolTest] = useState(false);
 
   // Load config on mount
   useEffect(() => {
@@ -148,19 +277,30 @@ function App() {
     chat.setInput('');
     try {
       const result = await chat.sendMessage(trimmed);
+      await debugLLMResponses('Raw LLM response: ' + result);
       // Try to parse tool calls
       let handled = false;
       let captionText = '';
       try {
         let obj = null;
-        try { obj = JSON.parse(result); } catch (e) {
+        await debugToolParsing('Attempting JSON parse');
+        try { obj = JSON.parse(result); await debugToolParsing('Direct JSON parse successful: ' + JSON.stringify(obj)); } catch (e) {
+          await debugToolParsing('Direct JSON parse failed, trying regex extraction');
           // Extract JSON object from mixed text
-          const m = result.match(/\{[\s\S]*\}$/);
-          if (m) { obj = JSON.parse(m[0]); captionText = result.slice(0, m.index).trim(); }
-          // Also support array after 'toolCalls:' when SO is off
-          if (!obj) {
-            const a = result.match(/toolCalls\s*:\s*(\[[\s\S]*\])/);
-            if (a) { try { obj = { toolCalls: JSON.parse(a[1]) }; } catch {} if (!configStore.structuredOutput && !suppressSOHint) setShowSOHint(true); }
+          if (result && typeof result === 'string') {
+            const m = result.match(/\{[\s\S]*\}$/);
+            await debugToolParsing('Regex match result: ' + JSON.stringify(m));
+            if (m) {
+              obj = JSON.parse(m[0]);
+              captionText = result.slice(0, m.index).trim();
+              await debugToolParsing('Parsed object: ' + JSON.stringify(obj));
+              await debugToolParsing('Caption text: ' + captionText);
+            }
+            // Also support array after 'toolCalls:' when SO is off
+            if (!obj) {
+              const a = result.match(/toolCalls\s*:\s*(\[[\s\S]*\])/);
+              if (a) { try { obj = { toolCalls: JSON.parse(a[1]) }; } catch {} if (!configStore.structuredOutput && !suppressSOHint) setShowSOHint(true); }
+            }
           }
         }
         // Structured calls preferred: toolCalls: [{type,payload}]
@@ -182,25 +322,38 @@ function App() {
             }
           }
         } else {
+          await debugToolParsing('No toolCalls array found, trying flat keys');
           // Flat keys fallback
           if (obj && obj.image_request) {
-            const prompt = typeof obj.image_request === 'string' ? obj.image_request : obj.image_request.prompt;
-            if (prompt) { await generateImage(prompt); handled = true; }
+            await debugToolParsing('Found flat key: image_request');
+            await generateImage(obj.image_request);
+            handled = true;
           }
           if (obj && obj.phone_url) {
+            await debugToolParsing('Found flat key: phone_url');
             let u = obj.phone_url; if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); uiStore.setPhoneOpen(true);
             if (captionText) {
+              await debugToolParsing('Adding caption message for phone_url: ' + captionText);
               chat.setMessages([...chat.messages, { role: 'assistant', content: captionText }]);
             }
             handled = true;
           }
-          if (obj && Array.isArray(obj.lore_suggestions)) { setSuggests(obj.lore_suggestions); uiStore.setSuggestOpen(true); handled = true; }
-          if (!configStore.structuredOutput && !suppressSOHint && /toolCalls\s*:|image_request|phone_url|lore_suggestions/.test(result) && !handled) {
+          if (obj && Array.isArray(obj.lore_suggestions)) {
+            await debugToolParsing('Found flat key: lore_suggestions');
+            setSuggests(obj.lore_suggestions); uiStore.setSuggestOpen(true);
+            handled = true;
+          }
+
+          // Check for tool call hints and structured output prompt
+          const hasToolHints = /toolCalls\s*:|image_request|phone_url|lore_suggestions/i.test(result);
+          if (!configStore.structuredOutput && !suppressSOHint && hasToolHints && !handled) {
             setShowSOHint(true);
           }
         }
       } catch (e) { console.warn('Tool parse failed', e); }
+      await debugToolParsing('Parsing complete. Handled: ' + handled + ', Caption text: ' + captionText);
     } catch (err) {
+      console.error('Error sending message:', err);
       showToast(err.message, 'error');
     }
   };
@@ -270,9 +423,12 @@ function App() {
          <button className="secondary" aria-label={uiStore.phoneOpen ? 'Close phone simulator' : 'Open phone simulator'} aria-expanded={uiStore.phoneOpen} onClick={() => uiStore.setPhoneOpen(!uiStore.phoneOpen)}>
            {uiStore.phoneOpen ? 'Close Phone' : 'Phone'}
          </button>
-         <button className="secondary" aria-label={uiStore.showConfig ? 'Close settings' : 'Open settings'} aria-expanded={uiStore.showConfig} onClick={() => uiStore.setShowConfig(!uiStore.showConfig)}>
-           {uiStore.showConfig ? 'Close Settings' : 'Settings'}
-         </button>
+         <button className="secondary" aria-label={showToolTest ? 'Close tool test' : 'Open tool test'} aria-expanded={showToolTest} onClick={() => setShowToolTest(!showToolTest)}>
+       {showToolTest ? 'Close Tool Test' : 'Tool Test'}
+     </button>
+     <button className="secondary" aria-label={uiStore.showConfig ? 'Close settings' : 'Open settings'} aria-expanded={uiStore.showConfig} onClick={() => uiStore.setShowConfig(!uiStore.showConfig)}>
+       {uiStore.showConfig ? 'Close Settings' : 'Settings'}
+     </button>
        </div>
        <button className="menu-toggle" aria-label="Toggle menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>
          ☰
@@ -793,6 +949,7 @@ function App() {
                 if (editingChar) {
                   await updateCharacter(editingChar.id, draft);
                 } else {
+                  await debugToolParsing('No toolCalls array found, trying flat keys');
                   await createCharacter(draft);
                 }
                 dataStore.loadCharacters();
@@ -847,6 +1004,10 @@ function App() {
               </div>
             </div>
           </section>
+        )}
+
+        {showToolTest && (
+          <ToolCallTestPanel onClose={() => setShowToolTest(false)} />
         )}
       </main>
 

@@ -13,6 +13,10 @@ from pydantic import BaseModel
 from typing import Dict, List, Optional
 import asyncio
 import httpx
+import json
+import time
+from datetime import datetime, timedelta
+from fastapi.responses import StreamingResponse
 from .config import AppConfig, ProviderConfig, load_config, save_config, mask_secret, Provider, ImagesConfig, ImageProvider
 from .storage import load_json, save_json, public_dir
 import os
@@ -47,11 +51,32 @@ try:
 except Exception:
     pass
 
+# Serve debug.json file for frontend access
+@app.get("/debug.json")
+async def get_debug_config():
+    """Serve debug.json file for frontend access."""
+    from .debug import get_debug_logger
+    logger = get_debug_logger()
+    try:
+        from pathlib import Path
+        debug_file = Path(__file__).parent.parent / "debug.json"
+        if debug_file.exists():
+            import json
+            data = json.loads(debug_file.read_text())
+            return data
+        else:
+            return logger.config
+    except Exception as e:
+        # Return current loaded config if file access fails
+        return logger.config
+
 
 @app.post("/phone/debug")
 async def phone_debug(payload: Dict[str, object]):
     try:
-        print("[CoolChat] Phone debug:", payload)
+        from .debug import get_debug_logger
+        logger = get_debug_logger()
+        logger.debug_api_calls(f"Phone debug: {payload}")
     except Exception:
         pass
     return {"status": "ok"}
@@ -935,7 +960,9 @@ async def _llm_reply(
         body = {"model": pcfg.model, "messages": messages, "temperature": pcfg.temperature}
         timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
         if getattr(cfg, 'debug', None) and getattr(cfg.debug, 'log_prompts', False):
-            print("[CoolChat] OpenAI request:", {"url": url, "body": body})
+            from .debug import get_debug_logger
+            logger = get_debug_logger()
+            logger.debug_llm_requests(f"OpenAI request: {url}, body: {body}")
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, headers=headers, json=body)
             if resp.status_code >= 400:
@@ -947,9 +974,11 @@ async def _llm_reply(
                 raise HTTPException(status_code=502, detail={"provider_error": detail})
             if getattr(cfg, 'debug', None) and getattr(cfg.debug, 'log_responses', False):
                 try:
-                    print("[CoolChat] OpenAI response:", resp.json())
+                    from .debug import get_debug_logger
+                    logger = get_debug_logger()
+                    logger.debug_llm_responses(f"OpenAI response: {resp.json()}")
                 except Exception:
-                    print("[CoolChat] OpenAI response text:", resp.text)
+                    logger.debug_llm_responses(f"OpenAI response text: {resp.text}")
             data = resp.json()
             # Standard OpenAI response shape
             try:
@@ -1097,6 +1126,15 @@ async def chat_endpoint(payload: ChatRequest) -> ChatResponse:
     _trim_history(session_id, cfg)
     _save_histories()
 
+    # Log the reply for tool calling debugging
+    from .debug import get_debug_logger
+    logger = get_debug_logger()
+    logger.debug_llm_responses(f"Returning reply: {repr(reply)}")
+    if 'toolCalls' in reply or 'image_request' in reply or 'phone_url' in reply:
+        logger.debug_tool_calls("Reply contains tool call")
+    else:
+        logger.debug_tool_calls("Reply contains no tool calls")
+
     return ChatResponse(reply=reply)
 
 
@@ -1169,6 +1207,34 @@ def _build_system_from_character(
                 )
         except Exception:
             pass
+
+    # Tool call prompt from user settings or default based on provider capabilities
+    if not tool_call_prompt and isinstance(system_prompts, dict):
+        tool_call_prompt = system_prompts.get("tool_call")
+
+    if not tool_call_prompt and tool_list_text:
+        # Use structured format for Gemini when structured_output is enabled
+        provider, _ = _active_provider_cfg(cfg)  # Get provider from cfg
+        if provider == Provider.GEMINI and getattr(cfg, 'structured_output', False):
+            tool_call_prompt = '''
+When generating tool calls, use this exact JSON format:
+{
+  "toolCalls": [
+    {"type": "image_request", "payload": {"prompt": "detailed prompt"}},
+    {"type": "phone_url", "payload": {"url": "https://..."}},
+    {"type": "lore_suggestions", "payload": {"items": [{"keyword": "", "content": ""}]}}
+  ]
+}
+For tool calls during a response, include the JSON directly. For post-message tool calls, include them in a message.'''.strip()
+        else:
+            tool_call_prompt = '''
+When generating tool calls, use this structured JSON format:
+{"toolCalls": [
+  {"type": "image_request", "payload": {"prompt": "concise prompt"}},
+  {"type": "phone_url", "payload": {"url": "https://..."}},
+  {"type": "lore_suggestions", "payload": {"items": [{"keyword": "...", "content": "..."}]}}
+]}
+Include optional caption text before the JSON when appropriate.'''
 
     # If main template provided, use it
     main_tpl = system_prompts.get("main") if isinstance(system_prompts, dict) else None
@@ -2103,6 +2169,116 @@ async def reset_chat(session_id: str) -> Dict[str, str]:
     _chat_histories.pop(session_id, None)
     _save_histories()
     return {"status": "ok"}
+
+
+@app.get("/chats/{session_id}/export/jsonl")
+async def export_chat_jsonl(session_id: str):
+    """Export chat history as SillyTavern-compatible JSONL file."""
+    hist = _chat_histories.get(session_id, [])
+    if not hist:
+        raise HTTPException(status_code=404, detail="Chat session not found or empty")
+
+    # Try to get active character for the export
+    cfg = load_config()
+    char_name = ""
+    if cfg.active_character_id and cfg.active_character_id in _characters:
+        char_name = _characters[cfg.active_character_id].name
+    else:
+        # Fallback to session ID if not named like a character
+        char_name = "Character" if session_id not in _characters.values() else session_id
+
+    # Generate chat metadata
+    from datetime import datetime
+    create_date = datetime.now().strftime("%Y-%m-%d@%Hh%Mm%Ss")
+
+    def generate():
+        import io
+        output = io.StringIO()
+
+        # First line: Metadata
+        metadata = {
+            "user_name": "User",  # Default, could be from config
+            "character_name": char_name,
+            "create_date": create_date,
+            "chat_metadata": {
+                "integrity": "00000000-0000-0000-0000-000000000000",  # Placeholder
+                "chat_id_hash": hash(session_id) % 2**63,
+                "objective": None,
+                "variables": {},
+                "note_prompt": "",
+                "note_interval": 1,
+                "note_position": 1,
+                "note_depth": 4,
+                "note_role": 0,
+                "timedWorldInfo": {"sticky": {}, "cooldown": {}},
+                "tainted": False,
+                "attachments": [],
+                "lastInContextMessageId": len(hist)
+            }
+        }
+        output.write(json.dumps(metadata, ensure_ascii=False) + "\n")
+
+        # Message lines
+        current_time = datetime.now()
+        for i, msg in enumerate(hist):
+            role = msg.get("role", "assistant").lower()
+            content = msg.get("content", "")
+            image_url = msg.get("image_url")
+
+            if role == "assistant":
+                name = char_name
+                is_user = False
+                is_system = True if i == 0 else False  # First system message
+            else:
+                name = "User"  # Could be from config
+                is_user = True
+                is_system = False
+
+            send_date = (current_time - timedelta(seconds=len(hist) - i)).strftime("%B %d, %Y %I:%M%p")
+
+            entry = {
+                "name": name,
+                "is_user": is_user,
+                "is_system": is_system,
+                "send_date": send_date,
+                "mes": content,
+                "extra": {
+                    "isSmallSys": is_system and len(content) < 100,
+                    "token_count": len(content) // 4,  # Rough estimate
+                    "reasoning": "",
+                    "qvink_memory": {"lagging": False, "include": None}
+                },
+                "tracker": {},
+                "title": "",
+                "gen_started": "",  # Empty for now
+                "gen_finished": "",
+                "swipe_id": 0,
+                "swipes": [content],
+                "swipe_info": []
+            }
+
+            if image_url:
+                entry["extra"]["image"] = image_url
+                entry["extra"]["generationType"] = 6  # Image type
+                entry["extra"]["negative"] = ""
+                entry["extra"]["inline_image"] = False
+                entry["extra"]["image_swipes"] = [image_url]
+
+            if not is_user and not is_system:
+                entry["force_avatar"] = "/thumbnail?type=persona&file=user-default.png"
+
+            output.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+        output.seek(0)
+        yield output.getvalue()
+        output.close()
+
+    fname = f"{session_id} - {create_date}.jsonl"
+    return StreamingResponse(
+        generate(),
+        media_type="text/plain",
+        headers={"Content-Disposition": f"attachment; filename={fname}"}
+    )
 
 
 # ---------------------------------------------------------------------------

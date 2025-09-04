@@ -21,7 +21,7 @@ export interface ChatState {
   setAvailableSessions: (sessions: string[]) => void;
 
   // Async actions
-  sendMessage: (message: string) => Promise<void>;
+  sendMessage: (message: string) => Promise<string>;
   loadChat: (sessionId: string) => Promise<void>;
   loadSessions: () => Promise<void>;
   resetChatSession: (sessionId: string) => Promise<void>;
@@ -47,7 +47,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   // Async actions
   sendMessage: async (message: string) => {
-    if (!message.trim() || get().sending) return;
+    if (!message.trim() || get().sending) return '';
 
     const { sessionId, messages } = get();
     const userMsg = { role: 'user', content: message.trim() };
@@ -61,15 +61,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
       const reply = await sendChat(message, sessionId);
-      set((state) => ({
-        messages: [...state.messages, { role: 'assistant', content: reply }],
-        sending: false
-      }));
+      set({ sending: false });
+      return reply;
     } catch (err: any) {
       set({
         error: err.message,
         sending: false
       });
+      throw err; // Re-throw so caller can handle it
     }
   },
 

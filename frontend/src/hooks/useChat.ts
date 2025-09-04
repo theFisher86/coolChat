@@ -6,7 +6,7 @@ export const useChat = () => {
   const chatStore = useChatStore();
 
   const sendChatMessage = useCallback(async (message: string) => {
-    await chatStore.sendMessage(message);
+    return await chatStore.sendMessage(message);
   }, [chatStore]);
 
   const switchSession = useCallback(async (sessionId: string) => {
