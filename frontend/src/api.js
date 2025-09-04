@@ -160,46 +160,6 @@ export async function generateImageDirect(prompt, sessionId = 'default') {
   return res.json();
 }
 
-// Phone templates and allowlist
-export async function listPhoneTemplates() {
-  const res = await fetch('/phone/templates');
-  if (!res.ok) throw new Error(`List phone templates failed: ${res.status}`);
-  return res.json(); // { templates: [{name,title}] }
-}
-
-export async function renderPhoneTemplate(template, data) {
-  const res = await fetch('/phone/render', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ template, data }) });
-  if (!res.ok) throw new Error(`Render phone template failed: ${res.status}`);
-  return res.json(); // { url }
-}
-
-export async function getPhoneAllowlist() {
-  const res = await fetch('/phone/allowlist');
-  if (!res.ok) throw new Error(`Get phone allowlist failed: ${res.status}`);
-  return res.json(); // { allowlist: [] }
-}
-
-export async function addPhoneAllowlist(url) {
-  const res = await fetch('/phone/allowlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
-  if (!res.ok) throw new Error(`Add phone allowlist failed: ${res.status}`);
-  return res.json();
-}
-
-export async function removePhoneAllowlist(url) {
-  const u = new URLSearchParams({ url }).toString();
-  const res = await fetch(`/phone/allowlist?${u}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error(`Remove phone allowlist failed: ${res.status}`);
-  return res.json();
-}
-
-export async function createPhoneTemplate({ name, html, css, overwrite = false, title }) {
-  const res = await fetch('/phone/templates', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, html, css, overwrite, title })
-  });
-  if (!res.ok) throw new Error(`Create phone template failed: ${res.status}`);
-  return res.json();
-}
-
 export async function updateLoreEntry(id, data) {
   const res = await fetch(`/lore/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
   if (!res.ok) throw new Error(`Update lore failed: ${res.status}`);

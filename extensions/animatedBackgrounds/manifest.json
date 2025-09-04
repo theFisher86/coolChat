@@ -1,9 +1,7 @@
 {
   "id": "animatedBackgrounds",
   "name": "Animated Backgrounds",
-  "version": "0.1.0",
   "client": {
-    "entry": "plugin.js"
+    "entry": "client.js"
   }
 }
-

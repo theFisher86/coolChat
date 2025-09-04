@@ -13,12 +13,13 @@ from pydantic import BaseModel
 from typing import Dict, List, Optional
 import asyncio
 import httpx
+import json
+import time
+from datetime import datetime, timedelta
+from fastapi.responses import StreamingResponse
 from .config import AppConfig, ProviderConfig, load_config, save_config, mask_secret, Provider, ImagesConfig, ImageProvider
 from .storage import load_json, save_json, public_dir
 import os
-import uuid
-import html as _html
-from pathlib import Path as _Path
 
 app = FastAPI(title="CoolChat")
 
@@ -41,214 +42,44 @@ try:
 except Exception:
     pass
 
-# Serve plugins directory statically and list manifests
+# Serve extensions folder (manifests and client code)
 try:
-    import os as _os
-    _plugins_dir = _os.path.join(_os.path.dirname(__file__), "..", "plugins")
-    _plugins_dir = _os.path.abspath(_plugins_dir)
-    _os.makedirs(_plugins_dir, exist_ok=True)
-    app.mount("/plugins", StaticFiles(directory=_plugins_dir), name="plugins")
+    _ext_dir = _os.path.join(_os.path.dirname(__file__), "..", "extensions")
+    _ext_dir = _os.path.abspath(_ext_dir)
+    _os.makedirs(_ext_dir, exist_ok=True)
+    app.mount("/plugins/static", StaticFiles(directory=_ext_dir), name="plugins_static")
 except Exception:
     pass
 
-@app.get("/plugins")
-async def list_plugins() -> Dict[str, object]:
-    items: List[Dict[str, object]] = []
+# Serve debug.json file for frontend access
+@app.get("/debug.json")
+async def get_debug_config():
+    """Serve debug.json file for frontend access."""
+    from .debug import get_debug_logger
+    logger = get_debug_logger()
     try:
-        import json as _json
-        root = _Path(_plugins_dir)
-        if root.exists():
-            for p in sorted(root.iterdir()):
-                try:
-                    if not p.is_dir():
-                        continue
-                    man = p / "manifest.json"
-                    if not man.exists():
-                        continue
-                    data = _json.loads(man.read_text(encoding="utf-8"))
-                    pid = data.get("id") or p.name
-                    items.append({
-                        "id": pid,
-                        "name": data.get("name") or pid,
-                        "version": data.get("version") or "",
-                        "client": data.get("client") or {},
-                    })
-                except Exception:
-                    continue
-    except Exception:
-        pass
-    return {"plugins": items}
+        from pathlib import Path
+        debug_file = Path(__file__).parent.parent / "debug.json"
+        if debug_file.exists():
+            import json
+            data = json.loads(debug_file.read_text())
+            return data
+        else:
+            return logger.config
+    except Exception as e:
+        # Return current loaded config if file access fails
+        return logger.config
 
 
 @app.post("/phone/debug")
 async def phone_debug(payload: Dict[str, object]):
     try:
-        print("[CoolChat] Phone debug:", payload)
+        from .debug import get_debug_logger
+        logger = get_debug_logger()
+        logger.debug_api_calls(f"Phone debug: {payload}")
     except Exception:
         pass
     return {"status": "ok"}
-
-
-# ---------------------------------------------------------------------------
-# Phone: templates and iframe allowlist
-# ---------------------------------------------------------------------------
-
-
-class PhoneRenderRequest(BaseModel):
-    template: str
-    data: Dict[str, object] | None = None
-
-
-class PhoneRenderResponse(BaseModel):
-    url: str
-
-
-def _phone_templates_dir() -> _Path:
-    return (public_dir() / "templates").resolve()
-
-
-def _phone_views_dir() -> _Path:
-    d = (public_dir() / "phone_views").resolve()
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-def _escape(v: object) -> str:
-    if v is None:
-        return ""
-    return _html.escape(str(v), quote=True)
-
-
-def _render_template_html(tpl_html: str, tpl_css: str | None, data: Dict[str, object] | None) -> str:
-    # Very small mustache-like replacer: {{key}} -> escaped value
-    out = tpl_html
-    for k, v in (data or {}).items():
-        token = "{{" + str(k) + "}}"
-        # Allow basic non-escaped insertion with triple braces {{{key}}}
-        out = out.replace("{{{" + str(k) + "}}}", str(v) if v is not None else "")
-        out = out.replace(token, _escape(v))
-    # Inject CSS if present
-    if tpl_css:
-        if "</head>" in out:
-            out = out.replace("</head>", f"<style>\n{tpl_css}\n</style>\n</head>")
-        else:
-            out = f"<style>\n{tpl_css}\n</style>\n" + out
-    return out
-
-
-@app.get("/phone/templates")
-async def phone_list_templates() -> Dict[str, object]:
-    root = _phone_templates_dir()
-    items: List[Dict[str, str]] = []
-    if root.exists():
-        for p in root.iterdir():
-            if p.is_dir():
-                name = p.name
-                title = name.replace("_", " ").title()
-                manifest = p / "manifest.json"
-                try:
-                    if manifest.exists():
-                        import json as _json
-                        m = _json.loads(manifest.read_text(encoding="utf-8"))
-                        title = m.get("title", title)
-                except Exception:
-                    pass
-                items.append({"name": name, "title": title})
-    return {"templates": items}
-
-
-class PhoneCreateTemplateRequest(BaseModel):
-    name: str
-    html: str
-    css: Optional[str] = None
-    overwrite: bool = False
-    title: Optional[str] = None
-
-
-@app.post("/phone/templates")
-async def phone_create_template(payload: PhoneCreateTemplateRequest) -> Dict[str, object]:
-    name = (payload.name or "").strip()
-    if not name or not all(ch.isalnum() or ch in ("-", "_") for ch in name):
-        raise HTTPException(status_code=400, detail="Invalid template name")
-    tdir = _phone_templates_dir() / name
-    if tdir.exists() and not payload.overwrite:
-        raise HTTPException(status_code=409, detail="Template already exists")
-    tdir.mkdir(parents=True, exist_ok=True)
-    # Write HTML and CSS
-    (tdir / "template.html").write_text(payload.html, encoding="utf-8")
-    if payload.css is not None:
-        (tdir / "styles.css").write_text(payload.css, encoding="utf-8")
-    # Optional manifest
-    try:
-        import json as _json
-        (tdir / "manifest.json").write_text(_json.dumps({"title": payload.title or name}, indent=2), encoding="utf-8")
-    except Exception:
-        pass
-    return {"status": "ok", "name": name}
-
-
-@app.post("/phone/render", response_model=PhoneRenderResponse)
-async def phone_render(payload: PhoneRenderRequest) -> PhoneRenderResponse:
-    name = (payload.template or "").strip()
-    if not name:
-        raise HTTPException(status_code=400, detail="Missing template name")
-    tdir = _phone_templates_dir() / name
-    if not tdir.exists():
-        raise HTTPException(status_code=404, detail="Unknown template")
-    html_path = tdir / "template.html"
-    css_path = tdir / "styles.css"
-    if not html_path.exists():
-        raise HTTPException(status_code=500, detail="Template missing template.html")
-    tpl_html = html_path.read_text(encoding="utf-8")
-    tpl_css = css_path.read_text(encoding="utf-8") if css_path.exists() else None
-    out_html = _render_template_html(tpl_html, tpl_css, payload.data or {})
-    vid = f"{uuid.uuid4().hex}.html"
-    out_path = _phone_views_dir() / vid
-    out_path.write_text(out_html, encoding="utf-8")
-    return PhoneRenderResponse(url=f"/public/phone_views/{vid}")
-
-
-@app.get("/phone/allowlist")
-async def phone_allowlist_get() -> Dict[str, object]:
-    data = load_json("phone.json", {"allowlist": []})
-    al = data.get("allowlist") if isinstance(data, dict) else []
-    if not isinstance(al, list):
-        al = []
-    # Normalize to strings
-    al = [str(x) for x in al if isinstance(x, (str, int, float))]
-    return {"allowlist": al}
-
-
-class PhoneAllowlistAdd(BaseModel):
-    url: str
-
-
-@app.post("/phone/allowlist")
-async def phone_allowlist_add(payload: PhoneAllowlistAdd) -> Dict[str, object]:
-    raw = (payload.url or "").strip()
-    if not raw:
-        raise HTTPException(status_code=400, detail="Missing url")
-    data = load_json("phone.json", {"allowlist": []})
-    al = data.get("allowlist") if isinstance(data, dict) else []
-    if not isinstance(al, list):
-        al = []
-    if raw not in al:
-        al = [raw] + al  # prepend as requested
-    data["allowlist"] = al
-    save_json("phone.json", data)
-    return {"allowlist": al}
-
-
-@app.delete("/phone/allowlist")
-async def phone_allowlist_remove(url: str) -> Dict[str, object]:
-    data = load_json("phone.json", {"allowlist": []})
-    al = data.get("allowlist") if isinstance(data, dict) else []
-    if not isinstance(al, list):
-        al = []
-    al = [x for x in al if str(x) != url]
-    data["allowlist"] = al
-    save_json("phone.json", data)
-    return {"allowlist": al}
 
 
 @app.on_event("startup")
@@ -260,6 +91,50 @@ async def _startup_load_state():
             print("[CoolChat] startup load_state error:", e)
         except Exception:
             pass
+
+
+# Extensions API: list available extensions and manage enabled map
+@app.get("/plugins")
+async def list_plugins():
+    # Read manifests from extensions folder
+    out = {"plugins": [], "enabled": {}}
+    cfg = load_config()
+    try:
+        base = _ext_dir
+        for name in sorted(os.listdir(base)):
+            mpath = os.path.join(base, name, "manifest.json")
+            if os.path.isfile(mpath):
+                try:
+                    with open(mpath, 'r', encoding='utf-8') as f:
+                        import json as _json
+                        data = _json.load(f)
+                        data['id'] = data.get('id') or name
+                        out['plugins'].append(data)
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    # Enabled map from config
+    try:
+        out['enabled'] = cfg.extensions if isinstance(cfg.extensions, dict) else {}
+    except Exception:
+        out['enabled'] = {}
+    return out
+
+
+@app.post('/plugins/enabled')
+async def set_enabled_extensions(payload: Dict[str, bool]):
+    try:
+        cfg = load_config()
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=400, detail='Invalid payload')
+        cfg.extensions = payload
+        save_config(cfg)
+        return {'status': 'ok'}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ---------------------------------------------------------------------------
@@ -649,34 +524,6 @@ _memory: Dict[int, MemoryEntry] = {}
 _next_memory_id: int = 1
 
 
-def _st_to_entries(items):
-    out = []
-    for i in items or []:
-        if isinstance(i, str):
-            out.append(LoreEntryCreate(keyword=i, content=""))
-            continue
-        if not isinstance(i, dict):
-            continue
-        keys = i.get("keys") or i.get("triggers") or i.get("key") or []
-        if isinstance(keys, dict):
-            keys = list(keys.values())
-        kw = keys[0] if isinstance(keys, list) and keys else (i.get("keyword") or i.get("comment") or "")
-        content = i.get("content") or i.get("text") or i.get("entry") or ""
-        secondary = i.get("secondary_keys") or i.get("secondary_keywords") or i.get("keysecondary") or []
-        logic_map = {0: "AND ANY", 3: "AND ALL", 1: "NOT ALL", 2: "NOT ANY"}
-        logic_val = i.get("logic")
-        if logic_val is None:
-            sl = i.get("selectiveLogic")
-            if isinstance(sl, int):
-                logic_val = logic_map.get(sl, "AND ANY")
-        if not logic_val:
-            logic_val = "AND ANY"
-        order = i.get("order") or 0
-        trigger = i.get("probability") or i.get("trigger") or 100
-        out.append(LoreEntryCreate(keyword=kw, content=content, keywords=keys if isinstance(keys, list) else [], logic=logic_val, secondary_keywords=secondary, order=order, trigger=trigger))
-    return out
-
-
 def _load_state() -> None:
     global _characters, _next_id, _lore, _next_lore_id, _lorebooks, _next_lorebook_id, _memory, _next_memory_id, _chat_histories
     data = load_json("characters.json", {"next_id": 1, "items": []})
@@ -770,6 +617,32 @@ def _save_lorebook_snapshot(lb: "Lorebook") -> None:
 def _parse_lorebook_data_to_entries(data: object) -> tuple[str, str, List["LoreEntryCreate"]]:
     import os as _os
     # Support SillyTavern World Info format and simple formats
+    def _st_to_entries(items):
+        out = []
+        for i in items or []:
+            if isinstance(i, str):
+                out.append(LoreEntryCreate(keyword=i, content=""))
+                continue
+            if not isinstance(i, dict):
+                continue
+            keys = i.get("keys") or i.get("triggers") or i.get("key") or []
+            if isinstance(keys, dict):
+                keys = list(keys.values())
+            kw = keys[0] if isinstance(keys, list) and keys else (i.get("keyword") or i.get("comment") or "")
+            content = i.get("content") or i.get("text") or i.get("entry") or ""
+            secondary = i.get("secondary_keys") or i.get("secondary_keywords") or i.get("keysecondary") or []
+            logic_map = {0: "AND ANY", 3: "AND ALL", 1: "NOT ALL", 2: "NOT ANY"}
+            logic_val = i.get("logic")
+            if logic_val is None:
+                sl = i.get("selectiveLogic")
+                if isinstance(sl, int):
+                    logic_val = logic_map.get(sl, "AND ANY")
+            if not logic_val:
+                logic_val = "AND ANY"
+            order = i.get("order") or 0
+            trigger = i.get("probability") or i.get("trigger") or 100
+            out.append(LoreEntryCreate(keyword=kw, content=content, keywords=keys if isinstance(keys, list) else [], logic=logic_val, secondary_keywords=secondary, order=order, trigger=trigger))
+        return out
 
     name = "Imported Lorebook"
     description = ""
@@ -1087,7 +960,9 @@ async def _llm_reply(
         body = {"model": pcfg.model, "messages": messages, "temperature": pcfg.temperature}
         timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
         if getattr(cfg, 'debug', None) and getattr(cfg.debug, 'log_prompts', False):
-            print("[CoolChat] OpenAI request:", {"url": url, "body": body})
+            from .debug import get_debug_logger
+            logger = get_debug_logger()
+            logger.debug_llm_requests(f"OpenAI request: {url}, body: {body}")
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, headers=headers, json=body)
             if resp.status_code >= 400:
@@ -1099,9 +974,11 @@ async def _llm_reply(
                 raise HTTPException(status_code=502, detail={"provider_error": detail})
             if getattr(cfg, 'debug', None) and getattr(cfg.debug, 'log_responses', False):
                 try:
-                    print("[CoolChat] OpenAI response:", resp.json())
+                    from .debug import get_debug_logger
+                    logger = get_debug_logger()
+                    logger.debug_llm_responses(f"OpenAI response: {resp.json()}")
                 except Exception:
-                    print("[CoolChat] OpenAI response text:", resp.text)
+                    logger.debug_llm_responses(f"OpenAI response text: {resp.text}")
             data = resp.json()
             # Standard OpenAI response shape
             try:
@@ -1249,6 +1126,15 @@ async def chat_endpoint(payload: ChatRequest) -> ChatResponse:
     _trim_history(session_id, cfg)
     _save_histories()
 
+    # Log the reply for tool calling debugging
+    from .debug import get_debug_logger
+    logger = get_debug_logger()
+    logger.debug_llm_responses(f"Returning reply: {repr(reply)}")
+    if 'toolCalls' in reply or 'image_request' in reply or 'phone_url' in reply:
+        logger.debug_tool_calls("Reply contains tool call")
+    else:
+        logger.debug_tool_calls("Reply contains no tool calls")
+
     return ChatResponse(reply=reply)
 
 
@@ -1301,18 +1187,10 @@ def _build_system_from_character(
         from .storage import load_json as _lj2
         _tools = _lj2("tools.json", {"enabled": {}})
         en = (_tools.get("enabled") or {}) if isinstance(_tools, dict) else {}
-        if en.get("phone"):
-            tools_lines.append("PhonePanel: Open a URL on the user's phone panel.")
-        if en.get("phone_template"):
-            tools_lines.append("PhoneTemplates: Render a predefined mini-site in the phone using a template and variables.")
-        if en.get("phone_allowlist_add"):
-            tools_lines.append("PhoneAllowlist: Add an iframe-friendly site to the allowlist when relevant.")
-        if en.get("phone_create_template"):
-            tools_lines.append("PhoneCreateTemplate: Save a new template (html/css) for future use.")
+        if en.get("phone"): tools_lines.append("PhonePanel: Open a URL on the user's phone panel.")
         if en.get("image_gen"): tools_lines.append("ImageGen: Request an image with a concise prompt.")
         if en.get("lore_suggest"): tools_lines.append("LoreSuggest: Suggest new lore entries (keyword + content).")
     except Exception:
-        en = {}
         pass
     tool_list_text = "\n".join(tools_lines)
     # tool_call prompt from user settings or default
@@ -1324,11 +1202,39 @@ def _build_system_from_character(
             if getattr(load_config(), 'structured_output', False):
                 tool_call_prompt = (
                     "When invoking tools, return JSON with key 'toolCalls' as an array of {type, payload}. "
-                    "Types: 'image_request' (payload:{prompt:string}), 'phone_url' (payload:{url:string}), 'phone_template' (payload:{template:string, data:object}), 'phone_allowlist_add' (payload:{url:string}), 'phone_create_template' (payload:{name:string, html:string, css?:string, overwrite?:boolean}), 'lore_suggestions' (payload:{items:[{keyword:string, content:string}]}). "
+                    "Types: 'image_request' (payload: {prompt:string}), 'phone_url' (payload:{url:string}), 'lore_suggestions' (payload:{items:[{keyword:string, content:string}]}). "
                     "Optionally include plain 'text' content outside of tool calls. Do not wrap JSON in code fences."
                 )
         except Exception:
             pass
+
+    # Tool call prompt from user settings or default based on provider capabilities
+    if not tool_call_prompt and isinstance(system_prompts, dict):
+        tool_call_prompt = system_prompts.get("tool_call")
+
+    if not tool_call_prompt and tool_list_text:
+        # Use structured format for Gemini when structured_output is enabled
+        provider, _ = _active_provider_cfg(cfg)  # Get provider from cfg
+        if provider == Provider.GEMINI and getattr(cfg, 'structured_output', False):
+            tool_call_prompt = '''
+When generating tool calls, use this exact JSON format:
+{
+  "toolCalls": [
+    {"type": "image_request", "payload": {"prompt": "detailed prompt"}},
+    {"type": "phone_url", "payload": {"url": "https://..."}},
+    {"type": "lore_suggestions", "payload": {"items": [{"keyword": "", "content": ""}]}}
+  ]
+}
+For tool calls during a response, include the JSON directly. For post-message tool calls, include them in a message.'''.strip()
+        else:
+            tool_call_prompt = '''
+When generating tool calls, use this structured JSON format:
+{"toolCalls": [
+  {"type": "image_request", "payload": {"prompt": "concise prompt"}},
+  {"type": "phone_url", "payload": {"url": "https://..."}},
+  {"type": "lore_suggestions", "payload": {"items": [{"keyword": "...", "content": "..."}]}}
+]}
+Include optional caption text before the JSON when appropriate.'''
 
     # If main template provided, use it
     main_tpl = system_prompts.get("main") if isinstance(system_prompts, dict) else None
@@ -1345,17 +1251,6 @@ def _build_system_from_character(
     try:
         if tool_call_prompt:
             segments.append(tool_call_prompt)
-    except Exception:
-        pass
-    # Include phone template/allowlist/create guidance if present and enabled
-    try:
-        if isinstance(system_prompts, dict):
-            if en.get("phone_template") and system_prompts.get("phone_templates"):
-                segments.append(str(system_prompts.get("phone_templates")))
-            if en.get("phone_allowlist_add") and system_prompts.get("phone_allowlist"):
-                segments.append(str(system_prompts.get("phone_allowlist")))
-            if en.get("phone_create_template") and system_prompts.get("phone_create_template"):
-                segments.append(str(system_prompts.get("phone_create_template")))
     except Exception:
         pass
     # Include user persona if present
@@ -1442,7 +1337,6 @@ def _build_system_from_character(
         tool_lines = []
         if en.get("phone"):
             tool_lines.append("Tool: PhonePanel — You can propose opening a URL on the user's phone panel to present web content. Return a JSON field phone_url with https:// URL when appropriate.")
-            tool_lines.append("Tool: PhoneTemplates — Use 'phone_template' to render a mini-site with variables. Example payload: {template:'storefront', data:{store_name:'Fake Mart', item_name:'Leg Lamp', description:'...', price:'$59.95', image_url:'/public/images/default/item.png', quantity:1}}.")
         if en.get("image_gen"):
             tool_lines.append("Tool: ImageGen — You can request an image from the image generator when visual output would help. Return a JSON field image_request with a concise prompt.")
         if en.get("lore_suggest"):
@@ -2277,6 +2171,116 @@ async def reset_chat(session_id: str) -> Dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/chats/{session_id}/export/jsonl")
+async def export_chat_jsonl(session_id: str):
+    """Export chat history as SillyTavern-compatible JSONL file."""
+    hist = _chat_histories.get(session_id, [])
+    if not hist:
+        raise HTTPException(status_code=404, detail="Chat session not found or empty")
+
+    # Try to get active character for the export
+    cfg = load_config()
+    char_name = ""
+    if cfg.active_character_id and cfg.active_character_id in _characters:
+        char_name = _characters[cfg.active_character_id].name
+    else:
+        # Fallback to session ID if not named like a character
+        char_name = "Character" if session_id not in _characters.values() else session_id
+
+    # Generate chat metadata
+    from datetime import datetime
+    create_date = datetime.now().strftime("%Y-%m-%d@%Hh%Mm%Ss")
+
+    def generate():
+        import io
+        output = io.StringIO()
+
+        # First line: Metadata
+        metadata = {
+            "user_name": "User",  # Default, could be from config
+            "character_name": char_name,
+            "create_date": create_date,
+            "chat_metadata": {
+                "integrity": "00000000-0000-0000-0000-000000000000",  # Placeholder
+                "chat_id_hash": hash(session_id) % 2**63,
+                "objective": None,
+                "variables": {},
+                "note_prompt": "",
+                "note_interval": 1,
+                "note_position": 1,
+                "note_depth": 4,
+                "note_role": 0,
+                "timedWorldInfo": {"sticky": {}, "cooldown": {}},
+                "tainted": False,
+                "attachments": [],
+                "lastInContextMessageId": len(hist)
+            }
+        }
+        output.write(json.dumps(metadata, ensure_ascii=False) + "\n")
+
+        # Message lines
+        current_time = datetime.now()
+        for i, msg in enumerate(hist):
+            role = msg.get("role", "assistant").lower()
+            content = msg.get("content", "")
+            image_url = msg.get("image_url")
+
+            if role == "assistant":
+                name = char_name
+                is_user = False
+                is_system = True if i == 0 else False  # First system message
+            else:
+                name = "User"  # Could be from config
+                is_user = True
+                is_system = False
+
+            send_date = (current_time - timedelta(seconds=len(hist) - i)).strftime("%B %d, %Y %I:%M%p")
+
+            entry = {
+                "name": name,
+                "is_user": is_user,
+                "is_system": is_system,
+                "send_date": send_date,
+                "mes": content,
+                "extra": {
+                    "isSmallSys": is_system and len(content) < 100,
+                    "token_count": len(content) // 4,  # Rough estimate
+                    "reasoning": "",
+                    "qvink_memory": {"lagging": False, "include": None}
+                },
+                "tracker": {},
+                "title": "",
+                "gen_started": "",  # Empty for now
+                "gen_finished": "",
+                "swipe_id": 0,
+                "swipes": [content],
+                "swipe_info": []
+            }
+
+            if image_url:
+                entry["extra"]["image"] = image_url
+                entry["extra"]["generationType"] = 6  # Image type
+                entry["extra"]["negative"] = ""
+                entry["extra"]["inline_image"] = False
+                entry["extra"]["image_swipes"] = [image_url]
+
+            if not is_user and not is_system:
+                entry["force_avatar"] = "/thumbnail?type=persona&file=user-default.png"
+
+            output.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+        output.seek(0)
+        yield output.getvalue()
+        output.close()
+
+    fname = f"{session_id} - {create_date}.jsonl"
+    return StreamingResponse(
+        generate(),
+        media_type="text/plain",
+        headers={"Content-Disposition": f"attachment; filename={fname}"}
+    )
+
+
 # ---------------------------------------------------------------------------
 # Tools / MCP registry (storage only for now)
 # ---------------------------------------------------------------------------
@@ -2326,7 +2330,7 @@ async def list_mcp_awesome():
 # Store tool enablement (public/tools.json)
 @app.get("/tools/settings")
 async def get_tool_settings(character_id: int | None = None):
-    data = load_json("tools.json", {"enabled": {"phone": False, "phone_template": False, "phone_allowlist_add": False, "phone_create_template": False, "image_gen": False, "lore_suggest": False}, "per_character": {}})
+    data = load_json("tools.json", {"enabled": {"phone": False, "image_gen": False, "lore_suggest": False}, "per_character": {}})
     if character_id is not None:
         en = (data.get("per_character", {}).get(str(character_id)) if isinstance(data.get("per_character"), dict) else None)
         if isinstance(en, dict):
@@ -2341,7 +2345,7 @@ async def save_tool_settings(payload: Dict[str, object], character_id: int | Non
     en = payload.get("enabled") if isinstance(payload.get("enabled"), dict) else None
     if en is None:
         raise HTTPException(status_code=400, detail="missing enabled map")
-    data = load_json("tools.json", {"enabled": {"phone": False, "phone_template": False, "phone_allowlist_add": False, "phone_create_template": False, "image_gen": False, "lore_suggest": False}, "per_character": {}})
+    data = load_json("tools.json", {"enabled": {"phone": False, "image_gen": False, "lore_suggest": False}, "per_character": {}})
     if character_id is not None:
         data.setdefault("per_character", {})
         data["per_character"][str(character_id)] = en
@@ -2790,6 +2794,35 @@ async def import_lorebook(file: UploadFile = File(...)) -> Lorebook:
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid lorebook file: {e}")
     # Support SillyTavern World Info format and simple formats
+    def _st_to_entries(items):
+        out = []
+        for i in items or []:
+            # Accept either dict entries or simple strings
+            if isinstance(i, str):
+                out.append(LoreEntryCreate(keyword=i, content=""))
+                continue
+            if not isinstance(i, dict):
+                continue
+            # Map Eldoria-like schema
+            keys = i.get("keys") or i.get("triggers") or i.get("key") or []
+            if isinstance(keys, dict):
+                keys = list(keys.values())
+            kw = keys[0] if isinstance(keys, list) and keys else (i.get("keyword") or i.get("comment") or "")
+            content = i.get("content") or i.get("text") or i.get("entry") or ""
+            secondary = i.get("secondary_keys") or i.get("secondary_keywords") or i.get("keysecondary") or []
+            # Logic mapping: selectiveLogic numeric -> string
+            logic_map = {0: "AND ANY", 3: "AND ALL", 1: "NOT ALL", 2: "NOT ANY"}
+            logic_val = i.get("logic")
+            if logic_val is None:
+                sl = i.get("selectiveLogic")
+                if isinstance(sl, int):
+                    logic_val = logic_map.get(sl, "AND ANY")
+            if not logic_val:
+                logic_val = "AND ANY"
+            order = i.get("order") or 0
+            trigger = i.get("probability") or i.get("trigger") or 100
+            out.append(LoreEntryCreate(keyword=kw, content=content, keywords=keys if isinstance(keys, list) else [], logic=logic_val, secondary_keywords=secondary, order=order, trigger=trigger))
+        return out
 
     if isinstance(data, (list, dict)):
         fname = getattr(file, 'filename', None)
@@ -2883,23 +2916,7 @@ async def get_theme(name: str):
 
 @app.get("/prompts")
 async def get_prompts():
-    data = load_json(
-        "prompts.json",
-        {
-            "active": [],
-            "all": [],
-            "system": {
-                "main": "",
-                "tool_call": "",
-                "lore_suggest": "",
-                "image_summary": "",
-                "phone_templates": "When a compact in-app experience suits the task (storefront, profile, article, gallery), render a phone template: return a toolCalls entry with type 'phone_template' and payload {template:string, data:object}. Choose from /phone/templates. Include keys like store_name, item_name, description (short), price, quantity, image_url, etc. Then continue with concise guidance if needed.",
-                "phone_allowlist": "If a website is iframe-friendly and relevant (e.g., payment or settings pages), add it to the persistent allowlist by returning a toolCalls entry with type 'phone_allowlist_add' and payload {url}. Prefer https URLs.",
-                "phone_create_template": "When no existing template fits, you may define a new minimal template. Return a toolCalls entry with type 'phone_create_template' and payload {name, html, css?, overwrite?}. Keep HTML small, use {{variable}} placeholders, and avoid external assets. After creation, render it using 'phone_template'."
-            },
-            "variables": {}
-        }
-    )
+    data = load_json("prompts.json", {"active": [], "all": [], "system": {"lore_suggest": "", "image_summary": ""}, "variables": {} })
     return data
 
 

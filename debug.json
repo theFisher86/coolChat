@@ -1,0 +1,19 @@
+{
+  "frontend": {
+    "tool_parsing": true,
+    "llm_responses": true,
+    "api_calls": false,
+    "store_actions": false,
+    "component_render": false,
+    "performance": false
+  },
+  "backend": {
+    "tool_calls": true,
+    "llm_requests": false,
+    "llm_responses": false,
+    "database_operations": false,
+    "file_operations": false,
+    "performance": false
+  },
+  "enabled": true
+}
