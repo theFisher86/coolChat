@@ -9,6 +9,60 @@ import { useUIStore } from './stores';
 import { useConfigStore } from './stores';
 import { useDataStore } from './stores';
 
+// Message Controls Component
+function MessageControls({ messageId, role, onSwipe, onEdit, onDelete, isVisible }) {
+  if (!isVisible) return null;
+
+  const handleSwipeClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Swipe clicked for message:', messageId);
+    onSwipe(messageId);
+  };
+
+  const handleEditClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Edit clicked for message:', messageId);
+    onEdit(messageId);
+  };
+
+  const handleDeleteClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Delete clicked for message:', messageId);
+    onDelete(messageId);
+  };
+
+  return (
+    <div className="message-controls">
+      {role === 'assistant' && (
+        <button
+          className="message-btn swipe-btn"
+          title="Regenerate message"
+          onClick={handleSwipeClick}
+        >
+          🔃
+        </button>
+      )}
+      <button
+        className="message-btn edit-btn"
+        title="Edit message"
+        onClick={handleEditClick}
+      >
+        📝
+      </button>
+      <button
+        className="message-btn delete-btn"
+        title="Delete message"
+        onClick={handleDeleteClick}
+      >
+        💀
+      </button>
+    </div>
+  );
+}
+
 // Keep some API imports that we'll eventually move to stores too
 import {
   getConfig,
@@ -28,6 +82,7 @@ import {
   getPrompts,
   savePrompts,
   getImageModels,
+  sendChat,
 } from './api.js';
 
 // Debug component to test tool call parsing
@@ -179,6 +234,20 @@ function App() {
   // Debug states for tool call testing
   const [showToolTest, setShowToolTest] = useState(false);
 
+  // Message control states
+  const [hoveredMessageId, setHoveredMessageId] = useState(null);
+  const [controlsVisible, setControlsVisible] = useState(false);
+  const hoverTimeoutRef = useRef(null);
+  const swipeNavTimeoutRef = useRef(null);
+  const [editingMessage, setEditingMessage] = useState(null);
+  const [editText, setEditText] = useState('');
+  // Message swipe states
+  const [swipeHistories, setSwipeHistories] = useState({});
+  const [swipeNavVisible, setSwipeNavVisible] = useState({});
+  const [animatingMessage, setAnimatingMessage] = useState(null);
+  const [swipeComingIn, setSwipeComingIn] = useState(null);
+  const [wigglingMessage, setWigglingMessage] = useState(null);
+
   // Load config on mount
   useEffect(() => {
     configStore.loadConfig();
@@ -272,9 +341,6 @@ function App() {
     chat.setError(null);
     const trimmed = chat.input.trim();
     if (!trimmed) return;
-    const userMsg = { role: 'user', content: trimmed };
-    chat.setMessages([...chat.messages, userMsg]);
-    chat.setInput('');
     try {
       const result = await chat.sendMessage(trimmed);
       await debugLLMResponses('Raw LLM response: ' + result);
@@ -357,6 +423,264 @@ function App() {
       showToast(err.message, 'error');
     }
   };
+
+  // Message control handlers
+    const handleMessageHover = (messageIndex, isEnter) => {
+      if (isEnter) {
+        if (hoverTimeoutRef.current) {
+          clearTimeout(hoverTimeoutRef.current);
+        }
+        hoverTimeoutRef.current = setTimeout(() => {
+          setHoveredMessageId(messageIndex);
+          setControlsVisible(true);
+        }, 300);
+      } else {
+        if (hoverTimeoutRef.current) {
+          clearTimeout(hoverTimeoutRef.current);
+        }
+        setControlsVisible(false);
+        setHoveredMessageId(null);
+      }
+    };
+
+    const handleSwipeNavHover = (messageIndex, isEnter) => {
+      if (isEnter) {
+        if (swipeNavTimeoutRef.current) {
+          clearTimeout(swipeNavTimeoutRef.current);
+        }
+        swipeNavTimeoutRef.current = setTimeout(() => {
+          setSwipeNavVisible(prev => ({ ...prev, [messageIndex]: true }));
+        }, 300);
+      } else {
+        if (swipeNavTimeoutRef.current) {
+          clearTimeout(swipeNavTimeoutRef.current);
+        }
+        setSwipeNavVisible(prev => ({ ...prev, [messageIndex]: false }));
+      }
+    };
+  
+    const handleSwipe = async (messageIndex) => {
+      setControlsVisible(false);
+      try {
+        let messages = chat.messages;
+  
+        if (messageIndex >= messages.length || messageIndex < 0) {
+          showToast('Message not found', 'error');
+          return;
+        }
+  
+        const message = messages[messageIndex];
+        if (message.role !== 'assistant') {
+          showToast('Only assistant messages can be regenerated', 'error');
+          return;
+        }
+  
+        // Find the user message that precedes this assistant message
+        let userMessageContent = null;
+        for (let i = messageIndex - 1; i >= 0; i--) {
+          if (messages[i].role === 'user') {
+            userMessageContent = messages[i].content;
+            break;
+          }
+        }
+  
+        if (!userMessageContent) {
+          showToast('No user message found to regenerate from', 'error');
+          return;
+        }
+  
+        // Trigger swipe animation - message pushes out to the left
+        setAnimatingMessage(messageIndex);
+  
+        // Small delay to show animation before API call
+        setTimeout(async () => {
+          chat.setSending(true);
+          chat.setError(null);
+  
+          // Initialize swipe history for this message if it doesn't exist
+          if (!swipeHistories[messageIndex]) {
+            swipeHistories[messageIndex] = {
+              currentIndex: 0,
+              generations: [message.content]
+            };
+          }
+  
+          try {
+            // Send just the user message content to generate a new response (not as part of conversation)
+            const reply = await sendChat(userMessageContent, chat.sessionId);
+            await debugLLMResponses('Raw LLM response after swipe: ' + reply);
+  
+            // Add the new generation to history
+            const swipeHistory = swipeHistories[messageIndex];
+            swipeHistory.generations.push(reply);
+            swipeHistory.currentIndex = swipeHistory.generations.length - 1; // Go to latest
+  
+            // Update message content to the new generation
+            const updatedMessages = [...messages];
+            updatedMessages[messageIndex] = {
+              ...message,
+              content: reply
+            };
+  
+            chat.setMessages(updatedMessages);
+            setSwipeHistories({ ...swipeHistories });
+
+            // Clear the outgoing animation and start incoming animation
+            setAnimatingMessage(null);
+            setSwipeComingIn(messageIndex); // Start incoming animation
+
+            // Clear incoming animation after it completes
+            setTimeout(() => {
+              setSwipeComingIn(null);
+            }, 800); // Match CSS animation duration
+
+            chat.setSending(false);
+            showToast('Message regenerated successfully', 'success');
+          } catch (err) {
+            console.error('Error during swipe:', err);
+            chat.setSending(false);
+            setAnimatingMessage(null); // Stop animation on error
+            setSwipeComingIn(null); // Clear any incoming animation
+            showToast('Failed to regenerate message: ' + err.message, 'error');
+          }
+        }, 300); // Delay to show swipe-out animation
+  
+      } catch (err) {
+        console.error('Error during swipe:', err);
+        showToast('Failed to regenerate message: ' + err.message, 'error');
+        setAnimatingMessage(null);
+      }
+    };
+  
+    const handleEdit = (messageIndex) => {
+      setControlsVisible(false);
+      const message = chat.messages[messageIndex];
+      if (message) {
+        setEditingMessage(messageIndex);
+        setEditText(message.content);
+      }
+    };
+  
+    const handleSaveEdit = async () => {
+      if (!editingMessage || !editText.trim()) return;
+  
+      try {
+        const messageIndex = editingMessage;
+  
+        // Create updated messages array
+        const updatedMessages = [...chat.messages];
+        updatedMessages[messageIndex] = {
+          ...updatedMessages[messageIndex],
+          content: editText.trim()
+        };
+  
+        chat.setMessages(updatedMessages);
+        setEditingMessage(null);
+        setEditText('');
+  
+        showToast('Message edited successfully', 'success');
+  
+      } catch (err) {
+        console.error('Error editing message:', err);
+        showToast('Failed to edit message: ' + err.message, 'error');
+      }
+    };
+  
+    const handleCancelEdit = () => {
+      setEditingMessage(null);
+      setEditText('');
+    };
+  
+    const handleDelete = (messageIndex) => {
+      setControlsVisible(false);
+  
+      if (messageIndex >= chat.messages.length || messageIndex < 0) return;
+  
+      // Clean up swipe history for this message
+      const newSwipeHistories = { ...swipeHistories };
+      delete newSwipeHistories[messageIndex];
+  
+      // Adjust indices for messages after the deleted one
+      const adjustedSwipeHistories = {};
+      Object.entries(newSwipeHistories).forEach(([idx, history]) => {
+        const numIdx = parseInt(idx);
+        if (numIdx > messageIndex) {
+          adjustedSwipeHistories[numIdx - 1] = history;
+        } else {
+          adjustedSwipeHistories[numIdx] = history;
+        }
+      });
+  
+      // Create updated messages array without the deleted message
+      const updatedMessages = chat.messages.filter((_, idx) => idx !== messageIndex);
+      chat.setMessages(updatedMessages);
+      setSwipeHistories(adjustedSwipeHistories);
+  
+      showToast('Message deleted', 'success');
+    };
+  
+    const handleSwipePrevious = (messageIndex) => {
+      const swipeHistory = swipeHistories[messageIndex];
+      if (!swipeHistory || swipeHistory.currentIndex > 0) {
+        const newIndex = Math.max(0, (swipeHistory?.currentIndex ?? 0) - 1);
+  
+        // Update message content
+        const updatedMessages = [...chat.messages];
+        updatedMessages[messageIndex] = {
+          ...updatedMessages[messageIndex],
+          content: swipeHistory.generations[newIndex]
+        };
+  
+        // Update current index
+        const updatedSwipeHistories = { ...swipeHistories };
+        updatedSwipeHistories[messageIndex] = {
+          ...swipeHistory,
+          currentIndex: newIndex
+        };
+  
+        chat.setMessages(updatedMessages);
+        setSwipeHistories(updatedSwipeHistories);
+
+        // Trigger horizontal flip animation
+        setWigglingMessage(messageIndex);
+        setTimeout(() => {
+          setWigglingMessage(null);
+        }, 1000); // Match animation duration
+      }
+    };
+  
+    const handleSwipeNext = (messageIndex) => {
+      const swipeHistory = swipeHistories[messageIndex];
+      if (!swipeHistory || swipeHistory.currentIndex < swipeHistory.generations.length - 1) {
+        const newIndex = Math.min(
+          (swipeHistory?.generations.length ?? 1) - 1,
+          (swipeHistory?.currentIndex ?? 0) + 1
+        );
+  
+        // Update message content
+        const updatedMessages = [...chat.messages];
+        updatedMessages[messageIndex] = {
+          ...updatedMessages[messageIndex],
+          content: swipeHistory.generations[newIndex]
+        };
+  
+        // Update current index
+        const updatedSwipeHistories = { ...swipeHistories };
+        updatedSwipeHistories[messageIndex] = {
+          ...swipeHistory,
+          currentIndex: newIndex
+        };
+  
+        chat.setMessages(updatedMessages);
+        setSwipeHistories(updatedSwipeHistories);
+
+        // Trigger horizontal flip animation
+        setWigglingMessage(messageIndex);
+        setTimeout(() => {
+          setWigglingMessage(null);
+        }, 1000); // Match animation duration
+      }
+    };
 
   // Load extensions state on mount
   const [extensions, setExtensions] = useState([]);
@@ -868,11 +1192,138 @@ function App() {
         )}
 
         <div className="messages" aria-live="polite" ref={messagesRef}>
-           {chat.messages.map((m, idx) => (
-             <div key={idx} className={`message ${m.role}`}>
-               <div className="bubble">{m.image_url ? (<div><img src={m.image_url} alt="generated" style={{ maxWidth: '100%', borderRadius: 8 }} />{m.content ? (<div className="img-caption">{m.content}</div>) : null}</div>) : m.content}</div>
-             </div>
-           ))}
+            {chat.messages.map((m, idx) => {
+              const messageId = m.id || `msg-${idx}`;
+              const isHovered = hoveredMessageId === idx && controlsVisible;
+              const isEditingThis = editingMessage === idx;
+              const isAnimating = animatingMessage === idx;
+              const isIncoming = swipeComingIn === idx;
+              const isWiggling = wigglingMessage === idx;
+              const hasSwipeHistory = swipeHistories[idx] && swipeHistories[idx].generations.length > 1;
+              const swipeNavHovered = swipeNavVisible[idx] || false;
+
+              return (
+                <div
+                  key={messageId}
+                  className={`message ${m.role}${isHovered ? ' message-hovered' : ''}${isEditingThis ? ' message-editing' : ''}${isAnimating ? ' message-animating-swipe' : ''}${isIncoming ? ' message-swipe-new' : ''}${isWiggling ? ' message-flip' : ''}`}
+                  onMouseEnter={() => {
+                    handleMessageHover(idx, true);
+                    if (hasSwipeHistory) handleSwipeNavHover(idx, true);
+                  }}
+                  onMouseLeave={() => {
+                    handleMessageHover(idx, false);
+                    if (hasSwipeHistory) handleSwipeNavHover(idx, false);
+                  }}
+                >
+                  <div className={`bubble ${hasSwipeHistory ? 'has-swipes' : ''}`}>
+                    <div className="bubble-content">
+                      {m.image_url ? (
+                        <div>
+                          <img src={m.image_url} alt="generated" style={{ maxWidth: '100%', borderRadius: 8 }} />
+                          {m.content ? (<div className="img-caption">{m.content}</div>) : null}
+                        </div>
+                      ) : (
+                        <>
+                          {isEditingThis ? (
+                            <div className="message-edit-container">
+                              <textarea
+                                value={editText}
+                                onChange={(e) => setEditText(e.target.value)}
+                                className="message-edit-input"
+                                autoFocus
+                                rows={Math.ceil(editText.length / 60)}
+                              />
+                              <div className="message-edit-buttons">
+                                <button className="message-edit-save" onClick={handleSaveEdit}>💾 Save</button>
+                                <button className="message-edit-cancel" onClick={handleCancelEdit}>❌ Cancel</button>
+                              </div>
+                            </div>
+                          ) : (
+                            m.content
+                          )}
+                        </>
+                      )}
+                    </div>
+                    {m.role === 'assistant' && hasSwipeHistory && swipeNavHovered && (
+                      <div className="swipe-navigation">
+                        <button
+                          className="swipe-nav-btn swipe-nav-prev"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleSwipePrevious(idx);
+                          }}
+                          disabled={swipeHistories[idx].currentIndex === 0}
+                          title="Previous generation"
+                        >
+                          ⬅️
+                        </button>
+                        <span className="swipe-count">
+                          {`${swipeHistories[idx].currentIndex + 1}/${swipeHistories[idx].generations.length}`}
+                        </span>
+                        <button
+                          className="swipe-nav-btn swipe-nav-next"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleSwipeNext(idx);
+                          }}
+                          disabled={swipeHistories[idx].currentIndex === swipeHistories[idx].generations.length - 1}
+                          title="Next generation"
+                        >
+                          ➡️
+                        </button>
+                      </div>
+                    )}
+                    {m.role === 'assistant' && (
+                      <div className="swipe-navigation">
+                        {swipeHistories[idx] && swipeHistories[idx].generations.length > 1 && (
+                          <>
+                            <button
+                              className="swipe-nav-btn swipe-nav-prev"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleSwipePrevious(idx);
+                              }}
+                              disabled={swipeHistories[idx].currentIndex === 0}
+                              title="Previous generation"
+                            >
+                              ⬅️
+                            </button>
+                            <span className="swipe-count">
+                              {swipeHistories[idx].generations.length > 1 &&
+                                `${swipeHistories[idx].currentIndex + 1}/${swipeHistories[idx].generations.length}`
+                              }
+                            </span>
+                            <button
+                              className="swipe-nav-btn swipe-nav-next"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleSwipeNext(idx);
+                              }}
+                              disabled={swipeHistories[idx].currentIndex === swipeHistories[idx].generations.length - 1}
+                              title="Next generation"
+                            >
+                              ➡️
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    <MessageControls
+                      messageId={idx}
+                      role={m.role}
+                      onSwipe={handleSwipe}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                      isVisible={isHovered}
+                    />
+                  </div>
+                </div>
+              );
+            })}
            {chat.error && (
              <div className="message error">
                <div className="bubble">{chat.error}</div>

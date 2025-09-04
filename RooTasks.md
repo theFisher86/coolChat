@@ -13,14 +13,19 @@
 ### 1.1 Debug System Completion
 - [x] Create debug.json configuration file
 - [x] Build debug utility modules (frontend/backend)
-- [ ] Replace remaining backend print() statements with debug logger
+- [x] Replace hard-coded console.log statements in App.jsx with debug functions
+- [x] Add /debug.json backend endpoint for frontend configuration access
+- [x] Test debug system with runtime configuration changes
+- [ ] Replace remaining backend print() statements with debug logger (partial progress)
 - [ ] Add runtime debug configuration UI panel
-- [ ] Systematically replace all console.log/error in frontend components
+- [ ] Systematically replace all console.log/error in remaining frontend components
 - [ ] Create comprehensive debug logging for critical paths
 
 ### 1.2 **Tool Calling Polish** (Currently Working)
 - [x] Fix tool calling execution in React hook
 - [x] Standardize JSON schema validation (`toolCalls` proper handling)
+- [x] Implement tool parsing with fallback to flat key format
+- [x] Working tool types: phone_url, image_request, lore_suggestions
 - [ ] Add retry mechanism for failed tool calls
 - [ ] Create unit tests for tool parsing logic
 - [ ] Implement tool call queue for concurrent requests
@@ -96,6 +101,7 @@
 - [ ] Create state change history for debugging
 
 ### 3.3 **Advanced Component Features**
+- [x] Message interaction controls (swipe, edit, delete on hover)
 - [ ] Rich text editor for character descriptions
 - [ ] Visual lore connection graphs (D3.js integration)
 - [ ] Character preview with avatar generation
@@ -177,11 +183,11 @@
 
 ## 🎯 **Immediate Next Steps (Priority Order)**
 
-1. **Complete debug system** - finish backend print statement replacement
-2. **Database migration** - implement SQLite for persistence
-3. **Tool calling polish** - add retry mechanism and testing
-4. **UI component polish** - responsive design and animations
-5. **Testing setup** - implement comprehensive test coverage
+1. **Complete debug system** - finish backend print statement replacement (currently 70% complete)
+2. **Database migration** - implement SQLite for persistence (highest priority for data integrity)
+3. **Tool calling polish** - add retry mechanism and comprehensive testing
+4. **UI component polish** - responsive design and accessibility improvements
+5. **Testing setup** - implement comprehensive test coverage across frontend/backend
 
 ## 📊 **Success Metrics**
 - [ ] ✅ All tool types working reliably (phone, image, lore)
