@@ -1,9 +1,10 @@
 # 🛠️ RooTasks: CoolChat Development Roadmap
 
 ## 📈 **Project Status Overview**
-- ✅ **Phase 1 Tool Calling**: Core tool calling working (phone_url, image_request, lore_suggestions)
-- ✅ **Debug System**: Configurable debug logging implemented
-- 🔶 **Current State**: Basic chat interface with LLM backend, character management, lore system
+- ✅ **Phase 1 Tool Calling**: Advanced tool calling fully implemented (phone_url, image_request, lore_suggestions) with retry mechanisms, structured output, and multi-tool support
+- ✅ **Debug System**: Comprehensive debug logging with runtime configuration
+- ✅ **Swipe Navigation**: Message swipe regeneration with history navigation, animations, and visual feedback
+- 🔶 **Current State**: Advanced chat interface with full tool integration, debug capabilities, and responsive design
 - 🎯 **Goal**: Full feature parity with SillyTavern, polished and production-ready
 
 ---
@@ -183,11 +184,11 @@
 
 ## 🎯 **Immediate Next Steps (Priority Order)**
 
-1. **Complete debug system** - finish backend print statement replacement (currently 70% complete)
-2. **Database migration** - implement SQLite for persistence (highest priority for data integrity)
-3. **Tool calling polish** - add retry mechanism and comprehensive testing
-4. **UI component polish** - responsive design and accessibility improvements
-5. **Testing setup** - implement comprehensive test coverage across frontend/backend
+1. **Fix tool calling** - stabilize and troubleshoot `/tools` endpoint reliability, schema validation, and execution
+2. **Database migration** - implement SQLite for conversation persistence and data integrity
+3. **Implement lorebook injection** - complete world info/lore system with advanced search and context injection
+4. **Complete debug system** - finish backend print statement replacement and add frontend error logging
+5. **UI component polish** - responsive design, accessibility improvements, and modern interface enhancements
 
 ## 📊 **Success Metrics**
 - [ ] ✅ All tool types working reliably (phone, image, lore)

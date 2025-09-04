@@ -73,6 +73,7 @@ import {
   deleteCharacter,
   updateLoreEntry,
   updateLorebook,
+  listLorebooks,
   listChats,
   resetChat,
   suggestLoreFromChat,
@@ -96,22 +97,20 @@ function ToolCallTestPanel({ onClose }) {
   };
 
   const testParse = (message) => {
-    addLog(`Testing message: ${message}`);
-    let handled = false;
-    let captionText = '';
-    try {
-      let obj = null;
-      try { obj = JSON.parse(message); } catch (e) {
-        addLog('Failed to parse as JSON directly');
-        // Extract JSON object from mixed text
-        const m = message.match(/\{[\s\S]*\}$/);
-        if (m) {
-          addLog(`Found JSON at end: ${m[0].substring(0, 100)}...`);
-          obj = JSON.parse(m[0]);
-          captionText = message.slice(0, m.index).trim();
-          addLog(`Caption text: "${captionText}"`);
-        }
-      }
+   addLog(`Testing message: ${message}`);
+   let handled = false;
+   let captionText = '';
+   try {
+     const { obj, captionText: extractedCaptionText } = extractJsonFromResponse(message);
+     captionText = extractedCaptionText;
+     addLog(`Extracted JSON: ${obj ? 'Found object' : 'No object'}`);
+     addLog(`Caption text: "${captionText}"`);
+
+     if (obj) {
+       addLog(`Parsed object keys: ${Object.keys(obj).join(', ')}`);
+     } else {
+       addLog('No JSON extracted from test message');
+     }
       // Structured calls preferred: toolCalls: [{type,payload}]
       if (obj && Array.isArray(obj.toolCalls)) {
         addLog(`Found ${obj.toolCalls.length} tool calls`);
@@ -146,14 +145,33 @@ function ToolCallTestPanel({ onClose }) {
   };
 
   const sampleMessages = [
+    // Clean JSON
     '{"toolCalls": [{"type": "image_request", "payload": {"prompt": "test prompt"}}]}',
+
+    // Mixed with caption
     'Here is your image: {"toolCalls": [{"type": "image_request", "payload": {"prompt": "beautiful sunset"}}]}',
-    '{"image_request": "test request"}',
+
+    // Mixed with asterisks and caption
+    '*The assistant creates a serene scene* {"toolCalls": [{"type": "image_request", "payload": {"prompt": "beautiful sunset"}}]}',
+
+    // Asterisks with toolCalls: pattern
+    '*Seraphina creates a beautiful image for you* toolCalls: [{"type": "image_request", "payload": {"prompt": "mountain landscape"}}]',
+
+    // Complex asterisk narrative
+    "***As the digital being processes your request...***\n\nThe image materializes: {\"toolCalls\": [{\"type\": \"image_request\", \"payload\": {\"prompt\": \"technological cityscape\"}}]}",
+
+    // Phone URL examples
     '{"phone_url": "https://example.com"}',
-    '{"toolCalls": [{"type": "phone_url", "payload": {"url": "https://reddit.com"}}]}',
+    '*Opening your link* {"toolCalls": [{"type": "phone_url", "payload": {"url": "https://reddit.com"}}]}',
+
+    // Lore suggestions
     '{"toolCalls": [{"type": "lore_suggestions", "payload": {"items": [{"keyword": "test", "content": "content"}]}}]}',
+    '*The assistant knows this fact well* {\"toolCalls\": [{\"type\": \"lore_suggestions\", \"payload\": {\"items\": [{\"keyword\": \"magic\", \"content\": \"enchantment spells\"}]}}]}',
+
+    // Edge cases
     'Regular response without tools',
-    'Please check: {}'
+    'Please check: {}',
+    '*Just some narrative text with no JSON*'
   ];
 
   return (
@@ -336,6 +354,93 @@ function App() {
     }
   }, [dataStore.selectedLorebook]);
 
+  // Improved function to extract JSON from complex LLM responses
+  const extractJsonFromResponse = (response) => {
+    if (!response || typeof response !== 'string') {
+      return { obj: null, captionText: '' };
+    }
+
+    let captionText = '';
+    let obj = null;
+
+    // Clean asterisks from the response
+    const cleanText = response.replace(/\*+/g, '').trim();
+
+    debugToolParsing('Cleaned text for extraction: ' + cleanText.slice(0, 200) + '...');
+
+    // Try 1: Direct JSON parse
+    try {
+      obj = JSON.parse(cleanText);
+      return { obj, captionText: '' };
+    } catch (e) {
+      debugToolParsing('Try 1 failed: Direct parse - ' + e.message);
+    }
+
+    // Try 2: Extract JSON object/array from end of text using reverse brace counting
+    const lastCloseIndex = Math.max(cleanText.lastIndexOf('}'), cleanText.lastIndexOf(']'));
+    if (lastCloseIndex > 0) {
+      const closeChar = cleanText.charAt(lastCloseIndex);
+      const openChar = closeChar === '}' ? '{' : '[';
+      let braceCount = 0;
+      let jsonStartIndex = -1;
+
+      for (let i = lastCloseIndex; i >= 0; i--) {
+        const c = cleanText.charAt(i);
+        if (c === closeChar) braceCount++;
+        if (c === openChar) {
+          braceCount--;
+          if (braceCount === 0) {
+            jsonStartIndex = i;
+            break;
+          }
+        }
+      }
+
+      if (jsonStartIndex >= 0) {
+        try {
+          const jsonString = cleanText.slice(jsonStartIndex, lastCloseIndex + 1);
+          obj = JSON.parse(jsonString);
+          captionText = cleanText.slice(0, jsonStartIndex).trim();
+          debugToolParsing('Try 2 success: Found JSON from end, length: ' + (lastCloseIndex - jsonStartIndex));
+          return { obj, captionText };
+        } catch (e) {
+          debugToolParsing('Try 2 parse failed: ' + e.message);
+        }
+      }
+    }
+
+    // Try 3: Look for 'toolCalls:' keyword and extract following array
+    const toolCallsMatch = cleanText.match(/toolCalls\s*:?\s*(\[[\s\S]*\])$/);
+    if (toolCallsMatch) {
+      try {
+        const arrayString = toolCallsMatch[1];
+        const arrayObj = JSON.parse(arrayString);
+        obj = { toolCalls: arrayObj };
+        captionText = cleanText.slice(0, toolCallsMatch.index).trim();
+        debugToolParsing('Try 3 success: toolCalls array found, caption: ' + captionText.slice(0, 100));
+        return { obj, captionText };
+      } catch (e) {
+        debugToolParsing('Try 3 parse failed: ' + e.message);
+      }
+    }
+
+    // Try 4: Fallback to regex extraction (last resort)
+    const fullJsonMatch = cleanText.match(/\{[\s\S]*\}/);
+    if (fullJsonMatch) {
+      try {
+        obj = JSON.parse(fullJsonMatch[0]);
+        captionText = cleanText.slice(0, fullJsonMatch.index).trim();
+        debugToolParsing('Try 4 success: Regex extraction worked, caption length: ' + captionText.length);
+        return { obj, captionText };
+      } catch (e) {
+        debugToolParsing('Try 4 parse failed: ' + e.message);
+      }
+    }
+
+    debugToolParsing('All extraction attempts failed');
+    return { obj: null, captionText: '' };
+  };
+
   const onSubmit = async (e) => {
     e.preventDefault();
     chat.setError(null);
@@ -344,30 +449,16 @@ function App() {
     try {
       const result = await chat.sendMessage(trimmed);
       await debugLLMResponses('Raw LLM response: ' + result);
-      // Try to parse tool calls
+      // Try to parse tool calls using improved extraction function
       let handled = false;
       let captionText = '';
       try {
-        let obj = null;
-        await debugToolParsing('Attempting JSON parse');
-        try { obj = JSON.parse(result); await debugToolParsing('Direct JSON parse successful: ' + JSON.stringify(obj)); } catch (e) {
-          await debugToolParsing('Direct JSON parse failed, trying regex extraction');
-          // Extract JSON object from mixed text
-          if (result && typeof result === 'string') {
-            const m = result.match(/\{[\s\S]*\}$/);
-            await debugToolParsing('Regex match result: ' + JSON.stringify(m));
-            if (m) {
-              obj = JSON.parse(m[0]);
-              captionText = result.slice(0, m.index).trim();
-              await debugToolParsing('Parsed object: ' + JSON.stringify(obj));
-              await debugToolParsing('Caption text: ' + captionText);
-            }
-            // Also support array after 'toolCalls:' when SO is off
-            if (!obj) {
-              const a = result.match(/toolCalls\s*:\s*(\[[\s\S]*\])/);
-              if (a) { try { obj = { toolCalls: JSON.parse(a[1]) }; } catch {} if (!configStore.structuredOutput && !suppressSOHint) setShowSOHint(true); }
-            }
-          }
+        const { obj, captionText: extractedCaptionText } = extractJsonFromResponse(result);
+        captionText = extractedCaptionText;
+        debugToolParsing('Extraction result: ' + JSON.stringify({ obj, captionText }));
+
+        if (!obj) {
+          debugToolParsing('No JSON extracted from response');
         }
         // Structured calls preferred: toolCalls: [{type,payload}]
         if (obj && Array.isArray(obj.toolCalls)) {
@@ -388,24 +479,24 @@ function App() {
             }
           }
         } else {
-          await debugToolParsing('No toolCalls array found, trying flat keys');
+          debugToolParsing('No toolCalls array found, trying flat keys');
           // Flat keys fallback
           if (obj && obj.image_request) {
-            await debugToolParsing('Found flat key: image_request');
+            debugToolParsing('Found flat key: image_request');
             await generateImage(obj.image_request);
             handled = true;
           }
           if (obj && obj.phone_url) {
-            await debugToolParsing('Found flat key: phone_url');
+            debugToolParsing('Found flat key: phone_url');
             let u = obj.phone_url; if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); uiStore.setPhoneOpen(true);
             if (captionText) {
-              await debugToolParsing('Adding caption message for phone_url: ' + captionText);
+              debugToolParsing('Adding caption message for phone_url: ' + captionText);
               chat.setMessages([...chat.messages, { role: 'assistant', content: captionText }]);
             }
             handled = true;
           }
           if (obj && Array.isArray(obj.lore_suggestions)) {
-            await debugToolParsing('Found flat key: lore_suggestions');
+            debugToolParsing('Found flat key: lore_suggestions');
             setSuggests(obj.lore_suggestions); uiStore.setSuggestOpen(true);
             handled = true;
           }
@@ -417,7 +508,7 @@ function App() {
           }
         }
       } catch (e) { console.warn('Tool parse failed', e); }
-      await debugToolParsing('Parsing complete. Handled: ' + handled + ', Caption text: ' + captionText);
+      debugToolParsing('Parsing complete. Handled: ' + handled + ', Caption text: ' + captionText);
     } catch (err) {
       console.error('Error sending message:', err);
       showToast(err.message, 'error');
@@ -1400,7 +1491,7 @@ function App() {
                 if (editingChar) {
                   await updateCharacter(editingChar.id, draft);
                 } else {
-                  await debugToolParsing('No toolCalls array found, trying flat keys');
+                  debugToolParsing('No toolCalls array found, trying flat keys');
                   await createCharacter(draft);
                 }
                 dataStore.loadCharacters();
