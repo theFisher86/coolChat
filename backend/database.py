@@ -11,13 +11,19 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Import Base from models
-from .models import Base
+try:
+    from .models import Base
+except ImportError:
+    from models import Base
 
 def create_tables():
     """Create all database tables."""
 
     # Ensure models are imported
-    from .models import ChatSession, ChatMessage
+    try:
+        from .models import ChatSession, ChatMessage
+    except ImportError:
+        from models import ChatSession, ChatMessage
     print("[CoolChat] Models loaded for table creation")
 
     Base.metadata.create_all(bind=engine)

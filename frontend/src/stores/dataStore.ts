@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { listCharacters, deleteCharacter, listLorebooks, updateLoreEntry } from '../api.js';
+import { listCharacters, deleteCharacter, listLorebooks, updateLoreEntry, getLorebook } from '../api.js';
 
 export interface DataState {
   // Characters
@@ -92,8 +92,9 @@ export const useDataStore = create<DataState>((set, get) => ({
 
   loadLorebooks: async () => {
     try {
-      const lorebooks = await listLorebooks();
-      set({ lorebooks: lorebooks || [] });
+      const lorebooksResponse = await listLorebooks();
+      const lorebooks = lorebooksResponse?.lorebooks || [];
+      set({ lorebooks });
       // Auto-select first lorebook if available
       if (lorebooks?.length > 0 && !get().selectedLorebook) {
         set({ selectedLorebook: lorebooks[0] });
@@ -105,25 +106,9 @@ export const useDataStore = create<DataState>((set, get) => ({
 
   loadLoreEntries: async (lorebookId: number) => {
     try {
-      // Load entries by fetching each entry ID from the lorebook
-      const lorebook = get().selectedLorebook;
-      if (lorebook && lorebook.entry_ids) {
-        const loadedEntries: any[] = [];
-        for (const entryId of lorebook.entry_ids) {
-          try {
-            const response = await fetch(`/lore/${entryId}`);
-            if (response.ok) {
-              const entry = await response.json();
-              loadedEntries.push(entry);
-            }
-          } catch (err: any) {
-            console.warn(`Failed to load lore entry ${entryId}:`, err);
-          }
-        }
-        set({ loreEntries: loadedEntries });
-      } else {
-        set({ loreEntries: [] });
-      }
+      // Get full lorebook with all entries using the new API endpoint
+      const lorebookData = await getLorebook(lorebookId);
+      set({ loreEntries: lorebookData.entries || [] });
     } catch (err: any) {
       console.warn('Failed to load lore entries:', err);
       set({ loreEntries: [] });

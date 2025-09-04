@@ -6,7 +6,7 @@ subset of SillyTavern's functionality so the front-end can store and retrieve
 character definitions.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -18,7 +18,9 @@ import time
 from datetime import datetime, timedelta
 from fastapi.responses import StreamingResponse
 from .config import AppConfig, ProviderConfig, load_config, save_config, mask_secret, Provider, ImagesConfig, ImageProvider
+from .models import Lorebook, LoreEntry
 from .storage import load_json, save_json, public_dir
+from .routers import lore
 import os
 
 app = FastAPI(title="CoolChat")
@@ -50,6 +52,9 @@ try:
     app.mount("/plugins/static", StaticFiles(directory=_ext_dir), name="plugins_static")
 except Exception:
     pass
+
+# Include the lore router
+app.include_router(lore.router, tags=["lore"])
 
 # Serve debug.json file for frontend access
 @app.get("/debug.json")
@@ -219,7 +224,23 @@ class CharacterUpdate(BaseModel):
     image_prompt_suffix: Optional[str] = None
 
 
-# simple in-memory store
+class LorebookCreate(BaseModel):
+    name: str
+    description: str | None = None
+    entries: Optional[List[dict]] = None
+
+
+class LoreEntryCreate(BaseModel):
+    keyword: str
+    content: str
+    keywords: Optional[List[str]] = None
+    secondary_keywords: Optional[List[str]] = None
+    logic: str | None = None
+    trigger: float | None = None
+    order: float | None = None
+
+
+# simple in-memory store (legacy - using database for lorebooks)
 _characters: Dict[int, Character] = {}
 _next_id: int = 1
 
@@ -312,203 +333,17 @@ async def update_character(char_id: int, payload: CharacterUpdate) -> Character:
 # ---------------------------------------------------------------------------
 
 
-class LoreEntry(BaseModel):
-    """Simple world info entry used for context injection."""
-
-    id: int
-    keyword: str
-    content: str
-    # Extended matching
-    keywords: List[str] = []  # primary keywords (comma list in UI)
-    logic: str = "AND ANY"  # AND ANY, AND ALL, NOT ANY, NOT ALL
-    secondary_keywords: List[str] = []
-    order: int = 0
-    trigger: int = 100
+# In-memory lore and lorebooks removed - now using database-backed system
 
 
-class LoreEntryCreate(BaseModel):
-    keyword: str
-    content: str
-    keywords: Optional[List[str]] = None
-    logic: Optional[str] = None
-    secondary_keywords: Optional[List[str]] = None
-    order: Optional[int] = None
-    trigger: Optional[int] = None
+# Legacy in-memory lore endpoints removed - using database system now
 
 
-_lore: Dict[int, LoreEntry] = {}
-_next_lore_id: int = 1
+# Removed all conflicting legacy lorebook endpoints - now using database router
 
 
-class Lorebook(BaseModel):
-    id: int
-    name: str
-    description: str = ""
-    entry_ids: List[int] = []
-
-
-class LorebookCreate(BaseModel):
-    name: str
-    description: str = ""
-    entries: Optional[List[LoreEntryCreate]] = None
-
-
-_lorebooks: Dict[int, Lorebook] = {}
-_next_lorebook_id: int = 1
-
-
-@app.get("/lore", response_model=List[LoreEntry])
-async def list_lore() -> List[LoreEntry]:
-    """Return all lore entries."""
-
-    return list(_lore.values())
-
-
-@app.post("/lore", response_model=LoreEntry, status_code=201)
-async def create_lore(payload: LoreEntryCreate) -> LoreEntry:
-    """Create a new lore entry."""
-
-    global _next_lore_id
-    data = payload.model_dump()
-    if data.get("keywords") is None:
-        data["keywords"] = []
-    if data.get("logic") is None:
-        data["logic"] = "AND ANY"
-    if data.get("secondary_keywords") is None:
-        data["secondary_keywords"] = []
-    data["order"] = data.get("order") or 0
-    data["trigger"] = data.get("trigger") or 100
-    entry = LoreEntry(id=_next_lore_id, **data)
-    _lore[_next_lore_id] = entry
-    _next_lore_id += 1
-    _save_lore()
-    return entry
-
-
-@app.get("/lore/{entry_id}", response_model=LoreEntry)
-async def get_lore(entry_id: int) -> LoreEntry:
-    """Retrieve a single lore entry."""
-
-    entry = _lore.get(entry_id)
-    if entry is None:
-        raise HTTPException(status_code=404, detail="Lore entry not found")
-    return entry
-
-
-@app.delete("/lore/{entry_id}", status_code=204)
-async def delete_lore(entry_id: int) -> None:
-    """Delete a lore entry."""
-
-    if entry_id not in _lore:
-        raise HTTPException(status_code=404, detail="Lore entry not found")
-    del _lore[entry_id]
-    _save_lore()
-    return None
-
-
-class LoreEntryUpdate(BaseModel):
-    keyword: str | None = None
-    content: str | None = None
-    title: str | None = None
-
-
-@app.put("/lore/{entry_id}", response_model=LoreEntry)
-async def update_lore(entry_id: int, payload: LoreEntryUpdate) -> LoreEntry:
-    entry = _lore.get(entry_id)
-    if entry is None:
-        raise HTTPException(status_code=404, detail="Lore entry not found")
-    data = entry.model_dump()
-    if payload.keyword is not None:
-        data['keyword'] = payload.keyword
-    if payload.content is not None:
-        data['content'] = payload.content
-    if payload.title is not None:
-        data['title'] = payload.title
-    updated = LoreEntry(**data)
-    _lore[entry_id] = updated
-    _save_lore()
-    return updated
-
-
-@app.get("/lorebooks", response_model=List[Lorebook])
-async def list_lorebooks() -> List[Lorebook]:
-    return list(_lorebooks.values())
-
-
-@app.post("/lorebooks", response_model=Lorebook, status_code=201)
-async def create_lorebook(payload: LorebookCreate) -> Lorebook:
-    global _next_lorebook_id, _next_lore
-    lb = Lorebook(id=_next_lorebook_id, name=payload.name, description=payload.description, entry_ids=[])
-    # Optionally create entries provided inline
-    if payload.entries:
-        global _next_lore_id
-        for le in payload.entries:
-            entry = LoreEntry(
-                id=_next_lore_id,
-                keyword=le.keyword,
-                content=le.content,
-                keywords=le.keywords or [],
-                logic=le.logic or "AND ANY",
-                secondary_keywords=le.secondary_keywords or [],
-                order=le.order or 0,
-                trigger=le.trigger or 100,
-            )
-            _lore[_next_lore_id] = entry
-            lb.entry_ids.append(_next_lore_id)
-            _next_lore_id += 1
-    _lorebooks[_next_lorebook_id] = lb
-    _next_lorebook_id += 1
-    _save_lorebooks(); _save_lore()
-    try:
-        _save_lorebook_snapshot(lb)
-    except Exception:
-        pass
-    return lb
-
-
-@app.get("/lorebooks/{lb_id}", response_model=Lorebook)
-async def get_lorebook(lb_id: int) -> Lorebook:
-    lb = _lorebooks.get(lb_id)
-    if lb is None:
-        raise HTTPException(status_code=404, detail="Lorebook not found")
-    return lb
-
-
-@app.delete("/lorebooks/{lb_id}", status_code=204)
-async def delete_lorebook(lb_id: int) -> None:
-    if lb_id not in _lorebooks:
-        raise HTTPException(status_code=404, detail="Lorebook not found")
-    del _lorebooks[lb_id]
-    _save_lorebooks()
-    return None
-
-
-class LorebookUpdate(BaseModel):
-    name: str | None = None
-    description: str | None = None
-    entry_ids: Optional[List[int]] = None
-
-
-@app.put("/lorebooks/{lb_id}", response_model=Lorebook)
-async def update_lorebook(lb_id: int, payload: LorebookUpdate) -> Lorebook:
-    lb = _lorebooks.get(lb_id)
-    if lb is None:
-        raise HTTPException(status_code=404, detail="Lorebook not found")
-    data = lb.model_dump()
-    if payload.name is not None:
-        data['name'] = payload.name
-    if payload.description is not None:
-        data['description'] = payload.description
-    if payload.entry_ids is not None:
-        data['entry_ids'] = payload.entry_ids
-    updated = Lorebook(**data)
-    _lorebooks[lb_id] = updated
-    _save_lorebooks()
-    try:
-        _save_lorebook_snapshot(updated)
-    except Exception:
-        pass
-    return updated
+# Legacy lorebook endpoints removed - now using database system
+# Legacy lorebook entry update endpoint removed - now using database router
 
 
 # ---------------------------------------------------------------------------
@@ -542,11 +377,32 @@ def _load_state() -> None:
 
     data = load_json("lore.json", {"next_id": 1, "items": []})
     _next_lore_id = int(data.get("next_id", 1))
-    _lore = {e["id"]: LoreEntry(**e) for e in data.get("items", [])}
+    _lore = {}
+    for e in data.get("items", []):
+        # Handle migration from old format (keyword) to new format (keywords, title)
+        try:
+            if "keyword" in e and "keywords" not in e:
+                # Old format: convert keyword to keywords list and use as title
+                e["keywords"] = [e["keyword"]]
+                e["title"] = e["keyword"]
+            _lore[e["id"]] = LoreEntry(**e)
+        except Exception as inner_e:
+            # Skip invalid entries during load
+            print(f"[CoolChat] Skipping invalid lore entry {e.get('id', 'unknown')}: {inner_e}")
+            continue
 
     data = load_json("lorebooks.json", {"next_id": 1, "items": []})
     _next_lorebook_id = int(data.get("next_id", 1))
-    _lorebooks = {lb["id"]: Lorebook(**lb) for lb in data.get("items", [])}
+    _lorebooks = {}
+    for lb in data.get("items", []):
+        # Handle migration from old format (entry_ids) to new database format
+        try:
+            # Remove entry_ids as they don't belong in Lorebook model anymore
+            lb_clean = {k: v for k, v in lb.items() if k != 'entry_ids'}
+            _lorebooks[lb["id"]] = Lorebook(**lb_clean)
+        except Exception as inner_e:
+            print(f"[CoolChat] Skipping invalid lorebook {lb.get('id', 'unknown')}: {inner_e}")
+            continue
 
     data = load_json("memory.json", {"next_id": 1, "items": []})
     _next_memory_id = int(data.get("next_id", 1))
@@ -624,52 +480,7 @@ def _save_lorebook_snapshot(lb: "Lorebook") -> None:
         pass
 
 
-def _parse_lorebook_data_to_entries(data: object) -> tuple[str, str, List["LoreEntryCreate"]]:
-    import os as _os
-    # Support SillyTavern World Info format and simple formats
-    def _st_to_entries(items):
-        out = []
-        for i in items or []:
-            if isinstance(i, str):
-                out.append(LoreEntryCreate(keyword=i, content=""))
-                continue
-            if not isinstance(i, dict):
-                continue
-            keys = i.get("keys") or i.get("triggers") or i.get("key") or []
-            if isinstance(keys, dict):
-                keys = list(keys.values())
-            kw = keys[0] if isinstance(keys, list) and keys else (i.get("keyword") or i.get("comment") or "")
-            content = i.get("content") or i.get("text") or i.get("entry") or ""
-            secondary = i.get("secondary_keys") or i.get("secondary_keywords") or i.get("keysecondary") or []
-            logic_map = {0: "AND ANY", 3: "AND ALL", 1: "NOT ALL", 2: "NOT ANY"}
-            logic_val = i.get("logic")
-            if logic_val is None:
-                sl = i.get("selectiveLogic")
-                if isinstance(sl, int):
-                    logic_val = logic_map.get(sl, "AND ANY")
-            if not logic_val:
-                logic_val = "AND ANY"
-            order = i.get("order") or 0
-            trigger = i.get("probability") or i.get("trigger") or 100
-            out.append(LoreEntryCreate(keyword=kw, content=content, keywords=keys if isinstance(keys, list) else [], logic=logic_val, secondary_keywords=secondary, order=order, trigger=trigger))
-        return out
-
-    name = "Imported Lorebook"
-    description = ""
-    if isinstance(data, list):
-        entries = _st_to_entries(data)
-    elif isinstance(data, dict):
-        entries_data = data.get("entries") or data.get("world_info") or []
-        if isinstance(entries_data, dict):
-            items = list(entries_data.values())
-        else:
-            items = entries_data
-        entries = _st_to_entries(items)
-        name = data.get("name") or data.get("book_name") or data.get("title") or name
-        description = data.get("description") or ""
-    else:
-        entries = []
-    return name, description, entries
+# Removed _parse_lorebook_data_to_entries - now using database-backed parser
 
 
 def _load_from_public_folders() -> None:
@@ -771,16 +582,7 @@ def _load_from_public_folders() -> None:
                 global _next_lorebook_id, _next_lore_id
                 lb = Lorebook(id=_next_lorebook_id, name=name, description=description, entry_ids=[])
                 for le in entries:
-                    entry_obj = LoreEntry(
-                        id=_next_lore_id,
-                        keyword=le.keyword,
-                        content=le.content,
-                        keywords=le.keywords or [],
-                        logic=le.logic or "AND ANY",
-                        secondary_keywords=le.secondary_keywords or [],
-                        order=le.order or 0,
-                        trigger=le.trigger or 100,
-                    )
+# Removed old memory-based lorebook loading - using database system now
                     _lore[_next_lore_id] = entry_obj
                     lb.entry_ids.append(_next_lore_id)
                     _next_lore_id += 1
@@ -2961,60 +2763,7 @@ async def generate_image(payload: GenerateImageRequest) -> GenerateFromChatRespo
 # ---------------------------------------------------------------------------
 
 
-@app.post("/lorebooks/import", response_model=Lorebook, status_code=201)
-async def import_lorebook(file: UploadFile = File(...)) -> Lorebook:
-    raw = await file.read()
-    import json as _json
-    try:
-        data = _json.loads(raw.decode("utf-8"))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid lorebook file: {e}")
-    # Support SillyTavern World Info format and simple formats
-    def _st_to_entries(items):
-        out = []
-        for i in items or []:
-            # Accept either dict entries or simple strings
-            if isinstance(i, str):
-                out.append(LoreEntryCreate(keyword=i, content=""))
-                continue
-            if not isinstance(i, dict):
-                continue
-            # Map Eldoria-like schema
-            keys = i.get("keys") or i.get("triggers") or i.get("key") or []
-            if isinstance(keys, dict):
-                keys = list(keys.values())
-            kw = keys[0] if isinstance(keys, list) and keys else (i.get("keyword") or i.get("comment") or "")
-            content = i.get("content") or i.get("text") or i.get("entry") or ""
-            secondary = i.get("secondary_keys") or i.get("secondary_keywords") or i.get("keysecondary") or []
-            # Logic mapping: selectiveLogic numeric -> string
-            logic_map = {0: "AND ANY", 3: "AND ALL", 1: "NOT ALL", 2: "NOT ANY"}
-            logic_val = i.get("logic")
-            if logic_val is None:
-                sl = i.get("selectiveLogic")
-                if isinstance(sl, int):
-                    logic_val = logic_map.get(sl, "AND ANY")
-            if not logic_val:
-                logic_val = "AND ANY"
-            order = i.get("order") or 0
-            trigger = i.get("probability") or i.get("trigger") or 100
-            out.append(LoreEntryCreate(keyword=kw, content=content, keywords=keys if isinstance(keys, list) else [], logic=logic_val, secondary_keywords=secondary, order=order, trigger=trigger))
-        return out
-
-    if isinstance(data, (list, dict)):
-        fname = getattr(file, 'filename', None)
-        inferred = os.path.splitext(os.path.basename(fname))[0] if fname else None
-        name, description, entries = _parse_lorebook_data_to_entries(data)
-        if inferred and name == "Imported Lorebook":
-            name = inferred
-        print("[CoolChat] lore import: parsed entries count:", len(entries))
-        lb = await create_lorebook(LorebookCreate(name=name, description=description, entries=entries))
-        try:
-            _save_lorebook_snapshot(lb)
-        except Exception:
-            pass
-        return lb
-    else:
-        raise HTTPException(status_code=400, detail="Unsupported lorebook JSON structure")
+# Removed conflicting /lorebooks/import endpoint - now using database router
 
 
 # ---------------------------------------------------------------------------
@@ -3117,22 +2866,5 @@ async def save_prompts(payload: Dict[str, object]):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.get("/lorebooks/{lb_id}/export")
-async def export_lorebook(lb_id: int):
-    lb = _lorebooks.get(lb_id)
-    if not lb:
-        raise HTTPException(status_code=404, detail="Lorebook not found")
-    entries = []
-    for eid in lb.entry_ids:
-        e = _lore.get(eid)
-        if not e:
-            continue
-        entries.append({"keys": [e.keyword], "content": e.content})
-    st = {
-        "name": lb.name,
-        "description": lb.description,
-        "entries": entries,
-    }
-    from fastapi.responses import JSONResponse
-    return JSONResponse(st, media_type="application/json")
+# Legacy lorebook export removed - now using database system
 

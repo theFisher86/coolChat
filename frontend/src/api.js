@@ -97,7 +97,7 @@ export async function getModels(provider) {
 
 // Lorebooks API
 export async function listLorebooks() {
-  const res = await fetch('/lorebooks');
+  const res = await fetch('/lorebooks/');
   if (!res.ok) throw new Error(`List lorebooks failed: ${res.status}`);
   return res.json();
 }
@@ -161,7 +161,7 @@ export async function generateImageDirect(prompt, sessionId = 'default') {
 }
 
 export async function updateLoreEntry(id, data) {
-  const res = await fetch(`/lore/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  const res = await fetch(`/lorebooks/entries/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
   if (!res.ok) throw new Error(`Update lore failed: ${res.status}`);
   return res.json();
 }
@@ -172,7 +172,80 @@ export async function updateLorebook(id, data) {
   return res.json();
 }
 
+export async function getLorebook(id) {
+  const res = await fetch(`/lorebooks/${id}`);
+  if (!res.ok) throw new Error(`Get lorebook failed: ${res.status}`);
+  return res.json();
+}
+
+export async function createLoreEntry(data) {
+  const res = await fetch('/lorebooks/entries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  if (!res.ok) throw new Error(`Create lore entry failed: ${res.status}`);
+  return res.json();
+}
+
+export async function deleteLoreEntry(id) {
+  const res = await fetch(`/lorebooks/entries/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`Delete lore entry failed: ${res.status}`);
+  return res.json();
+}
+
+export async function deleteLorebook(id) {
+  const res = await fetch(`/lorebooks/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`Delete lorebook failed: ${res.status}`);
+  return res.json();
+}
+
 // Chats
+// Lorebook search and advanced operations
+export async function searchLorebooks(query, limit = 10) {
+  const params = new URLSearchParams({ q: query || '', limit: limit.toString() });
+  const res = await fetch(`/lorebooks/search?${params}`);
+  if (!res.ok) throw new Error(`Search lorebooks failed: ${res.status}`);
+  return res.json();
+}
+
+export async function bulkCreateLoreEntries(bulkData) {
+  const res = await fetch('/lorebooks/entries/bulk', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(bulkData),
+  });
+  if (!res.ok) throw new Error(`Bulk create failed: ${res.status}`);
+  return res.json();
+}
+
+export async function linkCharacterToLorebook(characterId, lorebookId) {
+  const res = await fetch(`/lorebooks/characters/${characterId}/lorebooks/${lorebookId}`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error(`Link character to lorebook failed: ${res.status}`);
+  return res.json();
+}
+
+export async function unlinkCharacterFromLorebook(characterId, lorebookId) {
+  const res = await fetch(`/lorebooks/characters/${characterId}/lorebooks/${lorebookId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error(`Unlink character from lorebook failed: ${res.status}`);
+  return res.json();
+}
+
+export async function getCharacterLorebooks(characterId) {
+  const res = await fetch(`/lorebooks/characters/${characterId}/lorebooks`);
+  if (!res.ok) throw new Error(`Get character lorebooks failed: ${res.status}`);
+  return res.json();
+}
+
+export async function injectLoreContext(requestData) {
+  const res = await fetch('/lorebooks/inject_context', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestData),
+  });
+  if (!res.ok) throw new Error(`Inject context failed: ${res.status}`);
+  return res.json();
+}
 export async function listChats() {
   const res = await fetch('/chats');
   if (!res.ok) throw new Error(`List chats failed: ${res.status}`);

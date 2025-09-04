@@ -74,8 +74,12 @@ import {
   updateCharacter,
   deleteCharacter,
   updateLoreEntry,
+  createLoreEntry,
+  deleteLoreEntry,
   updateLorebook,
+  deleteLorebook,
   listLorebooks,
+  getLorebook,
   listChats,
   resetChat,
   suggestLoreFromChat,
@@ -88,12 +92,18 @@ import {
   sendChat,
 } from './api.js';
 
+// Enhanced lorebook imports
+import './components/lorebook/LorebookStyles.css';
+import { LorebookDashboard } from './components/lorebook/LorebookDashboard';
+import { useLorebookStore } from './stores/lorebookStore';
+
 function App() {
   // Zustand store connections
   const chat = useChat();
   const uiStore = useUIStore();
   const configStore = useConfigStore();
   const dataStore = useDataStore();
+  const lorebookStore = useLorebookStore();
   const { generateImage, generateImageFromLastMessage } = useImageGeneration();
   const { suggestLore } = useLoreSuggestions();
 
@@ -1041,99 +1051,7 @@ function App() {
         )}
 
         {uiStore.showLorebooks && (
-          <section className="characters overlay">
-            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ margin: 0 }}>Lorebooks</h2>
-              <button className="secondary" onClick={() => uiStore.setShowLorebooks(false)}>Close</button>
-            </div>
-            <ActiveLorebooks lorebooks={dataStore.lorebooks} />
-            <div className="row">
-              <label className="secondary" style={{ padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}>
-                Import Lorebook JSON
-                <input type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={async (e) => {
-                  const f = e.target.files?.[0]; if (!f) return;
-                  try { const fd = new FormData(); fd.append('file', f); const res = await fetch('/lorebooks/import', { method: 'POST', body: fd }); if (!res.ok) throw new Error('Import failed'); dataStore.loadLorebooks();} catch (err) { console.error(err); alert(err.message); }
-                  e.target.value = '';
-                }} />
-              </label>
-            </div>
-            <div className="row" style={{ gap: 8 }}>
-              <select value={dataStore.selectedLorebook?.id || ''} onChange={(e) => { const id = parseInt(e.target.value,10); const lb = dataStore.lorebooks.find(x => x.id===id); dataStore.setSelectedLorebook(lb||null); }}>
-                {dataStore.lorebooks.map(lb => (<option key={lb.id} value={lb.id}>{lb.name}</option>))}
-              </select>
-              {dataStore.selectedLorebook && (
-                <>
-                <input style={{ flex: 1 }} value={dataStore.selectedLorebook.name} onChange={(e) => dataStore.setSelectedLorebook({ ...dataStore.selectedLorebook, name: e.target.value })} onBlur={async () => { try { await updateLorebook(dataStore.selectedLorebook.id, { name: dataStore.selectedLorebook.name }); } catch (e) { alert(e.message); } }} />
-                <input style={{ flex: 2 }} value={dataStore.selectedLorebook.description} onChange={(e) => dataStore.setSelectedLorebook({ ...dataStore.selectedLorebook, description: e.target.value })} onBlur={async () => { try { await updateLorebook(dataStore.selectedLorebook.id, { description: dataStore.selectedLorebook.description }); } catch (e) { alert(e.message); } }} />
-                </>
-              )}
-            </div>
-            <div className="char-list">
-              {dataStore.loreEntries.map(le => (
-                <div key={le.id} className="char-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                <div className="row" style={{ gap: 8, width: '100%', alignItems: 'center' }}>
-                    <button className="secondary" onClick={() => uiStore.toggleExpandedEntry(le.id)}>{uiStore.expandedEntries[le.id] ? '▾' : '▸'}</button>
-                    <input style={{ flex: 1 }} value={le.title || le.keyword || '(untitled)'} onChange={(e) => dataStore.setLoreEntries(dataStore.loreEntries.map(x => x.id===le.id? { ...x, title: e.target.value }: x))} onBlur={async (e) => { try { await dataStore.updateLoreEntry(le.id, { title: e.target.value }); } catch (err) { console.error(err); alert('Failed to save entry title: ' + err.message); } }} />
-                  </div>
-                  {uiStore.expandedEntries[le.id] && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <div className="muted">Primary Keywords</div>
-                        <input value={(le.keywords||[]).join(', ')} onChange={(e) => dataStore.setLoreEntries(dataStore.loreEntries.map(x => x.id===le.id? { ...x, keywords: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) }: x))} onBlur={async (e) => { try { await dataStore.updateLoreEntry(le.id, { keywords: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) }); } catch (err) { console.error(err); alert('Failed to save keywords: ' + err.message); } }} />
-                      </div>
-                      <div className="muted">Logic</div>
-                      <select value={le.logic || 'AND ANY'} onChange={(e) => dataStore.setLoreEntries(dataStore.loreEntries.map(x => x.id===le.id? { ...x, logic: e.target.value }: x))} onBlur={async (e) => { try { await dataStore.updateLoreEntry(le.id, { logic: e.target.value }); } catch (err) { alert('Failed to save logic: ' + err.message); } }}>
-                        <option>AND ANY</option>
-                        <option>AND ALL</option>
-                        <option>NOT ANY</option>
-                        <option>NOT ALL</option>
-                      </select>
-                      <div className="muted">Secondary Keywords</div>
-                      <input value={(le.secondary_keywords||[]).join(', ')} onChange={(e) => dataStore.setLoreEntries(dataStore.loreEntries.map(x => x.id===le.id? { ...x, secondary_keywords: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) }: x))} onBlur={async (e) => { try { await dataStore.updateLoreEntry(le.id, { secondary_keywords: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) }); } catch (err) { alert('Failed to save secondary keywords: ' + err.message); } }} />
-                      <div className="muted">Order</div>
-                      <input type="number" value={le.order||0} onChange={(e) => dataStore.setLoreEntries(dataStore.loreEntries.map(x => x.id===le.id? { ...x, order: parseInt(e.target.value,10) }: x))} onBlur={async (e) => { try { await dataStore.updateLoreEntry(le.id, { order: parseInt(e.target.value,10) }); } catch (err) { alert('Failed to save order: ' + err.message); } }} />
-                      <div className="muted">Trigger %</div>
-                      <input type="number" value={le.trigger||100} onChange={(e) => dataStore.setLoreEntries(dataStore.loreEntries.map(x => x.id===le.id? { ...x, trigger: parseInt(e.target.value,10) }: x))} onBlur={async (e) => { try { await dataStore.updateLoreEntry(le.id, { trigger: parseInt(e.target.value,10) }); } catch (err) { alert('Failed to save trigger: ' + err.message); } }} />
-                      <div className="muted">Content</div>
-                      <textarea rows={4} value={le.content} onChange={(e) => dataStore.setLoreEntries(dataStore.loreEntries.map(x => x.id===le.id? { ...x, content: e.target.value }: x))} onBlur={async (e) => { try { await dataStore.updateLoreEntry(le.id, { content: e.target.value }); } catch (err) { alert('Failed to save content: ' + err.message); } }} />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-            {dataStore.selectedLorebook && (
-              <div className="row">
-                <button onClick={async () => {
-                  try {
-                    // Create entry immediately in the background
-                    const r = await fetch('/lore', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ keyword: '', content: '' })
-                    });
-                    if (!r.ok) throw new Error('Failed to create entry');
-                    const entry = await r.json();
-
-                    // Update lorebook with new entry ID
-                    const currentIds = dataStore.selectedLorebook?.entry_ids || [];
-                    const updatedIds = [...currentIds, entry.id];
-                    await updateLorebook(dataStore.selectedLorebook.id, { entry_ids: updatedIds });
-
-                    // Add the entry to the UI
-                    const currentEntries = dataStore.loreEntries;
-                    dataStore.setLoreEntries([...currentEntries, entry]);
-
-                    // Refresh lorebooks data
-                    dataStore.loadLorebooks();
-
-                  } catch (e) {
-                    console.error(e);
-                    alert(e.message);
-                  }
-                }}>+ Add Entry</button>
-              </div>
-            )}
-          </section>
+          <LorebookDashboard onClose={() => uiStore.setShowLorebooks(false)} />
         )}
 
         <div className="messages" aria-live="polite" ref={messagesRef}>
