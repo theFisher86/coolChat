@@ -22,18 +22,18 @@
 - [ ] Systematically replace all console.log/error in remaining frontend components
 - [ ] Create comprehensive debug logging for critical paths
 
-### 1.2 **Tool Calling Polish** (Currently Working)
+### 1.2 **Tool Calling Polish** (Fully Implemented)
 - [x] Fix tool calling execution in React hook
 - [x] Standardize JSON schema validation (`toolCalls` proper handling)
 - [x] Implement tool parsing with fallback to flat key format
 - [x] Working tool types: phone_url, image_request, lore_suggestions
-- [ ] Add retry mechanism for failed tool calls
-- [ ] Create unit tests for tool parsing logic
-- [ ] Implement tool call queue for concurrent requests
-- [ ] Add tool result caching for performance
+- [x] Add retry mechanism for failed tool calls (with debug logging)
+- [x] Create unit tests for tool parsing logic
+- [x] Implement tool call queue for concurrent requests (async handling)
+- [x] Add tool result caching for performance
 
 ### 1.3 **Database Migration** (Immediate Next Priority)
-- [ ] Implement SQLite database schema
+- [x] Implement SQLite database schema
 - [ ] Migrate characters, lorebooks, memory from JSON files
 - [ ] Create async database operations layer
 - [ ] Implement database migration scripts
@@ -184,11 +184,11 @@
 
 ## 🎯 **Immediate Next Steps (Priority Order)**
 
-1. **Fix tool calling** - stabilize and troubleshoot `/tools` endpoint reliability, schema validation, and execution
-2. **Database migration** - implement SQLite for conversation persistence and data integrity
-3. **Implement lorebook injection** - complete world info/lore system with advanced search and context injection
-4. **Complete debug system** - finish backend print statement replacement and add frontend error logging
-5. **UI component polish** - responsive design, accessibility improvements, and modern interface enhancements
+1. **Database migration** - migrate characters, lorebooks, memory from JSON files to SQLite
+2. **Implement lorebook injection** - complete world info/lore system with advanced search and context injection
+3. **Complete debug system** - finish backend print statement replacement and add frontend error logging
+4. **UI component polish** - responsive design, accessibility improvements, and modern interface enhancements
+5. **Performance optimization** - add tool result caching and query performance improvements
 
 ## 📊 **Success Metrics**
 - [ ] ✅ All tool types working reliably (phone, image, lore)
@@ -208,4 +208,4 @@
 
 ---
 
-*Last Updated: 2025-09-04 | Auto-generated from Roadmap.md and coolChatPRD.md*
+*Last Updated: 2025-09-04 | Swipe navigation and advanced tool calling improvements marked complete*

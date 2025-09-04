@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+timport React, { useEffect, useState, useRef } from 'react';
 import './App.css';
 import * as pluginHost from './pluginHost';
 import { debugLog, debugToolParsing, debugLLMResponses } from './debug';
