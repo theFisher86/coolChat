@@ -331,7 +331,7 @@ async def import_lorebook(file: UploadFile = File(...), db: Session = Depends(ge
 @router.get("/search")
 async def search_lorebooks(
     request: Request,
-    q: str = Query(..., description="Search query"),
+    q: Optional[str] = Query(None, description="Search query"),
     limit: int = Query(10, description="Maximum number of results"),
     db: Session = Depends(get_db)
 ):
@@ -340,7 +340,7 @@ async def search_lorebooks(
         raise HTTPException(status_code=429, detail="Too many search requests. Please wait a minute before trying again.")
     """Search lore entries with advanced keyword matching logic"""
     results = []
-    query_terms = [term.strip().lower() for term in q.split() if term.strip()]
+    query_terms = [term.strip().lower() for term in (q or "").split() if term.strip()]
 
     if not query_terms:
         return {"results": [], "total_found": 0}
@@ -349,6 +349,9 @@ async def search_lorebooks(
     content_filters = [LoreEntry.content.ilike(f"%{term}%") for term in query_terms]
     keyword_filters = [LoreEntry.keywords.cast(String).ilike(f"%{term}%") for term in query_terms]
     secondary_keyword_filters = [LoreEntry.secondary_keywords.cast(String).ilike(f"%{term}%") for term in query_terms]
+
+    # Combine filters - entries that match any term in content or keywords
+    combined_filters = content_filters + keyword_filters + secondary_keyword_filters
 
     # Combine filters - entries that match any term in content or keywords
     combined_filters = content_filters + keyword_filters + secondary_keyword_filters
@@ -417,7 +420,8 @@ async def search_lorebooks(
         # Additional scoring for content matches
         if matched:
             # Exact phrase match gets highest score
-            if q.lower() in content_lower:
+            query_lower = (q or "").lower()
+            if query_lower and query_lower in content_lower:
                 score += 25
 
             # Apply trigger percentage (higher means more likely to be included)
