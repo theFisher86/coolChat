@@ -33,11 +33,14 @@ This document outlines recommended features, changes, and improvements for the C
 *   **Feature:** Versioning for character cards, allowing users to revert to previous states.
 
 ### 2.2 Enhanced Lorebook Functionality
-**Problem:** Lorebook entry management is functional but could be more powerful.
-**Recommendation:** Add more sophisticated lore management features.
-*   **Feature:** Hierarchical lorebooks or nested entries for better organization of complex world information.
-*   **Feature:** Visual graph representation of lore connections (e.g., using D3.js or similar libraries in the frontend).
-*   **Improvement:** Advanced search and filtering for lore entries.
+**Problem:** Lorebook entry management exists but core functionality needs completion.
+**Recommendation:** Complete core lorebook functionality before adding advanced features.
+*   **Issue:** Lorebook keywords with spaces and commas support needs implementation.
+*   **Issue:** Search functionality returning 422 errors needs to be fixed.
+*   **Issue:** UI editor modal and form layout needs completion.
+*   **Feature:** Hierarchical lorebooks or nested entries for better organization of complex world information (Future).
+*   **Feature:** Visual graph representation of lore connections (e.g., using D3.js or similar libraries in the frontend) (Future).
+*   **Improvement:** Advanced search and filtering for lore entries (Future).
 
 ### 2.3 Improved Memory System
 **Problem:** Memory entries are summarized, but their utilization in chat context could be more dynamic.

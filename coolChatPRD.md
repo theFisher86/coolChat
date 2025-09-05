@@ -57,7 +57,7 @@ coolChat is a lightweight, Python-based LLM client inspired by **SillyTavern**, 
 
 * ✅ **Chat with LLMs** (OpenAI, local backends, API endpoints).
 * ✅ **Character cards** (import/export JSON, PNG-embedded metadata).
-* 🔲 **World Info / Lorebooks**: structured knowledge injection.
+* 🔶 **World Info / Lorebooks**: structured knowledge injection (backend implemented, UI needs completion).
 * 🔲 **Group chats**: multiple bots + user.
 * 🔲 **Session management**: save/load conversations.
 * 🔲 **Memory persistence**: long-term context caching.
@@ -133,6 +133,7 @@ coolChat is a lightweight, Python-based LLM client inspired by **SillyTavern**, 
 
 * Tool calling works with at least 3 sample tools (math, search, local file lookup).
 * Character cards can be imported/exported and used in conversation.
+* Lorebook system fully functional (keywords with spaces, search without 422 errors, improved UI).
 * Lorebook injects text when keywords triggered.
 * Conversations persist across reload.
 * Plugins can be enabled/disabled without code edits.

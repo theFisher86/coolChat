@@ -52,7 +52,12 @@
 ## 🚀 **PHASE 2: Feature Completeness** (Priority: MEDIUM)
 
 ### 2.1 **Core Feature Implementation**
-- [ ] Complete lorebook injection system with advanced search
+- [ ] **Complete lorebook system fixes (HIGH PRIORITY)**:
+  - [ ] Fix keywords field to support spaces in keywords (e.g., "crystal power", "safe haven")
+  - [ ] Fix 422 search error in lorebook search endpoint
+  - [ ] Complete lorebook editor modal UI improvements
+  - [ ] Improve form layout with better space allocation for keywords/content fields
+- [ ] Complete lorebook injection system (backend implemented, UI needs work)
 - [ ] Implement multi-chat/group bots capability
 - [ ] Add comprehensive session management (save/load/delete)
 - [ ] Create character import/export with PNG metadata support
@@ -184,16 +189,18 @@
 
 ## 🎯 **Immediate Next Steps (Priority Order)**
 
-1. **Database migration** - migrate characters, lorebooks, memory from JSON files to SQLite
-2. **Implement lorebook injection** - complete world info/lore system with advanced search and context injection
-3. **Complete debug system** - finish backend print statement replacement and add frontend error logging
-4. **UI component polish** - responsive design, accessibility improvements, and modern interface enhancements
-5. **Performance optimization** - add tool result caching and query performance improvements
+1. ⚡ **Fix lorebook functionality** - Complete keywords field, search function, and UI improvements
+2. **Database migration** - migrate characters, lorebooks, memory from JSON files to SQLite
+3. **Implement lorebook injection** - complete world info/lore system with advanced search and context injection
+4. **Complete debug system** - finish backend print statement replacement and add frontend error logging
+5. **UI component polish** - responsive design, accessibility improvements, and modern interface enhancements
+6. **Performance optimization** - add tool result caching and query performance improvements
 
 ## 📊 **Success Metrics**
 - [ ] ✅ All tool types working reliably (phone, image, lore)
 - [ ] ✅ Persistent data storage and backup/restore
 - [ ] ✅ Character import/export functionality
+- [x] 🔶 Lorebook system fully functional (keywords, search, UI)
 - [ ] ⚠️ 95% test coverage across codebase
 - [ ] ⚠️ Sub-1-second response times for all operations
 - [ ] ⚠️ WCAG AA accessibility compliance
