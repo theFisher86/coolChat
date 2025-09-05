@@ -1051,7 +1051,9 @@ function App() {
         )}
 
         {uiStore.showLorebooks && (
-          <LorebookDashboard onClose={() => uiStore.setShowLorebooks(false)} />
+          <section className="panel overlay">
+            <LorebookDashboard onClose={() => uiStore.setShowLorebooks(false)} />
+          </section>
         )}
 
         <div className="messages" aria-live="polite" ref={messagesRef}>

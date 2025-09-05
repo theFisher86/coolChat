@@ -20,6 +20,7 @@ from fastapi.responses import StreamingResponse
 from .config import AppConfig, ProviderConfig, load_config, save_config, mask_secret, Provider, ImagesConfig, ImageProvider
 from .models import Lorebook, LoreEntry
 from .storage import load_json, save_json, public_dir
+from .database import SessionLocal
 from .routers import lore
 import os
 
@@ -1095,21 +1096,21 @@ Include optional caption text before the JSON when appropriate.'''
         if char.lorebook_ids:
             lore_texts = []
             triggered_any = False
-            for lb_id in char.lorebook_ids:
-                lb = _lorebooks.get(lb_id)
-                if not lb:
-                    continue
-                for eid in lb.entry_ids:
-                    e = _lore.get(eid)
-                    if e:
+            db = SessionLocal()
+            try:
+                for lb_id in char.lorebook_ids:
+                    lb = db.query(Lorebook).filter(Lorebook.id == lb_id).first()
+                    if not lb:
+                        continue
+                    for entry in lb.entries:
                         include = False
                         if recent_text:
                             hay = recent_text.lower()
-                            primaries = [x.lower() for x in (e.keywords or [e.keyword]) if x]
-                            seconds = [x.lower() for x in (e.secondary_keywords or []) if x]
+                            primaries = [x.lower() for x in (entry.keywords or []) if x]
+                            seconds = [x.lower() for x in (entry.secondary_keywords or []) if x]
                             found_primary = [k for k in primaries if k in hay]
                             found_secondary = [k for k in seconds if k in hay]
-                            logic = (e.logic or "AND ANY").upper()
+                            logic = (entry.logic or "AND ANY").upper()
                             if logic == "AND ALL":
                                 include = len(found_primary) == len(primaries) and (
                                     not seconds or len(found_secondary) == len(seconds)
@@ -1123,8 +1124,11 @@ Include optional caption text before the JSON when appropriate.'''
                         else:
                             include = True
                         if include:
-                            lore_texts.append(f"[{e.keyword}] {e.content}")
+                            keyword = entry.keywords[0] if entry.keywords else entry.title
+                            lore_texts.append(f"[{keyword}] {entry.content}")
                             triggered_any = True
+            finally:
+                db.close()
             if lore_texts:
                 title = "Triggered World Info" if triggered_any else "World Info"
                 segments.append(f"{title}:\n" + "\n".join(lore_texts))
@@ -1136,16 +1140,31 @@ Include optional caption text before the JSON when appropriate.'''
         actives = getattr(_cfg, "active_lorebook_ids", []) or []
         if actives:
             lore_texts = []
-            for lb_id in actives:
-                lb = _lorebooks.get(lb_id)
-                if not lb:
-                    continue
-                for eid in lb.entry_ids:
-                    e = _lore.get(eid)
-                    if e:
-                        lore_texts.append(f"[{e.keyword}] {e.content}")
-            if lore_texts:
-                segments.append("Active Lorebooks:\n" + "\n".join(lore_texts))
+            db = SessionLocal()
+            try:
+                for lb_id in actives:
+                    lb = db.query(Lorebook).filter(Lorebook.id == lb_id).first()
+                    if not lb:
+                        continue
+                    for entry in lb.entries:
+                        trigger_found = False
+                        if recent_text:
+                            hay = recent_text.lower()
+                            primaries = [x.lower() for x in (entry.keywords or []) if x]
+                            logic = (entry.logic or "AND ANY").upper()
+                            for term in hay.split():
+                                if any(term in kw for kw in primaries):
+                                    trigger_found = True
+                                    break
+                        else:
+                            trigger_found = True
+                        if trigger_found:
+                            keyword = entry.keywords[0] if entry.keywords else entry.title
+                            lore_texts.append(f"[{keyword}] {entry.content}")
+                if lore_texts:
+                    segments.append("Active Lorebooks:\n" + "\n".join(lore_texts))
+            finally:
+                db.close()
     except Exception:
         pass
 
@@ -1676,6 +1695,23 @@ async def replace_config(raw: Dict[str, object]):
         return {"status": "ok"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid config: {e}")
+
+
+@app.put("/config/active_lorebook_ids")
+async def update_active_lorebook_ids(payload: Dict[str, List[int]]):
+    """Update the active lorebook IDs for chat context."""
+    try:
+        ids = payload.get("ids", [])
+        if not isinstance(ids, list):
+            raise HTTPException(status_code=400, detail="Invalid payload: ids must be a list")
+        cfg = load_config()
+        cfg.active_lorebook_ids = ids
+        save_config(cfg)
+        return {"status": "ok", "active_lorebook_ids": cfg.active_lorebook_ids}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update active lorebook IDs: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -2359,17 +2395,20 @@ async def lore_suggest_from_chat(payload: Dict[str, str] | None = None) -> LoreS
     # Collect existing keywords from active lorebooks
     existing = set()
     active_ids = (getattr(cfg, 'active_lorebook_ids', []) or [])
-    for lb_id in active_ids:
-        lb = _lorebooks.get(lb_id)
-        if not lb:
-            continue
-        for eid in lb.entry_ids:
-            e = _lore.get(eid)
-            if e and e.keyword:
-                existing.add(e.keyword.strip().lower())
-            for k in (e.keywords or []):
-                if k:
-                    existing.add(k.strip().lower())
+    db = SessionLocal()
+    try:
+        for lb_id in active_ids:
+            lb = db.query(Lorebook).filter(Lorebook.id == lb_id).first()
+            if not lb:
+                continue
+            for entry in lb.entries:
+                if entry.keyword:
+                    existing.add(entry.keyword.strip().lower())
+                for k in (entry.keywords or []):
+                    if k:
+                        existing.add(k.strip().lower())
+    finally:
+        db.close()
     # Build prompt
     prompt = (
         "You are a World Info assistant. Based on the conversation below, "

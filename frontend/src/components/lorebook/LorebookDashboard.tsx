@@ -6,6 +6,7 @@ import { LorebookGrid } from './LorebookGrid';
 import { LorebookSearch } from './LorebookSearch';
 import { LorebookBulkActions } from './LorebookBulkActions';
 import { LorebookImport } from './LorebookImport';
+import { ActiveLorebooks } from './ActiveLorebooks';
 
 const LorebookDashboard: React.FC = () => {
   const store = useLorebookStore();
@@ -261,6 +262,9 @@ const LorebookDashboard: React.FC = () => {
           {store.lorebooks.length} lorebooks, {store.lorebooks.reduce((sum, lb) => sum + lb.entry_count, 0)} total entries
         </span>
       </div>
+
+      {/* Active Lorebooks for Chat Context */}
+      <ActiveLorebooks lorebooks={store.lorebooks} />
 
       {/* Main Content */}
       <div className="dashboard-content">
