@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import './App.css';
 import * as pluginHost from './pluginHost';
 
@@ -95,6 +96,7 @@ import {
 // Enhanced lorebook imports
 import './components/lorebook/LorebookStyles.css';
 import { LorebookDashboard } from './components/lorebook/LorebookDashboard';
+import { useChatStore } from './stores';
 import { useLorebookStore } from './stores/lorebookStore';
 
 function App() {
@@ -102,6 +104,7 @@ function App() {
   const chat = useChat();
   const uiStore = useUIStore();
   const configStore = useConfigStore();
+  const chatStore = useChatStore();
   const dataStore = useDataStore();
   const lorebookStore = useLorebookStore();
   const { generateImage, generateImageFromLastMessage } = useImageGeneration();
@@ -314,8 +317,18 @@ function App() {
     const trimmed = chat.input.trim();
     if (!trimmed) return;
     try {
+      console.log(`[${new Date().toISOString()}] onSubmit: Starting submit, current messages:`, chat.messages.length, 'messages');
+      // Clear input first for immediate user feedback
+      chat.setInput('');
+      console.log(`[${new Date().toISOString()}] onSubmit: Before appending user message, messages:`, chat.messages.map(m => ({ role: m.role, content: m.content.slice(0,50) })));
+      flushSync(() => chatStore.setMessages((prev) => [...prev, { role: 'user', content: trimmed } ]));
+      // Use direct store access to get current messages
+      const currentMessages = useChatStore.getState().messages;
+      console.log(`[${new Date().toISOString()}] onSubmit: After appending user message, messages:`, currentMessages.map(m => ({ role: m.role, content: m.content.slice(0,50) })));
       const result = await chat.sendMessage(trimmed);
       await debugLLMResponses('Raw LLM response: ' + result);
+      const afterSendMessages = useChatStore.getState().messages;
+      console.log(`[${new Date().toISOString()}] onSubmit: after sendMessage, current messages:`, afterSendMessages.map(m => ({ role: m.role, content: m.content.slice(0,50) })));
       // Try to parse tool calls using improved extraction function
       let handled = false;
       let captionText = '';
@@ -333,15 +346,23 @@ function App() {
             if (!tc || !tc.type) continue;
             if (tc.type === 'image_request' && tc.payload?.prompt) {
               await generateImage(tc.payload.prompt);
+              if (captionText) {
+                flushSync(() => chatStore.setMessages((prev) => [...prev, { role: 'assistant', content: captionText }]));
+              }
               handled = true;
             } else if (tc.type === 'phone_url' && tc.payload?.url) {
               let u = tc.payload.url; if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); uiStore.setPhoneOpen(true);
               if (captionText) {
-                chat.setMessages([...chat.messages, { role: 'assistant', content: captionText }]);
+                flushSync(() => chatStore.setMessages((prev) => [...prev, { role: 'assistant', content: captionText }]));
               }
               handled = true;
             } else if (tc.type === 'lore_suggestions' && Array.isArray(tc.payload?.items)) {
+              console.log('[DEBUG] Lore suggestions tool call parsed (items):', tc.payload.items);
               setSuggests(tc.payload.items.map(x => ({ keyword: x.keyword, content: x.content })));
+              uiStore.setSuggestOpen(true); handled = true;
+            } else if (tc.type === 'lore_suggestions' && Array.isArray(tc.payload?.suggestions)) {
+              console.log('[DEBUG] Lore suggestions tool call parsed (suggestions):', tc.payload.suggestions);
+              setSuggests(tc.payload.suggestions.map(x => ({ keyword: x.keyword, content: x.content })));
               uiStore.setSuggestOpen(true); handled = true;
             }
           }
@@ -358,12 +379,13 @@ function App() {
             let u = obj.phone_url; if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); uiStore.setPhoneOpen(true);
             if (captionText) {
               debugToolParsing('Adding caption message for phone_url: ' + captionText);
-              chat.setMessages([...chat.messages, { role: 'assistant', content: captionText }]);
+              flushSync(() => chatStore.setMessages((prev) => [...prev, { role: 'assistant', content: captionText }]));
             }
             handled = true;
           }
           if (obj && Array.isArray(obj.lore_suggestions)) {
             debugToolParsing('Found flat key: lore_suggestions');
+            console.log('[DEBUG] Lore suggestions flat key parsed:', obj.lore_suggestions);
             setSuggests(obj.lore_suggestions); uiStore.setSuggestOpen(true);
             handled = true;
           }
@@ -376,6 +398,14 @@ function App() {
         }
       } catch (e) { console.warn('Tool parse failed', e); }
       debugToolParsing('Parsing complete. Handled: ' + handled + ', Caption text: ' + captionText);
+      const afterProcessingMessages = useChatStore.getState().messages;
+      console.log(`[${new Date().toISOString()}] onSubmit: after tool processing, handled:`, handled, 'messages:', afterProcessingMessages.map(m => ({ role: m.role, content: m.content.slice(0,50) })));
+    
+      // If no tool calls were processed, add the raw response as a regular message
+      if (!handled) {
+        debugToolParsing('No tool calls handled, adding response text to chat');
+        flushSync(() => chatStore.setMessages((prev) => [...prev, { role: 'assistant', content: result }]));
+      }
     } catch (err) {
       console.error('Error sending message:', err);
       showToast(err.message, 'error');
@@ -1057,7 +1087,12 @@ function App() {
         )}
 
         <div className="messages" aria-live="polite" ref={messagesRef}>
-            {chat.messages.map((m, idx) => {
+            {(() => {
+              const renderMessages = useChatStore.getState().messages;
+              console.log(`[${new Date().toISOString()}] Messages render: ${renderMessages.length} messages`, renderMessages.map(m => ({ role: m.role, content: m.content.slice(0,50) })));
+              return null;
+            })()}
+            {chatStore.messages.map((m, idx) => {
               const messageId = m.id || `msg-${idx}`;
               const isHovered = hoveredMessageId === idx && controlsVisible;
               const isEditingThis = editingMessage === idx;
@@ -2010,7 +2045,9 @@ function AppearanceTab() {
 }
 
 function SuggestLoreModal({ suggestions, onClose, onApply }) {
+  console.log('[DEBUG] SuggestLoreModal received suggestions:', suggestions);
   const [rows, setRows] = useState(() => (suggestions || []).map(s => ({ include: true, keyword: s.keyword || '', content: s.content || '' })));
+  console.log('[DEBUG] SuggestLoreModal rows initialized:', rows);
   const [lbOptions, setLbOptions] = useState([]);
   const [selLb, setSelLb] = useState('');
   useEffect(() => { (async () => { try { const cfg = await getConfig(); const actives = cfg.active_lorebook_ids || []; if (actives.length) { const lbs = await listLorebooks(); const opts = lbs.filter(x => actives.includes(x.id)).map(x => ({ id: x.id, name: x.name })); setLbOptions(opts); setSelLb(String(opts[0]?.id || '')); } } catch (e) { console.error(e);} })(); }, []);

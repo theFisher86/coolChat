@@ -14,14 +14,22 @@ export const useChat = () => {
     await chatStore.loadChat(sessionId);
   }, [chatStore]);
 
+  // Select state with selectors to ensure proper re-rendering
+  const messages = useChatStore(state => state.messages);
+  const input = useChatStore(state => state.input);
+  const sending = useChatStore(state => state.sending);
+  const error = useChatStore(state => state.error);
+  const sessionId = useChatStore(state => state.sessionId);
+  const availableSessions = useChatStore(state => state.availableSessions);
+
   return {
     // State
-    messages: chatStore.messages,
-    input: chatStore.input,
-    sending: chatStore.sending,
-    error: chatStore.error,
-    sessionId: chatStore.sessionId,
-    availableSessions: chatStore.availableSessions,
+    messages,
+    input,
+    sending,
+    error,
+    sessionId,
+    availableSessions,
 
     // Actions
     sendMessage: sendChatMessage,
@@ -42,8 +50,8 @@ export const useImageGeneration = () => {
   const generateImageFromLastMessage = useCallback(async () => {
     try {
       const result = await generateImageFromChat(chatStore.sessionId);
-      chatStore.setMessages([
-        ...chatStore.messages,
+      chatStore.setMessages((prev) => [
+        ...prev,
         { role: 'assistant', image_url: result.image_url, content: '' }
       ]);
     } catch (err: any) {
@@ -54,8 +62,8 @@ export const useImageGeneration = () => {
   const generateImage = useCallback(async (prompt: string) => {
     try {
       const result = await generateImageDirect(prompt, chatStore.sessionId);
-      chatStore.setMessages([
-        ...chatStore.messages,
+      chatStore.setMessages((prev) => [
+        ...prev,
         { role: 'assistant', image_url: result.image_url, content: prompt }
       ]);
     } catch (err: any) {

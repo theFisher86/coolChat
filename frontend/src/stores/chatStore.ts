@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { sendChat, getChat, listChats, resetChat } from '../api';
+import { flushSync } from 'react-dom';
 
 export interface ChatState {
   // Chat content state
@@ -13,7 +14,7 @@ export interface ChatState {
   availableSessions: string[];
 
   // Actions
-  setMessages: (messages: any[]) => void;
+  setMessages: (messages: any[] | ((prev: any[]) => any[])) => void;
   setInput: (input: string) => void;
   setSending: (sending: boolean) => void;
   setError: (error: string | null) => void;
@@ -38,7 +39,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   availableSessions: ['default'],
 
   // Basic setters
-  setMessages: (messages) => set({ messages }),
+  setMessages: (messages) => set((state) => ({ messages: typeof messages === 'function' ? messages(state.messages) : messages })),
   setInput: (input) => set({ input }),
   setSending: (sending) => set({ sending }),
   setError: (error) => set({ error }),
@@ -52,25 +53,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const { sessionId, messages } = get();
     const userMsg = { role: 'user', content: message.trim() };
 
-    set({
-      sending: true,
-      input: '',
-      error: null,
-      messages: [...messages, userMsg]
-    });
+    set({ sending: true, error: null });
 
-    try {
-      const reply = await sendChat(message, sessionId);
-      set({ sending: false });
-      return reply;
-    } catch (err: any) {
-      set({
-        error: err.message,
-        sending: false
-      });
-      throw err; // Re-throw so caller can handle it
-    }
-  },
+     try {
+       const reply = await sendChat(message, sessionId);
+       console.log('sendMessage: got reply:', reply.slice(0, 50));
+       set({ sending: false });
+       return reply;
+     } catch (err: any) {
+       set({
+         error: err.message,
+         sending: false,
+         messages: messages // Revert to original messages on error
+       });
+       throw err; // Re-throw so caller can handle it
+     }
+   },
 
   loadChat: async (sessionId: string) => {
     try {

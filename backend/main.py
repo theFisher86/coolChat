@@ -2514,7 +2514,6 @@ async def generate_from_chat(payload: GenerateFromChatRequest) -> GenerateFromCh
     # Dispatch to configured image backend
     img_cfg: ImagesConfig = getattr(cfg, 'images', ImagesConfig())
     active = getattr(img_cfg, 'active', ImageProvider.POLLINATIONS)
-    print("[CoolChat] images.generate_from_chat active=", active)
     url = None
     if active == ImageProvider.POLLINATIONS:
         import httpx as _httpx, urllib.parse as _urlp, os as _os, time as _time
