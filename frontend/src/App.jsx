@@ -94,7 +94,6 @@ import {
 } from './api.js';
 
 // Enhanced lorebook imports
-import './components/lorebook/LorebookStyles.css';
 import { LorebookDashboard } from './components/lorebook/LorebookDashboard';
 import { useChatStore } from './stores';
 import { useLorebookStore } from './stores/lorebookStore';

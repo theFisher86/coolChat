@@ -94,17 +94,19 @@ async def _startup_load_state():
         # Create SQLite tables if they don't exist
         from .database import create_tables
         create_tables()
-        print("[CoolChat] SQLite tables created/verified")
+        logger = get_debug_logger()
+        logger.debug_db("[CoolChat] SQLite tables created/verified")
 
         # Load existing JSON state
         _load_state()
 
-        # Migrate existing chat histories to SQLite
-        _migrate_chat_histories_to_sqlite()
+        # Migrate existing data to SQLite
+        _migrate_to_sqlite()
 
     except Exception as e:
         try:
-            print("[CoolChat] startup load_state error:", e)
+            logger = get_debug_logger()
+            logger.debug_db("[CoolChat] startup load_state error:" + str(e))
         except Exception:
             pass
 
@@ -1304,6 +1306,116 @@ def _migrate_chat_histories_to_sqlite() -> None:
 
     # Clear in-memory histories to prevent dual writes
     _chat_histories.clear()
+
+
+def _migrate_to_sqlite() -> None:
+    """Migrate characters, lorebooks, and memory from JSON files to SQLite database."""
+
+    # Check if migration has already been completed
+    db = SessionLocal()
+    try:
+        from .models import Character as CharModel
+        existing_characters = db.query(CharModel).count()
+        if existing_characters > 0:
+            print(f"[CoolChat] Migration appears complete ({existing_characters} characters in SQLite), skipping")
+            return
+    finally:
+        db.close()
+
+    print("[CoolChat] Migrating data from JSON to SQLite...")
+
+    # Load JSON data
+    char_data = load_json("characters.json", {"next_id": 1, "items": []})
+    memory_data = load_json("memory.json", {"next_id": 1, "items": []})
+
+    db = SessionLocal()
+    try:
+        # Migrate characters
+        if char_data.get("items"):
+            from .models import Character
+            print(f"[CoolChat] Migrating {len(char_data['items'])} characters...")
+            for char_item in char_data["items"]:
+                try:
+                    char = Character(**char_item)
+                    db.add(char)
+                except Exception as e:
+                    print(f"[CoolChat] Skipping invalid character: {e}")
+
+        # Migrate memory entries
+        if memory_data.get("items"):
+            from .models import MemoryEntry
+            print(f"[CoolChat] Migrating {len(memory_data['items'])} memory entries...")
+            for mem_item in memory_data["items"]:
+                try:
+                    mem = MemoryEntry(**mem_item)
+                    db.add(mem)
+                except Exception as e:
+                    print(f"[CoolChat] Skipping invalid memory entry: {e}")
+
+        # Migrate lorebooks and entries
+        _migrate_lorebooks_to_sqlite(db)
+
+        # Commit all migrations
+        db.commit()
+        print("[CoolChat] Migration completed successfully!")
+
+    except Exception as e:
+        print(f"[CoolChat] Migration error: {e}")
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def _migrate_lorebooks_to_sqlite(db) -> None:
+    """Migrate lorebooks and entries from JSON to SQLite."""
+
+    # Load lorebook data
+    lb_data = load_json("lorebooks.json", {"next_id": 1, "items": []})
+    lore_data = load_json("lore.json", {"next_id": 1, "items": []})
+
+    if not lb_data.get("items") and not lore_data.get("items"):
+        return
+
+    from .models import Lorebook as LorebookModel, LoreEntry
+
+    # Build mappings for lore entries
+    lore_by_id = {}
+    for lore_item in lore_data.get("items", []):
+        try:
+            entry_id = lore_item.get("id")
+            # Handle migration from old keyword format
+            if "keyword" in lore_item and "keywords" not in lore_item:
+                lore_item["keywords"] = [lore_item["keyword"]] if lore_item["keyword"] else []
+                lore_item["title"] = lore_item["keyword"]
+            lore_by_id[entry_id] = lore_item
+        except Exception as e:
+            print(f"[CoolChat] Skipping invalid lore entry {entry_id}: {e}")
+
+    # Migrate lorebooks
+    print(f"[CoolChat] Migrating {len(lb_data['items'])} lorebooks...")
+    for lb_item in lb_data["items"]:
+        try:
+            # Clean up old format (remove entry_ids since they don't belong in Lorebook model)
+            lb_clean = {k: v for k, v in lb_item.items() if k != 'entry_ids'}
+            lb = LorebookModel(**lb_clean)
+            db.add(lb)
+
+            # Add entries for this lorebook
+            entry_ids = lb_item.get("entry_ids", [])
+            for entry_id in entry_ids:
+                if entry_id in lore_by_id:
+                    entry_data = lore_by_id[entry_id]
+                    entry_data["lorebook_id"] = lb.id
+                    try:
+                        entry = LoreEntry(**entry_data)
+                        db.add(entry)
+                    except Exception as e:
+                        print(f"[CoolChat] Skipping invalid entry for lorebook: {e}")
+        except Exception as e:
+            print(f"[CoolChat] Skipping invalid lorebook: {e}")
+
+    print(f"[CoolChat] Migrated {len(lore_by_id)} lore entries")
 
 
 def _trim_history(session_id: str, cfg: AppConfig) -> None:

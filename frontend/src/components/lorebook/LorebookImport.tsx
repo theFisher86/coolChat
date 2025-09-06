@@ -1,5 +1,4 @@
 import React, { useState, DragEvent, ChangeEvent } from 'react';
-import './LorebookStyles.css';
 
 interface LorebookImportProps {
   onImport: (file: File) => Promise<void>;

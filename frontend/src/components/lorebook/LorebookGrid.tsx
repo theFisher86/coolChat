@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Lorebook } from '../../stores/lorebookStore';
-import './LorebookStyles.css';
 
 interface LorebookGridProps {
   lorebooks: Lorebook[];

@@ -105,6 +105,126 @@ async def create_lorebook(lorebook_data: dict, db: Session = Depends(get_db)):
         "created_at": lorebook.created_at.isoformat()
     }
 
+# Lore search and context injection API - moved before dynamic routes
+
+@router.get("/search")
+async def search_lorebooks(
+    q: Optional[str] = Query(None, description="Search query"),
+    limit: int = Query(10, description="Maximum number of results"),
+    db: Session = Depends(get_db)
+):
+    """Search lore entries with advanced keyword matching logic"""
+    results = []
+    query_terms = [term.strip().lower() for term in (q or "").split() if term.strip()]
+
+    if not query_terms:
+        return {"results": [], "total_found": 0}
+
+    # Build database filter conditions for content and keywords
+    content_filters = [LoreEntry.content.ilike(f"%{term}%") for term in query_terms]
+    keyword_filters = [LoreEntry.keywords.cast(String).ilike(f"%{term}%") for term in query_terms]
+    secondary_keyword_filters = [LoreEntry.secondary_keywords.cast(String).ilike(f"%{term}%") for term in query_terms]
+
+    # Combine filters - entries that match any term in content or keywords
+    combined_filters = content_filters + keyword_filters + secondary_keyword_filters
+
+    query = db.query(LoreEntry).options(joinedload(LoreEntry.lorebook)).filter(or_(*combined_filters))
+
+    # Load candidates (limit to a reasonable number to avoid memory issues, e.g., 1000 candidates max)
+    candidates = query.limit(1000).all()
+
+    for entry in candidates:
+        score = 0
+        matched = False
+
+        # Prepare keywords for matching
+        primary_kw = [kw.lower() if kw else "" for kw in entry.keywords or []]
+        secondary_kw = [kw.lower() if kw else "" for kw in entry.secondary_keywords or []]
+        all_keywords = primary_kw + secondary_kw
+        content_lower = entry.content.lower()
+
+        # Enhanced scoring based on logic settings
+        logic = entry.logic.upper() if entry.logic else "AND ANY"
+
+        # Check for exact keyword matches first (including spaces)
+        exact_keyword_match = any(term == kw for term in query_terms for kw in all_keywords)
+        if exact_keyword_match:
+            score += 30 if any(term == kw for term in query_terms for kw in primary_kw) else 20
+            matched = True
+        elif logic == "AND ANY":
+            # Matches if any search term is found in keywords or content
+            for term in query_terms:
+                if (any(term in kw for kw in all_keywords) or term in content_lower):
+                    score += 20 if any(term in kw for kw in primary_kw) else 10
+                    matched = True
+                    break
+
+        elif logic == "AND ALL":
+            # All query terms must be found (at least in secondary keywords)
+            all_matched = True
+            primary_boost = 0
+            for term in query_terms:
+                term_matched = (any(term in kw for kw in all_keywords) or term in content_lower)
+                if not term_matched:
+                    all_matched = False
+                    break
+                if any(term in kw for kw in primary_kw):
+                    primary_boost += 10
+            if all_matched:
+                score += 30 + primary_boost
+                matched = True
+
+        elif logic == "NOT ANY":
+            # Matches only if none of the query terms are found
+            no_matches = True
+            for term in query_terms:
+                if any(term in kw for kw in all_keywords) or term in content_lower:
+                    no_matches = False
+                    break
+            if no_matches:
+                score += 15
+                matched = True
+
+        elif logic == "NOT ALL":
+            # Matches if at least one query term is NOT found
+            some_not_found = False
+            for term in query_terms:
+                if not (any(term in kw for kw in all_keywords) or term in content_lower):
+                    some_not_found = True
+                    score += 15
+                    matched = True
+                    break
+
+        # Additional scoring for content matches
+        if matched:
+            # Exact phrase match gets highest score
+            query_lower = (q or "").lower()
+            if query_lower and query_lower in content_lower:
+                score += 25
+
+            # Apply trigger percentage (higher means more likely to be included)
+            trigger_multiplier = entry.trigger / 100.0 if entry.trigger else 1.0
+            score *= trigger_multiplier
+
+            results.append({
+                "id": entry.id,
+                "title": entry.title,
+                "content": entry.content,
+                "lorebook_name": entry.lorebook.name,
+                "lorebook_id": entry.lorebook.id,
+                "keywords": entry.keywords,
+                "secondary_keywords": entry.secondary_keywords,
+                "logic": entry.logic,
+                "trigger": entry.trigger,
+                "order": entry.order,
+                "score": score,
+                "matched_terms": query_terms  # Useful for debugging
+            })
+
+    # Sort by score, then by order (higher order = higher priority)
+    results.sort(key=lambda x: (-x["score"], -x["order"]), reverse=False)
+    return {"results": results[:limit], "total_found": len(results)}
+
 @router.get("/{lorebook_id}")
 async def get_lorebook(lorebook_id: int, db: Session = Depends(get_db)):
     """Get a specific lorebook with all its entries"""
@@ -326,126 +446,6 @@ async def import_lorebook(file: UploadFile = File(...), db: Session = Depends(ge
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
-# Lore search and context injection API
-
-@router.get("/search")
-async def search_lorebooks(
-    request: Request,
-    q: Optional[str] = Query(None, description="Search query"),
-    limit: int = Query(10, description="Maximum number of results"),
-    db: Session = Depends(get_db)
-):
-    # Apply rate limiting
-    if not rate_limiter.is_allowed(f"search_{request.client.host}"):
-        raise HTTPException(status_code=429, detail="Too many search requests. Please wait a minute before trying again.")
-    """Search lore entries with advanced keyword matching logic"""
-    results = []
-    query_terms = [term.strip().lower() for term in (q or "").split() if term.strip()]
-
-    if not query_terms:
-        return {"results": [], "total_found": 0}
-
-    # Build database filter conditions for content and keywords
-    content_filters = [LoreEntry.content.ilike(f"%{term}%") for term in query_terms]
-    keyword_filters = [LoreEntry.keywords.cast(String).ilike(f"%{term}%") for term in query_terms]
-    secondary_keyword_filters = [LoreEntry.secondary_keywords.cast(String).ilike(f"%{term}%") for term in query_terms]
-
-    # Combine filters - entries that match any term in content or keywords
-    combined_filters = content_filters + keyword_filters + secondary_keyword_filters
-
-    # Combine filters - entries that match any term in content or keywords
-    combined_filters = content_filters + keyword_filters + secondary_keyword_filters
-    query = db.query(LoreEntry).options(joinedload(LoreEntry.lorebook)).filter(or_(*combined_filters))
-
-    # Load candidates (limit to a reasonable number to avoid memory issues, e.g., 1000 candidates max)
-    candidates = query.limit(1000).all()
-
-    for entry in candidates:
-        score = 0
-        matched = False
-
-        # Prepare keywords for matching
-        primary_kw = [kw.lower() for kw in entry.keywords or []]
-        secondary_kw = [kw.lower() for kw in entry.secondary_keywords or []]
-        all_keywords = primary_kw + secondary_kw
-        content_lower = entry.content.lower()
-
-        # Enhanced scoring based on logic settings
-        logic = entry.logic.upper() if entry.logic else "AND ANY"
-
-        if logic == "AND ANY":
-            # Matches if any search term is found in keywords or content
-            for term in query_terms:
-                if (any(term in kw for kw in all_keywords) or term in content_lower):
-                    score += 20 if any(term in kw for kw in primary_kw) else 10
-                    matched = True
-                    break
-
-        elif logic == "AND ALL":
-            # All query terms must be found (at least in secondary keywords)
-            all_matched = True
-            primary_boost = 0
-            for term in query_terms:
-                term_matched = (any(term in kw for kw in all_keywords) or term in content_lower)
-                if not term_matched:
-                    all_matched = False
-                    break
-                if any(term in kw for kw in primary_kw):
-                    primary_boost += 10
-            if all_matched:
-                score += 30 + primary_boost
-                matched = True
-
-        elif logic == "NOT ANY":
-            # Matches only if none of the query terms are found
-            no_matches = True
-            for term in query_terms:
-                if any(term in kw for kw in all_keywords) or term in content_lower:
-                    no_matches = False
-                    break
-            if no_matches:
-                score += 15
-                matched = True
-
-        elif logic == "NOT ALL":
-            # Matches if at least one query term is NOT found
-            some_not_found = False
-            for term in query_terms:
-                if not (any(term in kw for kw in all_keywords) or term in content_lower):
-                    some_not_found = True
-                    score += 15
-                    matched = True
-                    break
-
-        # Additional scoring for content matches
-        if matched:
-            # Exact phrase match gets highest score
-            query_lower = (q or "").lower()
-            if query_lower and query_lower in content_lower:
-                score += 25
-
-            # Apply trigger percentage (higher means more likely to be included)
-            trigger_multiplier = entry.trigger / 100.0 if entry.trigger else 1.0
-            score *= trigger_multiplier
-
-            results.append({
-                "id": entry.id,
-                "title": entry.title,
-                "content": entry.content,
-                "lorebook_name": entry.lorebook.name,
-                "lorebook_id": entry.lorebook.id,
-                "keywords": entry.keywords,
-                "secondary_keywords": entry.secondary_keywords,
-                "logic": entry.logic,
-                "trigger": entry.trigger,
-                "order": entry.order,
-                "score": score,
-                "matched_terms": query_terms  # Useful for debugging
-            })
-
-    # Sort by score, then by order (higher order = higher priority)
-    results.sort(key=lambda x: (-x["score"], -x["order"]), reverse=False)
-    return {"results": results[:limit], "total_found": len(results)}
 
 # Character-Lorebook relationship management
 
@@ -620,7 +620,7 @@ async def bulk_create_entries(bulk_data: dict, db: Session = Depends(get_db)):
 # Context injection API for system prompts
 
 @router.post("/inject_context")
-async def inject_lore_context(request: Request, request_data: dict, db: Session = Depends(get_db)):
+async def inject_lore_context(request_data: dict, db: Session = Depends(get_db)):
     """Generate system prompt with relevant lore entries for a conversation"""
     global context_injection_depth
     context_injection_depth += 1
@@ -642,7 +642,7 @@ async def inject_lore_context(request: Request, request_data: dict, db: Session 
                 pass
 
         # Search for relevant entries
-        search_results = await search_lorebooks(request, q=recent_text, limit=20, db=db)
+        search_results = await search_lorebooks(q=recent_text, limit=20, db=db)
 
         # Select entries that fit within token budget
         selected_entries = []

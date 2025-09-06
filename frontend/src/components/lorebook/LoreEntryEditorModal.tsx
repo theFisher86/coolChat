@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { LoreEntry, useLorebookStore } from '../../stores/lorebookStore';
-import './LorebookStyles.css';
 
 interface LoreEntryEditorModalProps {
   entry: LoreEntry | null;
@@ -115,49 +114,89 @@ export const LoreEntryEditorModal: React.FC<LoreEntryEditorModalProps> = ({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
+      <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '90vh', overflow: 'auto' }}>
         <div className="modal-header">
           <h2>{entry ? 'Edit Lore Entry' : 'Create New Lore Entry'}</h2>
           <button onClick={onClose} className="close-btn">×</button>
         </div>
 
-        <div className="modal-body">
-          {/* Title */}
-          <div className="form-group">
-            <label>Title:</label>
-            <input
-              type="text"
-              value={editingEntry.title || ''}
-              onChange={(e) => handleChange('title', e.target.value)}
-              placeholder="Entry title..."
-              required
-            />
+        <div className="modal-body lorebook-editor">
+          {/* Top Row: Title, Logic, Trigger, Order */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px', marginBottom: '20px', alignItems: 'end' }}>
+            {/* Title */}
+            <div className="form-group">
+              <label>Title:</label>
+              <input
+                type="text"
+                value={editingEntry.title || ''}
+                onChange={(e) => handleChange('title', e.target.value)}
+                placeholder="Entry title..."
+                required
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            {/* Logic */}
+            <div className="form-group">
+              <label>Logic:</label>
+              <select
+                value={editingEntry.logic || 'AND ANY'}
+                onChange={(e) => handleChange('logic', e.target.value)}
+                style={{ width: '100%' }}
+              >
+                <option value="AND ANY">AND ANY</option>
+                <option value="AND ALL">AND ALL</option>
+                <option value="NOT ANY">NOT ANY</option>
+                <option value="NOT ALL">NOT ALL</option>
+              </select>
+            </div>
+
+            {/* Trigger */}
+            <div className="form-group">
+              <label>Trigger (%):</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={editingEntry.trigger || 100}
+                  onChange={(e) => handleChange('trigger', parseInt(e.target.value, 10))}
+                  style={{ flex: '1' }}
+                />
+                <span style={{ fontWeight: 'bold', minWidth: '30px', textAlign: 'right', fontSize: '12px' }}>
+                  {editingEntry.trigger || 100}%
+                </span>
+              </div>
+            </div>
+
+            {/* Order */}
+            <div className="form-group">
+              <label>Order:</label>
+              <input
+                type="number"
+                step="0.1"
+                value={editingEntry.order || 0}
+                onChange={(e) => handleChange('order', parseFloat(e.target.value))}
+                placeholder="0.0"
+                style={{ width: '100%' }}
+              />
+            </div>
           </div>
 
-          {/* Content */}
-          <div className="form-group">
-            <label>Content:</label>
-            <textarea
-              value={editingEntry.content || ''}
-              onChange={(e) => handleChange('content', e.target.value)}
-              placeholder="Entry content..."
-              rows={6}
-              required
-            />
-          </div>
-
-          <div className="form-row">
+          {/* Keywords Section */}
+          <div className="keyword-grid">
             {/* Primary Keywords */}
             <div className="form-group">
               <label>Primary Keywords:</label>
               <div className="keyword-section">
                 <div className="keyword-tags">
                   {(editingEntry.keywords || []).map((keyword, index) => (
-                    <span key={index} className="keyword-tag">
+                    <span key={index} className="keyword-tag" style={{ margin: '2px', fontSize: '12px' }}>
                       {keyword}
                       <button
                         onClick={() => removeKeyword('keywords', keyword)}
                         className="remove-keyword"
+                        style={{ marginLeft: '4px', fontSize: '10px' }}
                       >
                         ×
                       </button>
@@ -166,10 +205,11 @@ export const LoreEntryEditorModal: React.FC<LoreEntryEditorModalProps> = ({
                 </div>
                 <input
                   type="text"
-                  placeholder="Add primary keyword..."
+                  placeholder="Add keyword..."
                   value={keywordInput}
                   onChange={(e) => setKeywordInput(e.target.value)}
                   onKeyPress={(e) => handleKeywordKeyPress(e, 'keywords', keywordInput, setKeywordInput)}
+                  style={{ marginTop: '8px', width: '100%' }}
                 />
               </div>
             </div>
@@ -180,11 +220,12 @@ export const LoreEntryEditorModal: React.FC<LoreEntryEditorModalProps> = ({
               <div className="keyword-section">
                 <div className="keyword-tags">
                   {(editingEntry.secondary_keywords || []).map((keyword, index) => (
-                    <span key={index} className="keyword-tag secondary">
+                    <span key={index} className="keyword-tag secondary" style={{ margin: '2px', fontSize: '12px' }}>
                       {keyword}
                       <button
                         onClick={() => removeKeyword('secondary_keywords', keyword)}
                         className="remove-keyword"
+                        style={{ marginLeft: '4px', fontSize: '10px' }}
                       >
                         ×
                       </button>
@@ -199,52 +240,24 @@ export const LoreEntryEditorModal: React.FC<LoreEntryEditorModalProps> = ({
                   onKeyPress={(e) =>
                     handleKeywordKeyPress(e, 'secondary_keywords', secondaryKeywordInput, setSecondaryKeywordInput)
                   }
+                  style={{ marginTop: '8px', width: '100%' }}
                 />
               </div>
             </div>
           </div>
 
-          <div className="form-row">
-            {/* Logic */}
-            <div className="form-group">
-              <label>Logic:</label>
-              <select
-                value={editingEntry.logic || 'AND ANY'}
-                onChange={(e) => handleChange('logic', e.target.value)}
-              >
-                <option value="AND ANY">AND ANY</option>
-                <option value="AND ALL">AND ALL</option>
-                <option value="NOT ANY">NOT ANY</option>
-                <option value="NOT ALL">NOT ALL</option>
-              </select>
-            </div>
-
-            {/* Trigger */}
-            <div className="form-group">
-              <label>Trigger (%):</label>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={editingEntry.trigger || 100}
-                onChange={(e) => handleChange('trigger', parseInt(e.target.value, 10))}
-                className="trigger-slider"
-              />
-              <div className="trigger-value">{editingEntry.trigger || 100}%</div>
-            </div>
-
-            {/* Order */}
-            <div className="form-group">
-              <label>Order:</label>
-              <input
-                type="number"
-                step="0.1"
-                value={editingEntry.order || 0}
-                onChange={(e) => handleChange('order', parseFloat(e.target.value))}
-                placeholder="0.0"
-              />
-            </div>
-          </div>
+          {/* Content Section */}
+           <div className="form-group">
+             <label>Content:</label>
+             <textarea
+               value={editingEntry.content || ''}
+               onChange={(e) => handleChange('content', e.target.value)}
+               placeholder="Entry content..."
+               rows={18}
+               required
+               style={{ resize: 'vertical', minHeight: '200px', width: '100%' }}
+             />
+           </div>
 
           {/* Preview */}
           <div className="form-group">
@@ -257,7 +270,7 @@ export const LoreEntryEditorModal: React.FC<LoreEntryEditorModalProps> = ({
                 ) : 'No content'}
               </div>
               <div className="preview-meta">
-                Keywords: ${(editingEntry.keywords || []).join(', ') || 'none'} •
+                Keywords: {(editingEntry.keywords || []).join(', ') || 'none'} •
                 Logic: {editingEntry.logic || 'AND ANY'} •
                 Trigger: {editingEntry.trigger || 100}%
               </div>

@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import './LorebookStyles.css';
 import { useLorebookStore } from '../../stores/lorebookStore';
 import { Lorebook, LoreEntry } from '../../stores/lorebookStore';
 import { LorebookGrid } from './LorebookGrid';
@@ -381,6 +380,32 @@ const LorebookDashboard: React.FC = () => {
                                 setEditingLorebookEntries(updated);
                               }}
                             />
+                            <div className="form-group">
+                              <label>Trigger (%):</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={entry.trigger}
+                                onChange={(e) => {
+                                  const updated = [...editingLorebookEntries];
+                                  updated[index] = {...entry, trigger: parseInt(e.target.value) || 0};
+                                  setEditingLorebookEntries(updated);
+                                }}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label>Order:</label>
+                              <input
+                                type="number"
+                                value={entry.order}
+                                onChange={(e) => {
+                                  const updated = [...editingLorebookEntries];
+                                  updated[index] = {...entry, order: parseFloat(e.target.value) || 0};
+                                  setEditingLorebookEntries(updated);
+                                }}
+                              />
+                            </div>
                             <button
                               type="button"
                               className="delete-btn"
@@ -411,25 +436,6 @@ const LorebookDashboard: React.FC = () => {
                               />
                             </div>
                             <div className="form-group">
-                              <label>Secondary Keywords:</label>
-                              <input
-                                type="text"
-                                placeholder="secondary1, secondary2"
-                                value={entry.secondary_keywords.join(', ')}
-                                onChange={(e) => {
-                                  const updated = [...editingLorebookEntries];
-                                  updated[index] = {
-                                    ...entry,
-                                    secondary_keywords: e.target.value.split(',').map(k => k.trim()).filter(k => k)
-                                  };
-                                  setEditingLorebookEntries(updated);
-                                }}
-                              />
-                            </div>
-                          </div>
-
-                          <div className="form-row">
-                            <div className="form-group">
                               <label>Logic:</label>
                               <select
                                 value={entry.logic}
@@ -446,27 +452,17 @@ const LorebookDashboard: React.FC = () => {
                               </select>
                             </div>
                             <div className="form-group">
-                              <label>Trigger (%):</label>
+                              <label>Secondary Keywords:</label>
                               <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={entry.trigger}
+                                type="text"
+                                placeholder="secondary1, secondary2"
+                                value={entry.secondary_keywords.join(', ')}
                                 onChange={(e) => {
                                   const updated = [...editingLorebookEntries];
-                                  updated[index] = {...entry, trigger: parseInt(e.target.value) || 0};
-                                  setEditingLorebookEntries(updated);
-                                }}
-                              />
-                            </div>
-                            <div className="form-group">
-                              <label>Order:</label>
-                              <input
-                                type="number"
-                                value={entry.order}
-                                onChange={(e) => {
-                                  const updated = [...editingLorebookEntries];
-                                  updated[index] = {...entry, order: parseFloat(e.target.value) || 0};
+                                  updated[index] = {
+                                    ...entry,
+                                    secondary_keywords: e.target.value.split(',').map(k => k.trim()).filter(k => k)
+                                  };
                                   setEditingLorebookEntries(updated);
                                 }}
                               />

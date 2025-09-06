@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import './LorebookStyles.css';
 
 interface LorebookBulkActionsProps {
   selectedCount: number;

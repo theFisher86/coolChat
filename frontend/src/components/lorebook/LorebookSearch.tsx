@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react';
 import { SearchResult } from '../../stores/lorebookStore';
-import './LorebookStyles.css';
 
 interface LorebookSearchProps {
   onSearch: (query: string) => Promise<void>;
