@@ -215,29 +215,10 @@ const LorebookDashboard: React.FC = () => {
       {/* Header */}
       <div className="dashboard-header">
         <h1>Lorebook Management</h1>
-        <div className="dashboard-actions">
-          <button
-            className={`action-btn ${viewMode === 'cards' ? 'active' : ''}`}
-            onClick={() => setViewMode('cards')}
-          >
-            📋 Cards
-          </button>
-          <button
-            className={`action-btn ${viewMode === 'table' ? 'active' : ''}`}
-            onClick={() => setViewMode('table')}
-          >
-            📊 Table
-          </button>
-          <div className="dropdown-menu">
-            <button className="primary">+ Create</button>
-            <div className="dropdown-content">
-              <button onClick={() => setCreationMode('single')}>New Lorebook</button>
-              <button onClick={() => setCreationMode('bulk')}>Bulk Create</button>
-              <button onClick={() => setCreationMode('import')}>Import JSON</button>
-            </div>
-          </div>
-        </div>
       </div>
+      
+      {/* Active Lorebooks for Chat Context */}
+      <ActiveLorebooks lorebooks={store.lorebooks} />
 
       {/* Search Panel */}
       <LorebookSearch
@@ -262,9 +243,29 @@ const LorebookDashboard: React.FC = () => {
         </span>
       </div>
 
-      {/* Active Lorebooks for Chat Context */}
-      <ActiveLorebooks lorebooks={store.lorebooks} />
-
+      {/*Dashboard Actions*/}
+      <div className="dashboard-actions">
+        <button
+          className={`action-btn ${viewMode === 'cards' ? 'active' : ''}`}
+          onClick={() => setViewMode('cards')}
+        >
+          📋 Cards
+        </button>
+        <button
+          className={`action-btn ${viewMode === 'table' ? 'active' : ''}`}
+          onClick={() => setViewMode('table')}
+        >
+          📊 Table
+        </button>
+        <div className="dropdown-menu">
+          <button className="primary">+ Create</button>
+          <div className="dropdown-content">
+            <button onClick={() => setCreationMode('single')}>New Lorebook</button>
+            <button onClick={() => setCreationMode('bulk')}>Bulk Create</button>
+            <button onClick={() => setCreationMode('import')}>Import JSON</button>
+          </div>
+        </div>
+      </div>
       {/* Main Content */}
       <div className="dashboard-content">
         {creationMode === 'import' ? (

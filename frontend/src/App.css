@@ -2036,10 +2036,17 @@ a { color: var(--muted); }
 }
 .modal-content.large-modal{
   width:100%;
+  height:100vh;
+  overflow-y: scroll;
 }
 .dashboard-content .lorebook-grid{
   display:grid;
   grid-template-columns: 5fr 5fr 5fr 5fr;
+}
+
+.dashboard-actions{
+    display:grid;
+    grid-template-columns: 6rem 6rem 6rem;
 }
 
 .modal-overlay .lorebook-editor .entry-editor > .entry-header + .form-row {
@@ -2088,6 +2095,7 @@ a { color: var(--muted); }
 
   .dashboard-actions {
     justify-content: center;
+
   }
 
   .lorebook-grid {
