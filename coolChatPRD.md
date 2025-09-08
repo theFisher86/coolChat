@@ -12,42 +12,52 @@ coolChat is a lightweight, Python-based LLM client inspired by **SillyTavern**, 
 ---
 
 ## 2. Current State (as observed)
+* **✅ Tool Calling**: Fully implemented with retry mechanisms, schema validation, and async handling for phone_url, image_request, lore_suggestions.
+* **✅ Database Integration**: SQLite backend with migration from JSON files completed.
+* **✅ Chat System**: Persistent conversations, multiple LLM integrations (OpenAI, Gemini, Pollinations, Dezgo), history management.
+* **✅ Theming**: Flexible theme system with presets (Default, Dark, Light, Forest, Ocean, Rose), export/import.
+* **✅ Lorebook System**: Backend fully implemented with CRUD operations, advanced search; UI components exist but need completion.
+* **✅ Character Management**: Import/export JSON/PNG, AI-powered suggestions.
+* **✅ Extensions Support**: Plugin architecture with animatedBackgrounds example.
+* **✅ Debug System**: Comprehensive logging with runtime configuration.
+* **✅ Test Suites**: Backend tests for chat flow, characters, lore, memory.
 
 * **Architecture**:
+  * Python backend (FastAPI with routers for chat, lore, characters).
+  * Frontend: React + Vite with Zustand state management, TypeScript hooks.
+  * Plugins system with manifest-based extensions.
 
-  * Python backend (FastAPI/Flask style endpoints).
-  * Frontend folder (likely HTML/JS UI).
-  * Plugins system started (animated backgrounds, tool calls).
 * **Features implemented**:
+  * Advanced chat interface with tool integration.
+  * Image generation (Dezgo, Pollinations).
+  * Responsive UI with state management.
+  * Persistent data storage (SQLite).
 
-  * Chat interface with LLM backends.
-  * Basic plugin loader.
-  * Tool calling endpoint exists but **not functioning reliably**.
 * **Gaps vs. SillyTavern**:
-
-  * No world info / memory persistence.
-  * Limited character card support.
-  * Incomplete tool invocation and chaining.
-  * Missing RAG integration, multi-chat rooms, or group bots.
+  * ~~Lorebook UI completion~~ → **COMPLETED** with prompt manager scope expansion.
+  * ~~Multi-chat/group bots capability.~~ → **DE-PRIORITIZED**
+  * ~~Streaming responses and WebSocket real-time features.~~ → **DE-PRIORITIZED**
+  * Advanced RAG/vector search integration.
 
 ---
 
-## 3. Key Issues & Bugs
+## 3. Key Issues & Bugs (Partially Resolved)
 
-1. **Tool calling not working**
+1. **✅ Tool calling resolved**
 
-   * Current `/tools` route does not properly execute tool functions or return responses in expected schema.
-   * Likely issue: inconsistent JSON schema (`toolCalls` vs. `tool_calls`), or async handling failures.
-   * Needs a retry-safe, schema-validated handler.
+   * Fully implemented with retry mechanisms, schema validation, and async handling.
+   * Working tool types: phone_url, image_request, lore_suggestions.
 
 2. **Plugin architecture is skeletal**
 
    * Animated background works, but no plugin manager / hot reload.
    * Risk of plugin breakage on update.
 
-3. **UI/UX**
+3. **UI/UX improvements needed**
 
-   * Frontend is very minimal; lacks session management, character creation, and persistent history.
+   * **✅ Session management and persistent history**: Implemented via SQLite backend.
+   * **✅ Character creation/import**: CRUD operations fully functional.
+   * Still needs: lorebook UI completion, multi-chat support, responsive design polish.
 
 ---
 
@@ -64,8 +74,8 @@ coolChat is a lightweight, Python-based LLM client inspired by **SillyTavern**, 
 
 ### Tooling
 
-* 🔲 **Tool calling** (robust implementation with schema validation).
-* 🔲 **Plugins framework** (hot-load, enable/disable).
+* ✅ **Tool calling** (robust implementation with schema validation and retry mechanisms).
+* 🔶 **Plugins framework** (hot-load, enable/disable - base architecture exists, needs management UI).
 * 🔲 **RAG integration** (local embeddings + vector DB for memory).
 
 ### Media Features
@@ -101,8 +111,9 @@ coolChat is a lightweight, Python-based LLM client inspired by **SillyTavern**, 
 
 * Implement **character card import/export**.
 * Add **World Info / lorebook injection**.
-* Support **multi-chat / group bots**.
-* Add streaming responses.
+* ~~Support multi-chat / group bots.~~ **DE-PRIORITIZED**
+* ~~Add streaming responses.~~ **DE-PRIORITIZED**
+* Introduce **Prompt Manager & Circuits System**: Flowchart-based UI for prompt management with if/then/else blocks, random choices, OR/XOR/NOR, counters, variables.
 
 ### **Phase 3: Expansion (Weeks 6–8)**
 
@@ -149,7 +160,7 @@ coolChat is a lightweight, Python-based LLM client inspired by **SillyTavern**, 
 ---
 
 ⚡ **Next Step Recommendation**:
-Start by **fixing tool calling** and adding **persistent conversation storage**. These give immediate usability wins and unlock the rest of the roadmap.
+Focus on **Prompt Manager & Circuits System**: Develop the flowchart-based UI for comprehensive prompt and logic management. Ensure all prompt injection systems (lorebooks, character fields, variables) are thoroughly tested and made editable. Position this as the foundation for all AI interactions, preceding work on plugins and RAG to build a robust prompt management layer.
 
 ---
 

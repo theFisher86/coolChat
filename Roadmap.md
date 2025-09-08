@@ -4,24 +4,22 @@ This document outlines recommended features, changes, and improvements for the C
 
 ## 1. Architectural Enhancements
 
-### 1.1 Database Integration
+### 1.1 Database Integration ✅ (COMPLETED)
 **Problem:** Current in-memory storage for characters, lore, and memory, backed by JSON files, limits scalability, data integrity, and advanced querying.
-**Recommendation:** Introduce a proper database solution.
-*   **Phase 1 (Short-term):** Implement a lightweight, embedded database (e.g., SQLite) for local persistence and improved data management. This would be a relatively low-effort migration from JSON files.
-*   **Phase 2 (Mid-term):** Explore options for a more robust, scalable database (e.g., PostgreSQL, MongoDB) to support potential multi-user features or larger datasets. This would involve ORM/ODM integration (e.g., SQLAlchemy for SQL, Pydantic-ODM for MongoDB).
+**Solution Implemented:** Migrated to SQLite backend with proper schema, async operations, and data persistence.
+*   ✅ **Phase 1 (Short-term):** Implemented SQLite with migration scripts
+*   🔄 **Phase 2 (Mid-term):** Eventually explore PostgreSQL for multi-user support (low priority)
 
-### 1.2 Robust Error Handling and Logging
+### 1.2 Robust Error Handling and Logging 🔄 (IN PROGRESS)
 **Problem:** Broad `try-except` blocks and reliance on `print()` statements for debugging.
 **Recommendation:** Implement a structured logging framework and more granular error handling.
-*   **Feature:** Integrate a standard Python logging library (e.g., `logging` module) with configurable levels and output formats.
-*   **Improvement:** Replace broad `try-except` blocks with more specific exception handling to provide clearer error messages and prevent masking of issues.
-*   **Improvement:** Implement centralized error reporting for the frontend to send client-side errors to the backend for logging.
+*   ✅ **Debug system:** Comprehensive logging with debug.json configuration
+*   🔶 **Feature:** Integrate structured logging (logging module) - partially implemented
+*   🔶 **Improvement:** Replace remaining broad try-except blocks with specific exceptions
+*   🔲 **Improvement:** Centralized frontend error reporting to backend
 
-### 1.3 Real-time Communication (Optional)
-**Problem:** Chat is currently request/response based, lacking real-time streaming capabilities.
-**Recommendation:** Explore WebSocket integration for streaming LLM responses and potential future real-time chat features.
-*   **Feature:** Implement WebSockets in FastAPI to allow for streaming LLM responses, providing a more dynamic user experience.
-*   **Feature:** Lay groundwork for multi-user real-time chat features if the project scope expands.
+### 1.3 Real-time Communication → **DE-PRIORITIZED**
+**Note:** Streaming responses and real-time features temporarily de-prioritized after prompt manager implementation.*
 
 ## ~~2. Core Feature Development~~ ✅ **COMPLETED**
 
@@ -54,6 +52,26 @@ This document outlines recommended features, changes, and improvements for the C
 *   **Feature:** Text-to-speech for character voices.
 *   **Feature:** Speech-to-text for voice input.
 *   **Feature:** Video generation (e.g., short animated clips based on chat).
+
+## ~~3. User Experience & Interface (UI/UX)~~ → **DE-PRIORITIZED**
+*Note: Standard UI/UX improvements remain secondary after prompt manager implementation.*
+
+## 3. Prompt Manager & Circuits System
+### 3.1 New "Prompt Manager" concept
+- Introduction: A flowchart-based UI for managing all prompts, variables, and logic blocks in a visual editor.
+--circuits: Drag-and-drop interface allowing users to create complex prompt workflows with if/then/else blocks, random choice blocks, OR/XOR/NOR blocks, random number blocks, random choice from list blocks, counter blocks, variable blocks (from Settings->Prompts->Variables), general prompts, system prompts, placeholders, and ANY other prompt or content sent to the AI.
+- Integration: Circuits will replace hardcoded prompt construction, allowing full user customization of AI interactions.
+
+### 3.2 Enhanced Testing & Validation Focus
+- Shift primary focus to comprehensive testing and validation of lorebooks and prompt injection systems.
+- Ensure all prompt, variable, and text strings identified in the catalog below function correctly within circuits.
+
+### 3.3 System Prompt Extension
+- Add user-editable fields for previously non-editable text sent to AI:
+  - **Persona Format**: Template for user persona inclusion (e.g., "User Persona: {name}\n{description}")
+  - **Tool Descriptions Format**: Descriptive text for tool capabilities
+  - **Lore Injection Format**: Format for injecting lore entries (e.g., "[{keyword}] {content}")
+  - **Active Lore Title**: Title for active/global lore sections
 
 ## 3. User Experience & Interface (UI/UX)
 
@@ -115,5 +133,58 @@ This document outlines recommended features, changes, and improvements for the C
 *   **Feature:** An in-app "Extension Store" or catalog.
 *   **Feature:** One-click installation and uninstallation of extensions.
 *   **Feature:** Automatic updates for extensions.
+
+## 6. Strategic Considerations
+### 6.1 RAG Implementation Timing
+**Consideration:** While RAG (Retrieval-Augmented Generation) remains valuable for performance improvements, evaluate whether it should precede prompt manager work. Key factors:
+- Prompt manager/circuits will require extensive testing of current prompt injection systems first.
+- RAG may conflict with or duplicate prompt manager functionality.
+- Prioritize prompt manager as the foundation for all AI interactions, then assess RAG integration needs.
+
+## Appendix: Comprehensive Prompts & Variables Catalog
+This comprehensive catalog identifies all prompts, variables, and text strings sent to the AI or used in chat contexts, to ensure nothing is missed in the circuits system design.
+
+### A. Chat Messages
+- **User Input**: Direct user messages sent as `{"role": "user", "content": user_input}`
+- **AI Responses**: Assistant replies as `{"role": "assistant", "content": ai_response}`
+- **System Prompts**: Constructed from character and global settings as `{"role": "system", "content": built_system_prompt}`
+
+### B. Character Prompts
+- `system_prompt`: Core system instructions
+- `personality`: Character personality description
+- `scenario`: Scene/context description
+- `first_message`: Initial greeting
+- `alternate_greetings`: Alternative opening messages
+- `mes_example`: Message examples
+- `post_history_instructions`: Instructions for history processing
+
+### C. Lorebook Content
+- `keywords`: Primary and secondary keywords for trigger detection
+- `content`: Lore text injected into context
+- `title`: Optional content title
+
+### D. System Prompts (Editable via Settings->Prompts)
+- `main`: Main system prompt template
+- `tool_call`: Instructions for tool usage
+- `lore_suggest`: Prompt for suggesting new lore
+- `image_summary`: Scene summary for image generation
+- **NEW: `persona_format`**: Template for user persona inclusion
+- **NEW: `tool_descriptions_format`**: Descriptive text for tools
+- **NEW: `lore_injection_format`**: Format for lore entry injection
+- **NEW: `active_lore_title`**: Title for active lore sections
+
+### E. Variables (Editable)
+- Custom key-value pairs from prompts.json `"variables"` object
+- Replaced as `{{key}}` in prompts before AI submission
+
+### F. Tool Messages
+- `image_request`: `{"type": "image_request", "payload": {"prompt": "..."}}`
+- `phone_url`: `{"type": "phone_url", "payload": {"url": "..."}}`
+- `lore_suggestions`: `{"type": "lore_suggestions", "payload": {"items": [{"keyword": "...", "content": "..."}]}}`
+
+### G. Image Prompts
+- Explicit prompts sent to image APIs as query strings or form data (e.g., "detailed image description")
+
+This catalog serves as the source of truth for refining the prompt manager scope and ensuring all AI text interactions are manageable within circuits.
 
 This roadmap provides a strategic direction for the CoolChat project, focusing on improving its core architecture, expanding features, enhancing user experience, streamlining development, and empowering its extension ecosystem. The phased approach allows for incremental development and continuous improvement.

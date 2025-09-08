@@ -130,3 +130,11 @@ store.setState((prev) => [...prev, newItem])
 ```
 
 This applies to all async operations: image generation, API calls, file processing, etc.
+
+## General Prevention Guidelines
+✅ **RESOLVED**: All state-related async issues have been addressed through callback forms and proper state management practices.
+
+- Always use `setMessages((prev) => [...prev, newMessage])` patterns for async operations
+- For Zustand stores, prefer callback forms over direct state access in async handlers
+- Test with real async scenarios to catch closure issues early
+- Consider implementing useEffect with proper dependency arrays to handle prop/state changes

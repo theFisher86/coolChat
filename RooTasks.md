@@ -32,13 +32,13 @@
 - [x] Implement tool call queue for concurrent requests (async handling)
 - [x] Add tool result caching for performance
 
-### 1.3 **Database Migration** (Immediate Next Priority)
+### 1.3 **Database Migration** ✅ **COMPLETED**
 - [x] Implement SQLite database schema
-- [ ] Migrate characters, lorebooks, memory from JSON files
-- [ ] Create async database operations layer
-- [ ] Implement database migration scripts
-- [ ] Add data backup/restore functionality
-- [ ] Optimize query performance for chat history
+- [x] Migrate characters, lorebooks, memory from JSON files
+- [x] Create async database operations layer
+- [x] Implement database migration scripts
+- [x] Add data backup/restore functionality
+- [x] Optimize query performance for chat history
 
 ### 1.4 **Error Handling & Recovery**
 - [ ] Replace broad try-catch blocks with specific exception handling
@@ -58,7 +58,7 @@
   - [ ] Complete lorebook editor modal UI improvements
   - [ ] Improve form layout with better space allocation for keywords/content fields
 - [ ] Complete lorebook injection system (backend implemented, UI needs work)
-- [ ] Implement multi-chat/group bots capability
+- [ ] ~~Implement multi-chat/group bots capability~~ → **DE-PRIORITIZED**
 - [ ] Add comprehensive session management (save/load/delete)
 - [ ] Create character import/export with PNG metadata support
 - [ ] Improve memory system with context-aware retrieval
@@ -141,6 +141,19 @@
 
 ---
 
+## 🎯 **PHASE 2b: Prompt Manager & Circuits** (New High Priority)
+
+### 2.1 **Prompt Manager Development**
+- [ ] Design flowchart-based UI for managing prompts, variables, and logic blocks
+- [ ] Implement visual editor with drag-and-drop blocks: if/then/else, random choice, OR/XOR/NOR, random number, random choice from list, counter, variable, general prompts, system prompts, placeholders, and any other block types that may make sense for this application.
+- [ ] Add user-editable fields for non-editable text sent to AI:
+  - [ ] persona_format template
+  - [ ] tool_descriptions_format
+  - [ ] lore_injection_format
+  - [ ] active_lore_title
+- [ ] Integrate circuits with existing prompt injection systems (lorebooks, character fields, variables)
+- [ ] Comprehensive testing of all prompt pathways within circuits framework
+
 ## 🚀 **PHASE 5: Launch Preparation** (Priority: LOW)
 
 ### 5.1 **Production Setup**
@@ -167,9 +180,9 @@
 
 ## 🏗️ **ARCHITECTURAL IMPROVEMENTS** (Priority: ONGOING)
 
-### **Real-time Communication** (Future Enhancement)
+### **Real-time Communication** → **DE-PRIORITIZED**
 - [ ] Implement WebSocket support for Real-time chat
-- [ ] Add LLM response streaming (token-by-token)
+- [ ] ~~Add LLM response streaming (token-by-token)~~
 - [ ] Create multi-user real-time features
 - [ ] Implement push notification system
 
