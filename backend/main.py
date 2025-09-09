@@ -6,7 +6,7 @@ subset of SillyTavern's functionality so the front-end can store and retrieve
 character definitions.
 """
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -18,9 +18,10 @@ import time
 from datetime import datetime, timedelta
 from fastapi.responses import StreamingResponse
 from .config import AppConfig, ProviderConfig, load_config, save_config, mask_secret, Provider, ImagesConfig, ImageProvider
-from .models import Lorebook, LoreEntry
+from .models import Lorebook, LoreEntry, Character as CharacterModel
 from .storage import load_json, save_json, public_dir
-from .database import SessionLocal
+from .database import SessionLocal, get_db
+from sqlalchemy.orm import Session
 from .routers import lore
 import os
 
@@ -204,6 +205,9 @@ class Character(BaseModel):
     image_prompt_prefix: str | None = None
     image_prompt_suffix: str | None = None
 
+    class Config:
+        orm_mode = True
+
 
 class CharacterCreate(BaseModel):
     """Payload used when creating a new character."""
@@ -261,10 +265,6 @@ class LoreEntryCreate(BaseModel):
     order: float | None = None
 
 
-# simple in-memory store (legacy - using database for lorebooks)
-_characters: Dict[int, Character] = {}
-_next_id: int = 1
-
 
 @app.get("/")
 async def root():
@@ -283,70 +283,67 @@ async def health_check():
 
 
 @app.get("/characters", response_model=List[Character])
-async def list_characters() -> List[Character]:
+async def list_characters(db: Session = Depends(get_db)) -> List[Character]:
     """Return all stored character cards."""
 
-    return list(_characters.values())
+    return db.query(CharacterModel).all()
 
 
 @app.post("/characters", response_model=Character, status_code=201)
-async def create_character(payload: CharacterCreate) -> Character:
+async def create_character(payload: CharacterCreate, db: Session = Depends(get_db)) -> Character:
     """Create a new character and return the resulting record."""
 
-    global _next_id
     data = payload.model_dump()
+    lorebook_ids = data.pop("lorebook_ids", []) or []
     if data.get("alternate_greetings") is None:
         data["alternate_greetings"] = []
     if data.get("tags") is None:
         data["tags"] = []
-    if data.get("lorebook_ids") is None:
-        data["lorebook_ids"] = []
-    char = Character(id=_next_id, **data)
-    _characters[_next_id] = char
-    _next_id += 1
-    _save_characters()
-    try:
-        _save_character_snapshot(char)
-    except Exception:
-        pass
+    char = CharacterModel(**data)
+    if lorebook_ids:
+        char.lorebooks = db.query(Lorebook).filter(Lorebook.id.in_(lorebook_ids)).all()
+    db.add(char)
+    db.commit()
+    db.refresh(char)
     return char
 
 
 @app.get("/characters/{char_id}", response_model=Character)
-async def get_character(char_id: int) -> Character:
+async def get_character(char_id: int, db: Session = Depends(get_db)) -> Character:
     """Fetch a single character by its identifier."""
 
-    char = _characters.get(char_id)
+    char = db.get(CharacterModel, char_id)
     if char is None:
         raise HTTPException(status_code=404, detail="Character not found")
     return char
 
 
 @app.delete("/characters/{char_id}", status_code=204)
-async def delete_character(char_id: int) -> None:
+async def delete_character(char_id: int, db: Session = Depends(get_db)) -> None:
     """Remove a character from the store."""
 
-    if char_id not in _characters:
+    char = db.get(CharacterModel, char_id)
+    if char is None:
         raise HTTPException(status_code=404, detail="Character not found")
-    del _characters[char_id]
-    _save_characters()
+    db.delete(char)
+    db.commit()
     return None
 
 
 @app.put("/characters/{char_id}", response_model=Character)
-async def update_character(char_id: int, payload: CharacterUpdate) -> Character:
-    char = _characters.get(char_id)
+async def update_character(char_id: int, payload: CharacterUpdate, db: Session = Depends(get_db)) -> Character:
+    char = db.get(CharacterModel, char_id)
     if char is None:
         raise HTTPException(status_code=404, detail="Character not found")
     data = payload.model_dump(exclude_unset=True)
-    updated = char.model_copy(update=data)
-    _characters[char_id] = updated
-    _save_characters()
-    try:
-        _save_character_snapshot(updated)
-    except Exception:
-        pass
-    return updated
+    lorebook_ids = data.pop("lorebook_ids", None)
+    for key, value in data.items():
+        setattr(char, key, value)
+    if lorebook_ids is not None:
+        char.lorebooks = db.query(Lorebook).filter(Lorebook.id.in_(lorebook_ids)).all()
+    db.commit()
+    db.refresh(char)
+    return char
 
 
 # ---------------------------------------------------------------------------
@@ -391,10 +388,9 @@ _next_memory_id: int = 1
 
 
 def _load_state() -> None:
-    global _characters, _next_id, _lore, _next_lore_id, _lorebooks, _next_lorebook_id, _memory, _next_memory_id, _chat_histories
-    data = load_json("characters.json", {"next_id": 1, "items": []})
-    _next_id = int(data.get("next_id", 1))
-    _characters = {c["id"]: Character(**c) for c in data.get("items", [])}
+    global _lore, _next_lore_id, _lorebooks, _next_lorebook_id, _memory, _next_memory_id, _chat_histories
+
+    # Characters are stored in the database; no need to load from JSON
 
     data = load_json("lore.json", {"next_id": 1, "items": []})
     _next_lore_id = int(data.get("next_id", 1))
@@ -432,52 +428,11 @@ def _load_state() -> None:
     globals_dict = load_json("histories.json", {})
     _chat_histories.clear(); _chat_histories.update(globals_dict)
 
-    # Additionally auto-load any characters/lorebooks from public folders
-    try:
-        _load_from_public_folders()
-    except Exception as e:
-        try:
-            print("[CoolChat] load_from_public_folders error:", e)
-        except Exception:
-            pass
-
 
 def _safe_name(name: str) -> str:
     import re
     s = re.sub(r"[^A-Za-z0-9._-]+", "_", (name or "").strip())
     return s or "item"
-
-
-def _export_character_st_json(char: Character) -> Dict[str, object]:
-    data = char.model_dump()
-    return {
-        "name": data.get("name"),
-        "description": data.get("description", ""),
-        "first_mes": data.get("first_message"),
-        "alternate_greetings": data.get("alternate_greetings", []),
-        "scenario": data.get("scenario"),
-        "system_prompt": data.get("system_prompt"),
-        "personality": data.get("personality"),
-        "mes_example": data.get("mes_example"),
-        "creator_notes": data.get("creator_notes"),
-        "tags": data.get("tags", []),
-        # Non-standard extras
-        "avatar_url": data.get("avatar_url"),
-        "lorebook_ids": data.get("lorebook_ids", []),
-        "image_prompt_prefix": data.get("image_prompt_prefix"),
-        "image_prompt_suffix": data.get("image_prompt_suffix"),
-    }
-
-
-def _save_character_snapshot(char: Character) -> None:
-    import json as _json, os as _os
-    chars_dir = public_dir() / "characters"
-    try:
-        chars_dir.mkdir(parents=True, exist_ok=True)
-        fname = f"{char.id}_{_safe_name(char.name)}.json"
-        (chars_dir / fname).write_text(_json.dumps(_export_character_st_json(char), indent=2, ensure_ascii=False), encoding="utf-8")
-    except Exception:
-        pass
 
 
 def _export_lorebook_st_json(lb: "Lorebook") -> Dict[str, object]:
@@ -501,123 +456,6 @@ def _save_lorebook_snapshot(lb: "Lorebook") -> None:
         pass
 
 
-# Removed _parse_lorebook_data_to_entries - now using database-backed parser
-
-
-def _load_from_public_folders() -> None:
-    """Auto-import any characters and lorebooks found in public folders."""
-    import json as _json
-    import os as _os
-    # Characters
-    cdir = public_dir() / "characters"
-    if cdir.exists():
-        # Build a set of existing names (case-insensitive)
-        existing_names = {c.name.strip().lower() for c in _characters.values()}
-        for entry in sorted(cdir.iterdir()):
-            try:
-                if entry.is_file() and entry.suffix.lower() == ".png":
-                    raw = entry.read_bytes()
-                    if raw[:8] != b"\x89PNG\r\n\x1a\n":
-                        continue
-                    data = _parse_png_card(raw)
-                    name = (data.get("name") or "").strip()
-                    if not name or name.lower() in existing_names:
-                        continue
-                    payload = CharacterCreate(
-                        name=name,
-                        description=data.get("description", ""),
-                        avatar_url=f"/public/characters/{entry.name}",
-                        first_message=data.get("first_message") or data.get("first_mes"),
-                        alternate_greetings=data.get("alternate_greetings") or [],
-                        scenario=data.get("scenario"),
-                        system_prompt=data.get("system_prompt"),
-                        personality=data.get("personality"),
-                        mes_example=data.get("mes_example"),
-                        creator_notes=data.get("creator_notes"),
-                        tags=data.get("tags") or [],
-                        post_history_instructions=data.get("post_history_instructions"),
-                        extensions=data.get("extensions"),
-                        lorebook_ids=data.get("lorebook_ids") or [],
-                    )
-                    # Create directly (inline rather than HTTP)
-                    global _next_id
-                    data_c = payload.model_dump()
-                    if data_c.get("alternate_greetings") is None:
-                        data_c["alternate_greetings"] = []
-                    if data_c.get("tags") is None:
-                        data_c["tags"] = []
-                    if data_c.get("lorebook_ids") is None:
-                        data_c["lorebook_ids"] = []
-                    char = Character(id=_next_id, **data_c)
-                    _characters[_next_id] = char
-                    _next_id += 1
-                    existing_names.add(name.lower())
-                elif entry.is_file() and entry.suffix.lower() == ".json":
-                    obj = _json.loads(entry.read_text(encoding="utf-8"))
-                    name = (obj.get("name") or obj.get("title") or "").strip()
-                    if not name or name.lower() in existing_names:
-                        continue
-                    payload = CharacterCreate(
-                        name=name,
-                        description=obj.get("description", ""),
-                        avatar_url=obj.get("avatar_url"),
-                        first_message=obj.get("first_message") or obj.get("first_mes"),
-                        alternate_greetings=obj.get("alternate_greetings") or [],
-                        scenario=obj.get("scenario"),
-                        system_prompt=obj.get("system_prompt"),
-                        personality=obj.get("personality"),
-                        mes_example=obj.get("mes_example"),
-                        creator_notes=obj.get("creator_notes"),
-                        tags=obj.get("tags") or [],
-                        post_history_instructions=obj.get("post_history_instructions"),
-                        extensions=obj.get("extensions"),
-                        lorebook_ids=obj.get("lorebook_ids") or [],
-                    )
-                    data_c = payload.model_dump()
-                    if data_c.get("alternate_greetings") is None:
-                        data_c["alternate_greetings"] = []
-                    if data_c.get("tags") is None:
-                        data_c["tags"] = []
-                    if data_c.get("lorebook_ids") is None:
-                        data_c["lorebook_ids"] = []
-                    char = Character(id=_next_id, **data_c)
-                    _characters[_next_id] = char
-                    _next_id += 1
-                    existing_names.add(name.lower())
-            except Exception:
-                continue
-
-    # Lorebooks
-    ldir = public_dir() / "lorebooks"
-    if ldir.exists():
-        existing_lb_names = {lb.name.strip().lower() for lb in _lorebooks.values()}
-        for entry in sorted(ldir.iterdir()):
-            try:
-                if not (entry.is_file() and entry.suffix.lower() == ".json"):
-                    continue
-                obj = _json.loads(entry.read_text(encoding="utf-8"))
-                name, description, entries = _parse_lorebook_data_to_entries(obj)
-                if not name or name.strip().lower() in existing_lb_names:
-                    continue
-                # Create Lorebook
-                global _next_lorebook_id, _next_lore_id
-                lb = Lorebook(id=_next_lorebook_id, name=name, description=description, entry_ids=[])
-                for le in entries:
-# Removed old memory-based lorebook loading - using database system now
-                    _lore[_next_lore_id] = entry_obj
-                    lb.entry_ids.append(_next_lore_id)
-                    _next_lore_id += 1
-                _lorebooks[_next_lorebook_id] = lb
-                _next_lorebook_id += 1
-                existing_lb_names.add(name.strip().lower())
-            except Exception:
-                continue
-
-
-def _save_characters() -> None:
-    save_json("characters.json", {"next_id": _next_id, "items": [c.model_dump() for c in _characters.values()]})
-
-
 def _save_lore() -> None:
     save_json("lore.json", {"next_id": _next_lore_id, "items": [e.model_dump() for e in _lore.values()]})
 
@@ -632,6 +470,15 @@ def _save_memory() -> None:
 
 def _save_histories() -> None:
     save_json("histories.json", _chat_histories)
+
+
+def _get_character(char_id: int) -> CharacterModel | None:
+    """Helper to fetch a character from the database by ID."""
+    db = SessionLocal()
+    try:
+        return db.get(CharacterModel, char_id)
+    finally:
+        db.close()
 
 
 def _summarize(text: str, width: int = 60) -> str:
@@ -741,9 +588,10 @@ async def _llm_reply(
 
     # Provider: openai (or compatible)
     # Build optional system message from active character and user persona, respecting token limit
+    char = _get_character(cfg.active_character_id) if getattr(cfg, "active_character_id", None) else None
     system_msg = None if disable_system else (
         system_override if system_override is not None else _build_system_from_character(
-            _characters.get(cfg.active_character_id) if hasattr(cfg, 'active_character_id') else None,
+            char,
             getattr(cfg, 'user_persona', None),
             (getattr(cfg.providers.get(provider, ProviderConfig()), 'max_context_tokens', None) or getattr(cfg, 'max_context_tokens', 2048)),
             recent_text or "",
@@ -752,9 +600,7 @@ async def _llm_reply(
 
     # Replace tokens in messages
     def _replace(text: str) -> str:
-        char_name = None
-        if cfg.active_character_id and cfg.active_character_id in _characters:
-            char_name = _characters[cfg.active_character_id].name
+        char_name = char.name if char else None
         user_name = getattr(cfg, 'user_persona', None).name if getattr(cfg, 'user_persona', None) else "User"
         if not text:
             return text
@@ -1962,6 +1808,7 @@ async def import_character(
     name: str | None = Form(default=None),
     description: str | None = Form(default=""),
     avatar_url: str | None = Form(default=None),
+    db: Session = Depends(get_db),
 ):
     # If a file was provided, detect PNG or JSON
     data = None
@@ -1977,7 +1824,7 @@ async def import_character(
                 import os as _os
                 static_chars = _os.path.join(_os.path.dirname(__file__), "..", "public", "characters")
                 _os.makedirs(static_chars, exist_ok=True)
-                fname = f"{_next_id}.png"
+                fname = f"{int(time.time()*1000)}.png"
                 fpath = _os.path.join(static_chars, fname)
                 with open(fpath, "wb") as fh:
                     fh.write(raw)
@@ -2013,7 +1860,7 @@ async def import_character(
         lorebook_ids=data.get("lorebook_ids") or [],
     )
     # Reuse create_character logic
-    return await create_character(payload)
+    return await create_character(payload, db)
 
 
 def _parse_png_card(raw: bytes) -> Dict[str, object]:
@@ -2329,11 +2176,12 @@ async def export_chat_jsonl(session_id: str):
     # Try to get active character for the export
     cfg = load_config()
     char_name = ""
-    if cfg.active_character_id and cfg.active_character_id in _characters:
-        char_name = _characters[cfg.active_character_id].name
-    else:
-        # Fallback to session ID if not named like a character
-        char_name = "Character" if session_id not in _characters.values() else session_id
+    if getattr(cfg, 'active_character_id', None):
+        char_obj = _get_character(cfg.active_character_id)
+        if char_obj:
+            char_name = char_obj.name
+    if not char_name:
+        char_name = "Character"
 
     # Generate chat metadata
     from datetime import datetime
@@ -2636,7 +2484,7 @@ async def generate_from_chat(payload: GenerateFromChatRequest) -> GenerateFromCh
     except Exception:
         pass
     # Character-specific prepend/append
-    char = _characters.get(cfg.active_character_id) if getattr(cfg, 'active_character_id', None) else None
+    char = _get_character(cfg.active_character_id) if getattr(cfg, 'active_character_id', None) else None
     prefix = getattr(char, 'image_prompt_prefix', None) or ""
     suffix = getattr(char, 'image_prompt_suffix', None) or ""
     final_prompt = (prefix + " " + desc + " " + suffix).strip()
@@ -2663,7 +2511,7 @@ async def generate_from_chat(payload: GenerateFromChatRequest) -> GenerateFromCh
         _os.makedirs(images_root, exist_ok=True)
         # Save under character folder
         try:
-            cname = _characters.get(getattr(cfg, 'active_character_id', None)).name if getattr(cfg, 'active_character_id', None) in _characters else "default"
+            cname = char.name if char else "default"
         except Exception:
             cname = "default"
         try:
@@ -2781,7 +2629,7 @@ async def generate_from_chat(payload: GenerateFromChatRequest) -> GenerateFromCh
         images_root = _os.path.join(_os.path.dirname(__file__), "..", "public", "images")
         _os.makedirs(images_root, exist_ok=True)
         try:
-            cname = _characters.get(getattr(cfg, 'active_character_id', None)).name if getattr(cfg, 'active_character_id', None) in _characters else "default"
+            cname = char.name if char else "default"
         except Exception:
             cname = "default"
         try:
@@ -2816,6 +2664,7 @@ class GenerateImageRequest(BaseModel):
 async def generate_image(payload: GenerateImageRequest) -> GenerateFromChatResponse:
     cfg = load_config()
     final_prompt = payload.prompt.strip()
+    char = _get_character(cfg.active_character_id) if getattr(cfg, 'active_character_id', None) else None
     # Reuse provider dispatch from generate_from_chat
     class _P(BaseModel):
         session_id: str | None = None
@@ -2835,7 +2684,7 @@ async def generate_image(payload: GenerateImageRequest) -> GenerateFromChatRespo
         images_root = _os.path.join(_os.path.dirname(__file__), "..", "public", "images")
         _os.makedirs(images_root, exist_ok=True)
         try:
-            cname = _characters.get(getattr(cfg, 'active_character_id', None)).name if getattr(cfg, 'active_character_id', None) in _characters else "default"
+            cname = char.name if char else "default"
         except Exception:
             cname = "default"
         from pathlib import Path as _Path
@@ -2908,7 +2757,7 @@ async def generate_image(payload: GenerateImageRequest) -> GenerateFromChatRespo
         images_root = _os.path.join(_os.path.dirname(__file__), "..", "public", "images")
         _os.makedirs(images_root, exist_ok=True)
         try:
-            cname = _characters.get(getattr(cfg, 'active_character_id', None)).name if getattr(cfg, 'active_character_id', None) in _characters else "default"
+            cname = char.name if char else "default"
         except Exception:
             cname = "default"
         from pathlib import Path as _Path
@@ -2940,11 +2789,11 @@ async def generate_image(payload: GenerateImageRequest) -> GenerateFromChatRespo
 
 
 @app.get("/characters/{char_id}/export")
-async def export_character(char_id: int):
-    char = _characters.get(char_id)
+async def export_character(char_id: int, db: Session = Depends(get_db)):
+    char = db.get(CharacterModel, char_id)
     if not char:
         raise HTTPException(status_code=404, detail="Character not found")
-    data = char.model_dump()
+    data = Character.model_validate(char).model_dump() if hasattr(Character, "model_validate") else Character.from_orm(char).dict()
     # Map to a simple ST-like JSON; full PNG card export is future work
     st = {
         "name": data.get("name"),
