@@ -446,7 +446,19 @@ function App() {
         setSwipeNavVisible(prev => ({ ...prev, [messageIndex]: false }));
       }
     };
-  
+
+    // Hide controls when tapping outside a message
+    useEffect(() => {
+      const handleTouchOutside = (e) => {
+        if (!e.target.closest('.message')) {
+          setControlsVisible(false);
+          setHoveredMessageId(null);
+        }
+      };
+      document.addEventListener('touchstart', handleTouchOutside);
+      return () => document.removeEventListener('touchstart', handleTouchOutside);
+    }, []);
+
     const handleSwipe = async (messageIndex) => {
       setControlsVisible(false);
       try {
@@ -1111,6 +1123,14 @@ function App() {
                     if (hasSwipeHistory) handleSwipeNavHover(idx, true);
                   }}
                   onMouseLeave={() => {
+                    handleMessageHover(idx, false);
+                    if (hasSwipeHistory) handleSwipeNavHover(idx, false);
+                  }}
+                  onTouchStart={() => {
+                    handleMessageHover(idx, true);
+                    if (hasSwipeHistory) handleSwipeNavHover(idx, true);
+                  }}
+                  onTouchEnd={() => {
                     handleMessageHover(idx, false);
                     if (hasSwipeHistory) handleSwipeNavHover(idx, false);
                   }}
