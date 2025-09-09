@@ -99,6 +99,9 @@ import { LorebookDashboard } from './components/lorebook/LorebookDashboard';
 import { useChatStore } from './stores';
 import { useLorebookStore } from './stores/lorebookStore';
 
+// Circuit editor imports
+import { CircuitEditor } from './components/circuits/CircuitEditor';
+
 function App() {
   // Zustand store connections
   const chat = useChat();
@@ -759,6 +762,9 @@ function App() {
          <button className="secondary" aria-label={uiStore.showLorebooks ? 'Hide lorebooks panel' : 'Show lorebooks panel'} aria-expanded={uiStore.showLorebooks} onClick={() => uiStore.setShowLorebooks(!uiStore.showLorebooks)}>
            {uiStore.showLorebooks ? 'Hide Lorebooks' : 'Lorebooks'}
          </button>
+         <button className="secondary" aria-label={uiStore.showCircuits ? 'Hide circuits panel' : 'Show circuits panel'} aria-expanded={uiStore.showCircuits} onClick={() => uiStore.setShowCircuits(!uiStore.showCircuits)}>
+           {uiStore.showCircuits ? 'Hide Circuits' : 'Circuits'}
+         </button>
          <button className="secondary" aria-label={uiStore.phoneOpen ? 'Close phone simulator' : 'Open phone simulator'} aria-expanded={uiStore.phoneOpen} onClick={() => uiStore.setPhoneOpen(!uiStore.phoneOpen)}>
            {uiStore.phoneOpen ? 'Close Phone' : 'Phone'}
          </button>
@@ -1110,6 +1116,16 @@ function App() {
         {uiStore.showLorebooks && (
           <section className="panel overlay">
             <LorebookDashboard onClose={() => uiStore.setShowLorebooks(false)} />
+          </section>
+        )}
+
+        {uiStore.showCircuits && (
+          <section className="panel overlay">
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2>Circuits</h2>
+              <button className="secondary" onClick={() => uiStore.setShowCircuits(false)}>Close</button>
+            </div>
+            <CircuitEditor />
           </section>
         )}
 
@@ -1867,7 +1883,7 @@ function ThemesManager() {
 }
 
 function AppearanceTab() {
-  const [theme, setTheme] = useState({ primary: '#2563eb', secondary: '#374151', text1: '#e5e7eb', text2: '#cbd5e1', highlight: '#10b981', lowlight: '#111827', phone_style: 'classic' });
+  const [theme, setTheme] = useState({ primary: '#2563eb', secondary: '#374151', text1: '#e5e7eb', text2: '#cbd5e1', highlight: '#10b981', lowlight: '#111827', phone_style: 'classic', background_animations: [] });
   const [presetThemes, setPresetThemes] = useState([
     { name: 'Default', theme: { primary: '#2563eb', secondary: '#374151', text1: '#e5e7eb', text2: '#cbd5e1', highlight: '#10b981', lowlight: '#111827' } },
     { name: 'Dark', theme: { primary: '#8b5cf6', secondary: '#1f2937', text1: '#f9fafb', text2: '#d1d5db', highlight: '#f59e0b', lowlight: '#111827' } },

@@ -7,6 +7,7 @@ export interface UIState {
   showChats: boolean;
   showTools: boolean;
   showLorebooks: boolean;
+  showCircuits: boolean;
   phoneOpen: boolean;
 
   // UI configuration
@@ -39,6 +40,7 @@ export interface UIState {
   setShowChats: (show: boolean) => void;
   setShowTools: (show: boolean) => void;
   setShowLorebooks: (show: boolean) => void;
+  setShowCircuits: (show: boolean) => void;
   setPhoneOpen: (show: boolean) => void;
 
   setSettingsTab: (tab: string) => void;
@@ -71,6 +73,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   showChats: false,
   showTools: false,
   showLorebooks: false,
+  showCircuits: false,
   phoneOpen: false,
 
   settingsTab: 'connection',
@@ -95,6 +98,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   setShowChats: (show) => set({ showChats: show }),
   setShowTools: (show) => set({ showTools: show }),
   setShowLorebooks: (show) => set({ showLorebooks: show }),
+  setShowCircuits: (show) => set({ showCircuits: show }),
   setPhoneOpen: (show) => set({ phoneOpen: show }),
 
   setSettingsTab: (tab) => set({ settingsTab: tab }),
@@ -126,6 +130,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       showChats: false,
       showTools: false,
       showLorebooks: false,
+      showCircuits: false,
     }),
 
   togglePanel: (panelName, value) => {

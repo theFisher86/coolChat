@@ -13,10 +13,10 @@ def create_tables():
     """Create all database tables using SQLAlchemy"""
     # Import models after setting path
     from models import Base
-    from database import DATABASE_URL
+    from database import SQLALCHEMY_DATABASE_URL
 
     # Create engine
-    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+    engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 
     try:
         # Create all tables defined in models

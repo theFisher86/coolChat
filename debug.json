@@ -60,7 +60,7 @@
     "highlight": "#f59e0b",
     "lowlight": "#022c22",
     "phone_style": "classic",
-    "background_animations": true
+    "background_animations": []
   },
   "active_lorebook_ids": null,
   "extensions": null,

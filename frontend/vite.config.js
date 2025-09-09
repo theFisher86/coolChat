@@ -20,6 +20,7 @@ export default defineConfig({
         '/lorebooks': 'http://127.0.0.1:8001',
         '/image': 'http://127.0.0.1:8001',
         '/images': 'http://127.0.0.1:8001',
+        '/circuits': 'http://127.0.0.1:8001',
         '/prompts': 'http://127.0.0.1:8001',
         '/chats': 'http://127.0.0.1:8001',
         '/themes': 'http://127.0.0.1:8001',

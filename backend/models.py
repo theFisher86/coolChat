@@ -175,6 +175,15 @@ class RAGConfig(Base):
     # Metadata
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+class AppSettings(Base):
+    """Main application settings storage"""
+    __tablename__ = "app_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(100), nullable=False, unique=True, index=True)  # e.g., "main_config"
+    value = Column(JSON, nullable=False)  # Store all settings as JSON
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
 # Add messages relationship to ChatSession
