@@ -1,7 +1,11 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { vi, describe, it, expect } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import App from './App';
+
+afterEach(() => {
+  cleanup();
+});
 
 describe('App chat', () => {
   it('shows user and bot messages after sending', async () => {
@@ -23,5 +27,33 @@ describe('App chat', () => {
     expect(global.fetch).toHaveBeenCalledWith('http://test/chat', expect.any(Object));
 
     global.fetch.mockRestore();
+  });
+});
+
+describe('mobile menu', () => {
+  let mql;
+
+  beforeEach(() => {
+    mql = window.matchMedia('(max-width: 768px)');
+    mql.matches = true;
+  });
+
+  it('closes when tapping outside the menu', async () => {
+    render(<App />);
+    const toggle = screen.getByLabelText(/toggle menu/i);
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.touchStart(document.body);
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-expanded', 'false'));
+  });
+
+  it('closes on orientation change', async () => {
+    render(<App />);
+    const toggle = screen.getByLabelText(/toggle menu/i);
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    mql.matches = false;
+    mql.dispatchEvent({ matches: false });
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-expanded', 'false'));
   });
 });
