@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { sendChat, getChat, listChats, resetChat } from '../api';
+import { API_BASE } from '../api';
 import { flushSync } from 'react-dom';
 
 export interface ChatState {
@@ -13,6 +14,9 @@ export interface ChatState {
   sessionId: string;
   availableSessions: string[];
 
+  // Circuit integration
+  selectedCircuitId: number | null;
+
   // Actions
   setMessages: (messages: any[] | ((prev: any[]) => any[])) => void;
   setInput: (input: string) => void;
@@ -20,6 +24,7 @@ export interface ChatState {
   setError: (error: string | null) => void;
   setSessionId: (sessionId: string) => void;
   setAvailableSessions: (sessions: string[]) => void;
+  setSelectedCircuitId: (circuitId: number | null) => void;
 
   // Async actions
   sendMessage: (message: string) => Promise<string>;
@@ -37,6 +42,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   error: null,
   sessionId: 'default',
   availableSessions: ['default'],
+  selectedCircuitId: null,
 
   // Basic setters
   setMessages: (messages) => set((state) => ({ messages: typeof messages === 'function' ? messages(state.messages) : messages })),
@@ -45,18 +51,43 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setError: (error) => set({ error }),
   setSessionId: (sessionId) => set({ sessionId }),
   setAvailableSessions: (availableSessions) => set({ availableSessions }),
+  setSelectedCircuitId: (selectedCircuitId) => set({ selectedCircuitId }),
 
   // Async actions
   sendMessage: async (message: string) => {
     if (!message.trim() || get().sending) return '';
 
-    const { sessionId, messages } = get();
+    const { sessionId, messages, selectedCircuitId } = get();
     const userMsg = { role: 'user', content: message.trim() };
 
     set({ sending: true, error: null });
 
+      let circuitOutputs = null;
+      if (selectedCircuitId) {
+        // Execute circuit with message as input
+        try {
+          const res = await fetch(`${API_BASE}/circuits/${selectedCircuitId}/execute`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ inputs: { message: message.trim() } }),
+          });
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Circuit execution failed: ${res.status} ${text}`);
+          }
+          const result = await res.json();
+          if (!result.success) {
+            throw new Error(`Circuit execution error: ${result.error}`);
+          }
+          circuitOutputs = result.variables || {};
+        } catch (err: any) {
+          console.error('Circuit execution failed:', err);
+          set({ error: `Circuit execution failed: ${err.message}`, sending: false });
+          throw new Error(`Circuit execution failed: ${err.message}`);
+        }
+      }
      try {
-       const reply = await sendChat(message, sessionId);
+       const reply = await sendChat(message, sessionId, selectedCircuitId, circuitOutputs);
        console.log('sendMessage: got reply:', reply.slice(0, 50));
        set({ sending: false });
        return reply;

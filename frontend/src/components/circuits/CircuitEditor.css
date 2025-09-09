@@ -31,3 +31,133 @@
 .title {
   font-weight: 600;
 }
+
+/* Block styles */
+.circuit-block {
+  padding: 10px 15px;
+  border-radius: 8px;
+  text-align: center;
+  border: 1px solid #ccc;
+  background: #f0f0f0;
+  font-size: 12px;
+  min-width: 80px;
+  color: #333;
+  cursor: default;
+}
+
+.block-icon {
+  font-size: 18px;
+  margin-right: 5px;
+}
+
+.circuit-logic {
+  background: #e3f2fd;
+  border-color: #2196f3;
+  color: #1976d2;
+}
+
+.circuit-content {
+  background: #e8f5e8;
+  border-color: #4caf50;
+  color: #388e3c;
+}
+
+.circuit-flow {
+  background: #f3e5f5;
+  border-color: #9c27b0;
+  color: #7b1fa2;
+}
+
+.circuit-integration {
+  background: #fff3e0;
+  border-color: #ff9800;
+  color: #f57c00;
+}
+
+/* Palette items */
+.palette-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  margin-bottom: 5px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background: #f9f9f9;
+  cursor: grab;
+  transition: all 0.2s ease;
+}
+
+.palette-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.palette-item:active {
+  transform: scale(0.98);
+}
+
+.palette-item.circuit-logic {
+  background: #e3f2fd;
+  border-color: #2196f3;
+}
+
+.palette-item.circuit-content {
+  background: #e8f5e8;
+  border-color: #4caf50;
+}
+
+.palette-item.circuit-flow {
+  background: #f3e5f5;
+  border-color: #9c27b0;
+}
+
+.palette-item.circuit-integration {
+  background: #fff3e0;
+  border-color: #ff9800;
+}
+
+/* Canvas styles */
+.circuit-canvas {
+  height: 100%;
+}
+
+.canvas-grid {
+  height: calc(100% - 40px);
+}
+
+/* Properties */
+.property-item {
+  margin-bottom: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--muted);
+}
+
+.property-item:last-child {
+  border-bottom: none;
+}
+
+/* React Flow overrides */
+.react-flow__node {
+  border-radius: 6px;
+}
+
+.react-flow__handle {
+  background: #666;
+  width: 8px;
+  height: 8px;
+}
+
+.react-flow__edge-path {
+  stroke: #666;
+  stroke-width: 2;
+}
+
+.react-flow__controls {
+  bottom: 10px;
+  left: 10px;
+}
+
+.react-flow__minimap {
+  bottom: 10px;
+  right: 10px;
+}

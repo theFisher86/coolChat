@@ -1,17 +1,84 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useCircuitStore } from '../../stores/circuitStore';
+import ReactFlow, { Node, Edge, addEdge, Connection, useNodesState, useEdgesState, Controls, MiniMap } from 'reactflow';
+import 'reactflow/dist/style.css';
 import './CircuitEditor.css';
+
+// Block components
+const BlockNode = ({ data }: any) => (
+  <div className={`circuit-block circuit-${data.type}`}>
+    <span className="block-icon">{data.icon}</span>
+    <span>{data.label}</span>
+  </div>
+);
+
+const nodeTypes = {
+  logic: BlockNode,
+  content: BlockNode,
+  flow: BlockNode,
+  integration: BlockNode,
+};
 
 export const CircuitEditor: React.FC = () => {
   const { circuits, current, fetchCircuits, saveCircuit } = useCircuitStore();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] = useState({ name: '', description: '' });
 
+  // React Flow state
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+
   useEffect(() => {
     fetchCircuits().catch(err => {
       console.error('Failed to fetch circuits:', err);
     });
   }, [fetchCircuits]);
+
+  useEffect(() => {
+    if (current) {
+      setNodes((current.data as any).nodes || []);
+      setEdges((current.data as any).edges || []);
+      setSelectedNode(null);
+    }
+  }, [current, setNodes, setEdges]);
+
+  const onConnect = useCallback((params: Connection) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
+
+  const onDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const nodeType = event.dataTransfer.getData('nodeType');
+    if (!nodeType) return;
+    const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
+    if (!reactFlowBounds) return;
+    const blocksize = 100;
+    const position = {
+      x: event.clientX - reactFlowBounds.left - blocksize / 2,
+      y: event.clientY - reactFlowBounds.top - blocksize / 2,
+    };
+    const newNode: Node = {
+      id: `${nodeType}-${Date.now()}`,
+      type: nodeType,
+      position,
+      data: { label: nodeType.charAt(0).toUpperCase() + nodeType.slice(1) + ' Block', type: nodeType, icon: getIconForType(nodeType) },
+    };
+    setNodes((nds) => nds.concat(newNode));
+  }, [setNodes]);
+
+  const onDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => event.preventDefault(), []);
+
+  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => setSelectedNode(node), []);
+
+  const getIconForType = (type: string) => {
+    const icons: Record<string, string> = { logic: '🌟', content: '📖', flow: '↗️', integration: '🔗' };
+    return icons[type] || '⚡';
+  };
+
+  const onSave = () => {
+    if (!current) return;
+    saveCircuit({ ...current, data: { nodes, edges } }).catch(err => console.error('Failed to save:', err));
+  };
 
   const handleCreateCircuit = async () => {
     if (!createForm.name.trim()) return;
@@ -42,6 +109,14 @@ export const CircuitEditor: React.FC = () => {
             title="Create new circuit"
           >
             + New Circuit
+          </button>
+          <button
+            className="secondary"
+            onClick={onSave}
+            disabled={!current}
+            title="Save circuit"
+          >
+            Save Circuit
           </button>
         </div>
       </div>
@@ -92,26 +167,17 @@ export const CircuitEditor: React.FC = () => {
         <aside className="block-palette panel">
           <h4>Block Palette</h4>
           <div className="palette-items">
-            <div className="palette-item" draggable>
-              <span className="block-icon">🔗</span>
-              <span>Input</span>
-            </div>
-            <div className="palette-item" draggable>
-              <span className="block-icon">⚡</span>
-              <span>Output</span>
-            </div>
-            <div className="palette-item" draggable>
-              <span className="block-icon">↗️</span>
-              <span>AND Gate</span>
-            </div>
-            <div className="palette-item" draggable>
-              <span className="block-icon">⊻</span>
-              <span>OR Gate</span>
-            </div>
-            <div className="palette-item" draggable>
-              <span className="block-icon">🔔</span>
-              <span>NOT Gate</span>
-            </div>
+            {(['logic', 'content', 'flow', 'integration'] as const).map(type => (
+              <div
+                key={type}
+                className={`palette-item circuit-${type}`}
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('nodeType', type)}
+              >
+                <span className="block-icon">{getIconForType(type)}</span>
+                <span>{type.charAt(0).toUpperCase() + type.slice(1)} Block</span>
+              </div>
+            ))}
           </div>
         </aside>
 
@@ -121,7 +187,7 @@ export const CircuitEditor: React.FC = () => {
             {circuits.length === 0 && <span className="muted">No circuits available. Create your first circuit!</span>}
           </div>
 
-          {circuits.length > 0 && (
+          {circuits.length > 0 && !current && (
             <div className="circuits-list">
               {circuits.map((circuit) => (
                 <div
@@ -141,10 +207,23 @@ export const CircuitEditor: React.FC = () => {
           {current && (
             <div className="circuit-canvas">
               <h3>{current.name}</h3>
-              <div className="canvas-grid">
-                <div className="muted" style={{ textAlign: 'center', padding: '2rem' }}>
-                  Canvas for {current.name}<br />
-                  Circuit editing features coming soon...
+              <div style={{ height: '400px', position: 'relative' }}>
+                <div ref={reactFlowWrapper} style={{ height: '100%' }}>
+                  <ReactFlow
+                    nodes={nodes}
+                    edges={edges}
+                    onNodesChange={onNodesChange}
+                    onEdgesChange={onEdgesChange}
+                    onConnect={onConnect}
+                    onDrop={onDrop}
+                    onDragOver={onDragOver}
+                    onNodeClick={onNodeClick}
+                    nodeTypes={nodeTypes}
+                    fitView
+                  >
+                    <Controls />
+                    <MiniMap />
+                  </ReactFlow>
                 </div>
               </div>
             </div>
@@ -155,20 +234,39 @@ export const CircuitEditor: React.FC = () => {
           <h4>Properties</h4>
           {current ? (
             <div className="properties-content">
-              <div className="property-item">
-                <strong>Name:</strong> {current.name}
-              </div>
-              {current.description && (
-                <div className="property-item">
-                  <strong>Description:</strong> {current.description}
-                </div>
+              {!selectedNode ? (
+                <>
+                  <div className="property-item">
+                    <strong>Name:</strong> {current.name}
+                  </div>
+                  {current.description && (
+                    <div className="property-item">
+                      <strong>Description:</strong> {current.description}
+                    </div>
+                  )}
+                  <div className="property-item">
+                    <strong>Nodes:</strong> {nodes.length}
+                  </div>
+                  <div className="property-item">
+                    <strong>Edges:</strong> {edges.length}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="property-item">
+                    <strong>Label:</strong> {selectedNode.data.label}
+                  </div>
+                  <div className="property-item">
+                    <strong>Type:</strong> {selectedNode.data.type}
+                  </div>
+                  <div className="property-item">
+                    <strong>ID:</strong> {selectedNode.id}
+                  </div>
+                  <div className="property-item">
+                    <strong>Position:</strong> ({Math.round(selectedNode.position.x)}, {Math.round(selectedNode.position.y)})
+                  </div>
+                </>
               )}
-              <div className="property-item">
-                <strong>Nodes:</strong> {(current.data.nodes?.length || 0)}
-              </div>
-              <div className="property-item">
-                <strong>Edges:</strong> {(current.data.edges?.length || 0)}
-              </div>
             </div>
           ) : (
             <div className="muted">No circuit selected</div>

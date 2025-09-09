@@ -11,11 +11,14 @@ export async function checkHealth() {
   }
 }
 
-export async function sendChat(message, sessionId = 'default') {
+export async function sendChat(message, sessionId = 'default', circuit_id = null, circuit_outputs = null) {
+  const body = { message, session_id: sessionId };
+  if (circuit_id) body.circuit_id = circuit_id;
+  if (circuit_outputs) body.circuit_outputs = circuit_outputs;
   const res = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, session_id: sessionId }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -318,4 +321,21 @@ export async function saveToolSettings(data) {
   return res.json();
 }
 
-export default { checkHealth, sendChat, getConfig, updateConfig, getModels, listCharacters, createCharacter, deleteCharacter };
+export async function executeCircuit(circuitId, inputs, characterId = null) {
+  const body = { inputs };
+  if (characterId) body.character_id = characterId;
+
+  const res = await fetch(`${API_BASE}/circuits/${circuitId}/execute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Execute circuit failed: ${res.status} ${text}`);
+  }
+  return res.json();
+}
+
+
+export default { checkHealth, sendChat, executeCircuit, getConfig, updateConfig, getModels, listCharacters, createCharacter, deleteCharacter };
