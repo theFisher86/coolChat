@@ -3,14 +3,19 @@
 
 import asyncio
 import base64
+import logging
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
+
 import numpy as np
 from sqlalchemy.orm import Session
 
 from .models import LoreEntry
 from .rag_service import EmbeddingService
 from .database import SessionLocal
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -34,31 +39,41 @@ class HybridSearch:
         Perform hybrid search with extensive logging
         Returns results in format compatible with existing lore search API
         """
-        print(f"🔍 HYBRID SEARCH: '{query}' - Limit: {limit}")
+        logger.debug("🔍 HYBRID SEARCH: '%s' - Limit: %s", query, limit)
 
         # Step 1: Initialize components
         await self.embedding_service._ensure_initialized()
         config = self.embedding_service.config
-        print(f"📊 RAG Config: Provider={config.provider}, KW Weight={config.keyword_weight}, "
-              f"Semantic Weight={config.semantic_weight}, Top-K={config.top_k_candidates}")
+        logger.debug(
+            "📊 RAG Config: Provider=%s, KW Weight=%s, Semantic Weight=%s, Top-K=%s",
+            config.provider,
+            config.keyword_weight,
+            config.semantic_weight,
+            config.top_k_candidates,
+        )
 
         try:
             # Step 2: Generate query embedding
-            print("🔄 Generating query embedding...")
+            logger.debug("🔄 Generating query embedding...")
             query_embedding = await self.embedding_service.generate_embedding(query)
-            print("✅ Query embedding generated successfully")
+            logger.debug("✅ Query embedding generated successfully")
 
             # Step 3: Get keyword candidates
-            print(f"🔍 Getting keyword candidates (top {config.top_k_candidates})...")
-            keyword_candidates = await self._get_keyword_candidates(query, db_session, config.top_k_candidates)
-            print(f"✅ Found {len(keyword_candidates)} keyword candidates")
+            logger.debug(
+                "🔍 Getting keyword candidates (top %s)...",
+                config.top_k_candidates,
+            )
+            keyword_candidates = await self._get_keyword_candidates(
+                query, db_session, config.top_k_candidates
+            )
+            logger.debug("✅ Found %d keyword candidates", len(keyword_candidates))
 
             if not keyword_candidates:
-                print("⏭️  No keyword candidates found, returning empty results")
+                logger.debug("⏭️  No keyword candidates found, returning empty results")
                 return []
 
             # Step 4: Calculate hybrid scores
-            print("🧮 Calculating hybrid scores...")
+            logger.debug("🧮 Calculating hybrid scores...")
             search_results = await self._calculate_hybrid_scores(
                 keyword_candidates, query_embedding, config
             )
@@ -68,13 +83,19 @@ class HybridSearch:
             top_results = search_results[:limit]
 
             # Log results
-            print(f"🏆 TOP {len(top_results)} RESULTS:")
+            logger.debug("🏆 TOP %d RESULTS:", len(top_results))
             for i, result in enumerate(top_results, 1):
                 entry = result.entry
-                print(f"   #{i} - ID:{entry.id} | KW:{result.keyword_score:.3f} | "
-                      f"SEM:{result.semantic_score:.3f} | HYBRID:{result.hybrid_score:.3f}")
-                print(f"       Title: '{entry.title or 'Untitled'}'")
-                print(f"       Content: '{entry.content[:100]}...'")
+                logger.debug(
+                    "   #%d - ID:%s | KW:%.3f | SEM:%.3f | HYBRID:%.3f",
+                    i,
+                    entry.id,
+                    result.keyword_score,
+                    result.semantic_score,
+                    result.hybrid_score,
+                )
+                logger.debug("       Title: '%s'", entry.title or "Untitled")
+                logger.debug("       Content: '%s'", f"{entry.content[:100]}...")
 
             # Convert to API format
             final_results = []
@@ -97,12 +118,15 @@ class HybridSearch:
                     "matched_terms": result.matched_terms
                 })
 
-            print(f"✅ Hybrid search completed successfully - Returning {len(final_results)} results")
+            logger.debug(
+                "✅ Hybrid search completed successfully - Returning %d results",
+                len(final_results),
+            )
             return final_results
 
         except Exception as e:
-            print(f"❌ Error in hybrid search: {e}")
-            print("⏭️  Falling back to keyword-only search")
+            logger.error("❌ Error in hybrid search: %s", e)
+            logger.warning("⏭️  Falling back to keyword-only search")
             return await self._keyword_search_fallback(query, db_session, limit)
 
     async def _get_keyword_candidates(self, query: str, db_session: Optional[Session], limit: int) -> List[LoreEntry]:
@@ -185,25 +209,41 @@ class HybridSearch:
                     semantic_score = max(0, similarity)  # Ensure non-negative
                 elif candidate.embedding_dimensions == len(query_vector):
                     # Allow backward compatibility: use the candidate's dimension if it matches query
-                    print(f"ℹ️  Using backward-compatible embedding for entry {candidate.id}: "
-                          f"stored_dimensions={candidate.embedding_dimensions} (config expects {config.dimensions})")
+                    logger.info(
+                        "ℹ️  Using backward-compatible embedding for entry %s: stored_dimensions=%s (config expects %s)",
+                        candidate.id,
+                        candidate.embedding_dimensions,
+                        config.dimensions,
+                    )
                     entries_with_embeddings += 1
                     entry_vector = self.embedding_service.decode_embedding(candidate.embedding)
                     similarity = self.embedding_service.cosine_similarity(query_vector, entry_vector)
                     semantic_score = max(0, similarity)  # Ensure non-negative
                 else:
                     # Complete dimension mismatch - skip this entry
-                    print(f"⚠️  Skipping entry {candidate.id} due to dimension mismatch: "
-                          f"stored={candidate.embedding_dimensions}, query={len(query_vector)}, config={config.dimensions}")
+                    logger.warning(
+                        "⚠️  Skipping entry %s due to dimension mismatch: stored=%s, query=%s, config=%s",
+                        candidate.id,
+                        candidate.embedding_dimensions,
+                        len(query_vector),
+                        config.dimensions,
+                    )
                     semantic_score = 0.0
             else:
                 semantic_score = 0.0
 
             semantic_scores[candidate.id] = semantic_score
 
-        print(f"📈 Semantic analysis complete:")
-        print(f"   - Entries with embeddings: {entries_with_embeddings}/{len(candidates)}")
-        print(f"   - Average semantic score: {sum(semantic_scores.values())/len(semantic_scores):.3f}")
+        logger.debug("📈 Semantic analysis complete:")
+        logger.debug(
+            "   - Entries with embeddings: %d/%d",
+            entries_with_embeddings,
+            len(candidates),
+        )
+        logger.debug(
+            "   - Average semantic score: %.3f",
+            sum(semantic_scores.values()) / len(semantic_scores) if semantic_scores else 0.0,
+        )
 
         # Calculate hybrid scores
         search_results = []
@@ -227,7 +267,7 @@ class HybridSearch:
 
     async def _keyword_search_fallback(self, query: str, db_session: Optional[Session], limit: int) -> List[Dict[str, Any]]:
         """Fallback keyword-only search when embeddings fail"""
-        print("🔍 Performing keyword-only search fallback")
+        logger.debug("🔍 Performing keyword-only search fallback")
         candidates = await self._get_keyword_candidates(query, db_session, limit * 2)
 
         results = []
@@ -249,5 +289,5 @@ class HybridSearch:
                 "matched_terms": query.split()
             })
 
-        print(f"✅ Keyword fallback search returned {len(results)} results")
+        logger.debug("✅ Keyword fallback search returned %d results", len(results))
         return results
