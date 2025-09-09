@@ -31,9 +31,10 @@ A completely AI-built LLM client inspired by SillyTavern, implemented in Python 
 - ✅ Test suites (backend: chat, characters, lore, memory)
 - ✅ RAG hybrid search with multi-provider embedding support
 - 🔶 Lorebook system (backend with RAG complete, UI needs completion with keyword fixes and search improvements)
+- ✅ **Circuit Editor Implementation**: Complete ReactFlow-based visual workflow editor with drag-and-drop block creation, color-coded connectors, dynamic block sizing, and full CRUD circuit management
 - ~~🔲 Multi-chat and group bot support~~ → **DE-PRIORITIZED**
 - ~~🔲 Streaming LLM responses and WebSocket features~~ → **DE-PRIORITIZED**
-- 🔆 Prompt Manager & Circuits System (new priority): Flowchart-based UI for comprehensive prompt management with logic blocks, variables, and visual workflow design
+- 🔆 Circuit Logic Engine: Backend processing and block execution logic (next phase development)
 
 ## Architecture
 - **Backend**: Python FastAPI with SQLite database
@@ -64,11 +65,11 @@ VITE_API_BASE=https://api.example.com npm run build
 ```
 
 ## Next Steps & Priority Tasks
-1. **Implement Prompt Manager & Circuits System** - Develop visual flowchart UI for managing all prompts, variables, and logic blocks with if/then/else, random choices, counters, etc.
-2. **Enhance System Prompt Editing** - Add user-editable fields for previously hardcoded text sent to AI (persona format, tool descriptions, lore injection format)
-3. **Comprehensive Testing of Prompt Injection** - Ensure lorebooks, character fields, variables, and all editable prompts function correctly within circuits
-4. ~~Implement multi-chat support~~ **DE-PRIORITIZED**
-5. ~~Add streaming responses~~ **DE-PRIORITIZED**
+1. ✅ **Circuit Editor UI Complete** - Visual workflow editor fully implemented with professional drag-and-drop interface
+2. ⏳ **Implement Circuit Logic Engine** - Develop backend processing for circuit execution, block logic, and data flow
+3. ⏳ **Block Processing Logic** - Implement actual processing functionality for Logic, Content, Flow, and Integration blocks
+4. ⏳ **Prompt Integration** - Connect circuits to the chat system's prompt building pipeline
+5. **Enhance lorebook UI** - Complete keywords field fixes and search improvements
 6. **Enhance plugin ecosystem** - Plugin manager UI, hot-reload, sandboxing
 7. **Optimize performance** - Context management strategies, caching, async improvements
 8. **Add comprehensive testing** - Frontend tests, end-to-end flows, performance benchmarks

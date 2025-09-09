@@ -4,33 +4,120 @@ import ReactFlow, { Node, Edge, addEdge, Connection, useNodesState, useEdgesStat
 import 'reactflow/dist/style.css';
 import './CircuitEditor.css';
 
-// Block components
-const BlockNode = ({ data }: any) => (
-  <div className={`circuit-block circuit-${data.type}`}>
-    <Handle
-      type="target"
-      position={Position.Top}
-      style={{ background: '#555', width: 8, height: 8 }}
-    />
-    <Handle
-      type="source"
-      position={Position.Bottom}
-      style={{ background: '#555', width: 8, height: 8 }}
-    />
-    <Handle
-      type="target"
-      position={Position.Left}
-      style={{ background: '#555', width: 8, height: 8 }}
-    />
-    <Handle
-      type="source"
-      position={Position.Right}
-      style={{ background: '#555', width: 8, height: 8 }}
-    />
-    <span className="block-icon">{data.icon}</span>
-    <span>{data.label}</span>
-  </div>
-);
+// Block connector configurations
+const blockConfigs = {
+  logic: {
+    inputs: ['input1'],
+    outputs: ['output'],
+    label: 'Logic Block'
+  },
+  content: {
+    inputs: ['text', 'source'],
+    outputs: ['result'],
+    label: 'Content Block'
+  },
+  flow: {
+    inputs: ['trigger'],
+    outputs: ['next', 'branched'],
+    label: 'Flow Block'
+  },
+  integration: {
+    inputs: ['request', 'params'],
+    outputs: ['response', 'success', 'error'],
+    label: 'Integration Block'
+  }
+};
+
+// Block components with dynamic connectors
+const BlockNode = ({ data }: any) => {
+  const config = blockConfigs[data.type] || { inputs: [], outputs: [], label: 'Unknown Block' };
+  const totalConnectors = Math.max(config.inputs.length, config.outputs.length, 1);
+  const blockHeight = 80 + (totalConnectors * 20); // Base height + space for connectors
+
+  // Calculate connector spacing
+  const getConnectorTop = (index: number, total: number) => {
+    const start = 20;
+    const spacing = (blockHeight - 40) / Math.max(total - 1, 1);
+    return start + (index * spacing);
+  };
+
+  return (
+    <div
+      className={`circuit-block circuit-${data.type}`}
+      style={{ height: blockHeight, minHeight: 100 }}
+    >
+      {/* Input connectors (left side) */}
+      {config.inputs.map((inputName, index) => (
+        <Handle
+          key={`input-${inputName}`}
+          id={`input-${inputName}`}
+          type="target"
+          position={Position.Left}
+          style={{
+            background: '#10b981',
+            border: '2px solid #059669',
+            width: 12,
+            height: 12,
+            borderRadius: '50%',
+            position: 'absolute',
+            left: -6,
+            top: getConnectorTop(index, config.inputs.length) - 6
+          }}
+          title={`Input: ${inputName}`}
+        />
+      ))}
+
+      {/* Output connectors (right side) */}
+      {config.outputs.map((outputName, index) => (
+        <Handle
+          key={`output-${outputName}`}
+          id={`output-${outputName}`}
+          type="source"
+          position={Position.Right}
+          style={{
+            background: '#f59e0b',
+            border: '2px solid #d97706',
+            width: 12,
+            height: 12,
+            borderRadius: '50%',
+            position: 'absolute',
+            right: -6,
+            top: getConnectorTop(index, config.outputs.length) - 6
+          }}
+          title={`Output: ${outputName}`}
+        />
+      ))}
+
+      {/* Block content */}
+      <div className="block-content" style={{
+        padding: '8px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <span className="block-icon" style={{ fontSize: '16px', marginBottom: '4px' }}>
+          {data.icon}
+        </span>
+        <span style={{
+          fontSize: '12px',
+          fontWeight: 'bold',
+          textAlign: 'center',
+          wordBreak: 'break-word'
+        }}>
+          {config.label}
+        </span>
+        <span style={{
+          fontSize: '10px',
+          opacity: 0.7,
+          marginTop: '2px'
+        }}>
+          {totalConnectors} connections
+        </span>
+      </div>
+    </div>
+  );
+};
 
 const nodeTypes = {
   logic: BlockNode,
@@ -97,11 +184,18 @@ export const CircuitEditor2: React.FC = () => {
       x: event.clientX - reactFlowBounds.left - blocksize / 2,
       y: event.clientY - reactFlowBounds.top - blocksize / 2,
     };
+    const config = blockConfigs[nodeType] || { inputs: [], outputs: [], label: 'Unknown Block' };
     const newNode: Node = {
       id: `${nodeType}-${Date.now()}`,
       type: nodeType,
       position,
-      data: { label: nodeType.charAt(0).toUpperCase() + nodeType.slice(1) + ' Block', type: nodeType, icon: getIconForType(nodeType) },
+      data: {
+        label: config.label,
+        type: nodeType,
+        icon: getIconForType(nodeType),
+        inputs: config.inputs,
+        outputs: config.outputs
+      },
     };
     setNodes((nds) => nds.concat(newNode));
   }, [setNodes]);
@@ -250,14 +344,16 @@ export const CircuitEditor2: React.FC = () => {
               {/* Instructions for circuit editing:
                * How to use the circuit editor:
                * 1. Drag blocks from the Block Palette onto the canvas
-               * 2. Hover over a node to reveal connection points (small dark circles on the node edges)
-               * 3. Click and drag from one connection point to another to create edges between blocks
-               * 4. Click on a node to select it and view its properties in the properties panel
-               * 5. Delete nodes by:
+               * 2. Notice the color-coded connectors:
+               *    - GREEN connectors on the LEFT are INPUTS (data flows IN)
+               *    - ORANGE connectors on the RIGHT are OUTPUTS (data flows OUT)
+               * 3. Click and drag from an OUTPUT connector to an INPUT connector to connect blocks
+               * 4. Blocks automatically expand taller to accommodate more connectors
+               * 5. Click on a node to select it and view its properties in the properties panel
+               * 6. Delete nodes by:
                *    - Pressing the Delete key when a node is selected
                *    - Clicking the "Delete Node" button in the properties panel
-               * 6. Use the Controls panel for zoom/pan and MiniMap for overview navigation
-               * Connection points are automatically handled by ReactFlow library
+               * 7. Use the Controls panel for zoom/pan and MiniMap for overview navigation
                */}
               <div style={{ height: '400px', position: 'relative' }}>
                 <div ref={reactFlowWrapper} style={{ height: '100%' }}>
