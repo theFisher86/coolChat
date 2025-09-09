@@ -177,16 +177,31 @@ function App() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
   };
 
-  // Close menu on mobile when clicking outside or on a button
+  // Close menu on mobile when interacting outside or on orientation change
   useEffect(() => {
-    const handleClick = (e) => {
-      if (window.innerWidth <= 768 && !e.target.closest('.header')) {
+    const mediaQuery = window.matchMedia('(max-width: 768px)');
+
+    const handleInteraction = (e) => {
+      if (!e.target.closest('.header')) {
         setMenuOpen(false);
       }
     };
-    if (menuOpen) {
-      document.addEventListener('click', handleClick);
-      return () => document.removeEventListener('click', handleClick);
+
+    const handleMediaChange = (e) => {
+      if (!e.matches) {
+        setMenuOpen(false);
+      }
+    };
+
+    if (menuOpen && mediaQuery.matches) {
+      document.addEventListener('click', handleInteraction);
+      document.addEventListener('touchstart', handleInteraction);
+      mediaQuery.addEventListener('change', handleMediaChange);
+      return () => {
+        document.removeEventListener('click', handleInteraction);
+        document.removeEventListener('touchstart', handleInteraction);
+        mediaQuery.removeEventListener('change', handleMediaChange);
+      };
     }
   }, [menuOpen]);
 
