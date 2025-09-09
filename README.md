@@ -41,6 +41,12 @@ A completely AI-built LLM client inspired by SillyTavern, implemented in Python 
 - **Tools**: Integrated LLM tools for enhanced interaction
 - **Plugins**: Extensible plugin architecture
 
+## Rate Limiting
+The lorebook API endpoints are protected by an in-memory sliding-window rate limiter.
+Each client IP is limited to 30 requests per minute. Requests exceeding this limit
+receive an HTTP `429 Too Many Requests` response. Inactive clients are pruned
+automatically to keep memory usage minimal.
+
 ## Getting Started
 1. Install backend dependencies: `pip install -r backend/requirements.txt`
 2. Install frontend dependencies: `cd frontend && npm install`

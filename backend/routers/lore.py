@@ -6,8 +6,8 @@ import json
 from pathlib import Path
 import os
 import time
-from collections import defaultdict
-from collections import defaultdict
+from collections import deque, OrderedDict
+import asyncio
 import logging
 
 # Configure logging
@@ -18,23 +18,40 @@ from ..models import Lorebook, LoreEntry, Character
 from ..hybrid_search import HybridSearch
 from ..rag_service import get_rag_service
 
-# Simple in-memory rate limiter
+# Sliding-window rate limiter with LRU expiration
 class RateLimiter:
-    def __init__(self, requests_per_minute: int = 30):
+    def __init__(self, requests_per_minute: int = 30, window_seconds: int = 60):
         self.requests_per_minute = requests_per_minute
-        self.requests = defaultdict(list)
+        self.window_seconds = window_seconds
+        self.requests: "OrderedDict[str, deque[float]]" = OrderedDict()
+        self.lock = asyncio.Lock()
 
-    def is_allowed(self, client_key: str) -> bool:
-        current_time = time.time()
-        # Keep only requests from the last minute
-        self.requests[client_key] = [
-            req_time for req_time in self.requests[client_key]
-            if current_time - req_time < 60
-        ]
-        if len(self.requests[client_key]) >= self.requests_per_minute:
+    async def is_allowed(self, client_key: str) -> bool:
+        now = time.monotonic()
+        async with self.lock:
+            bucket = self.requests.get(client_key)
+            if bucket is None:
+                bucket = deque()
+                self.requests[client_key] = bucket
+
+            # Remove timestamps outside the window
+            while bucket and now - bucket[0] > self.window_seconds:
+                bucket.popleft()
+
+            if len(bucket) < self.requests_per_minute:
+                bucket.append(now)
+                self.requests.move_to_end(client_key)
+                self._expire_clients(now)
+                return True
+
             return False
-        self.requests[client_key].append(current_time)
-        return True
+
+    def _expire_clients(self, now: float) -> None:
+        # Remove clients with no activity within the window using LRU order
+        for key, bucket in list(self.requests.items()):
+            if bucket and now - bucket[-1] <= self.window_seconds:
+                break
+            del self.requests[key]
 
 rate_limiter = RateLimiter()
 
@@ -42,9 +59,9 @@ rate_limiter = RateLimiter()
 context_injection_depth = 0
 max_recursion_depth = 5
 
-def check_rate_limit(request: Request):
+async def check_rate_limit(request: Request):
     client_ip = request.client.host  # Assuming FastAPI request provides client
-    if not rate_limiter.is_allowed(client_ip):
+    if not await rate_limiter.is_allowed(client_ip):
         raise HTTPException(status_code=429, detail="Too many requests")
     return True
 
