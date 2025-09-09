@@ -74,8 +74,11 @@ except Exception:
     pass
 
 # Include routers
+# Include routers
 app.include_router(lore.router, tags=["lore"])
-app.include_router(characters.router, tags=["characters"])
+
+# Characters router not included - using direct endpoints instead to avoid model conflicts
+# app.include_router(characters.router, tags=["characters"])
 
 # Serve debug.json file for frontend access
 @app.get("/debug.json")
