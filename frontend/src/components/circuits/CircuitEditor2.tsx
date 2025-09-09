@@ -25,6 +25,103 @@ const blockConfigs = {
     inputs: ['request', 'params'],
     outputs: ['response', 'success', 'error'],
     label: 'Integration Block'
+  },
+  // System Prompt Content Blocks
+  system_main: {
+    inputs: ['character_data'],
+    outputs: ['main_prompt'],
+    label: 'System: Main Template'
+  },
+  system_tool_call: {
+    inputs: ['tools_data', 'character_data'],
+    outputs: ['tool_instructions'],
+    label: 'System: Tool Call'
+  },
+  system_lore_suggest: {
+    inputs: ['lorebook_context'],
+    outputs: ['lore_suggest_prompt'],
+    label: 'System: Lore Suggest'
+  },
+  system_image_summary: {
+    inputs: ['scene_data', 'character_data'],
+    outputs: ['image_summary_prompt'],
+    label: 'System: Image Summary'
+  },
+  // Personalized Format Template Blocks
+  format_persona: {
+    inputs: ['user_persona'],
+    outputs: ['persona_formatted'],
+    label: 'Format: Persona'
+  },
+  format_tools: {
+    inputs: ['tools_config'],
+    outputs: ['tools_formatted'],
+    label: 'Format: Tool Descriptions'
+  },
+  format_lore_injection: {
+    inputs: ['lore_entries'],
+    outputs: ['lore_formatted'],
+    label: 'Format: Lore Injection'
+  },
+  // Character-based Prompt Blocks
+  char_system_prompt: {
+    inputs: ['character_settings'],
+    outputs: ['system_preprompt'],
+    label: 'Character: System Prompt'
+  },
+  char_personality: {
+    inputs: ['character_data'],
+    outputs: ['personality_text'],
+    label: 'Character: Personality'
+  },
+  char_scenario: {
+    inputs: ['character_data', 'scenario_data'],
+    outputs: ['scenario_text'],
+    label: 'Character: Scenario'
+  },
+  char_first_message: {
+    inputs: ['character_data', 'greetings'],
+    outputs: ['first_message_text'],
+    label: 'Character: First Message'
+  },
+  // Tool Message Blocks
+  tool_image_request: {
+    inputs: ['prompt_text', 'generation_params'],
+    outputs: ['tool_call_json'],
+    label: 'Tool: Image Request'
+  },
+  tool_phone_url: {
+    inputs: ['phone_number', 'url_params'],
+    outputs: ['tool_call_json'],
+    label: 'Tool: Phone URL'
+  },
+  tool_lore_suggestions: {
+    inputs: ['suggestions_array', 'validation_params'],
+    outputs: ['tool_call_json'],
+    label: 'Tool: Lore Suggestions'
+  },
+  // Lorebook Content Blocks
+  lorebook_content: {
+    inputs: ['keywords', 'content_text', 'trigger_logic'],
+    outputs: ['lore_entry'],
+    label: 'Lorebook: Content Block'
+  },
+  // Variables Block
+  variables_substitution: {
+    inputs: ['template_text', 'variables_map'],
+    outputs: ['processed_text'],
+    label: 'Variables: K/V Substitution'
+  },
+  // Dynamic Active Lore Blocks
+  lore_active_display: {
+    inputs: ['active_lore_entries'],
+    outputs: ['formatted_lore_display'],
+    label: 'Lore: Active Display'
+  },
+  lore_title_injection: {
+    inputs: ['active_lore_entries', 'title_template'],
+    outputs: ['titled_lore_block'],
+    label: 'Lore: Active Title'
   }
 };
 
@@ -124,6 +221,31 @@ const nodeTypes = {
   content: BlockNode,
   flow: BlockNode,
   integration: BlockNode,
+  // System Prompt Blocks
+  system_main: BlockNode,
+  system_tool_call: BlockNode,
+  system_lore_suggest: BlockNode,
+  system_image_summary: BlockNode,
+  // Format Template Blocks
+  format_persona: BlockNode,
+  format_tools: BlockNode,
+  format_lore_injection: BlockNode,
+  // Character-based Blocks
+  char_system_prompt: BlockNode,
+  char_personality: BlockNode,
+  char_scenario: BlockNode,
+  char_first_message: BlockNode,
+  // Tool Message Blocks
+  tool_image_request: BlockNode,
+  tool_phone_url: BlockNode,
+  tool_lore_suggestions: BlockNode,
+  // Lorebook Content Blocks
+  lorebook_content: BlockNode,
+  // Variables Block
+  variables_substitution: BlockNode,
+  // Dynamic Active Lore Blocks
+  lore_active_display: BlockNode,
+  lore_title_injection: BlockNode,
 };
 
 export const CircuitEditor2: React.FC = () => {
@@ -301,6 +423,7 @@ export const CircuitEditor2: React.FC = () => {
         <aside className="block-palette panel">
           <h4>Block Palette</h4>
           <div className="palette-items">
+            {/* Original Blocks */}
             {(['logic', 'content', 'flow', 'integration'] as const).map(type => (
               <div
                 key={type}
@@ -310,6 +433,86 @@ export const CircuitEditor2: React.FC = () => {
               >
                 <span className="block-icon">{getIconForType(type)}</span>
                 <span>{type.charAt(0).toUpperCase() + type.slice(1)} Block</span>
+              </div>
+            ))}
+
+            {/* System Prompt Blocks */}
+            <div className="palette-section">
+              <h5>System Prompts</h5>
+            </div>
+            {(['system_main', 'system_tool_call', 'system_lore_suggest', 'system_image_summary'] as const).map(type => (
+              <div
+                key={type}
+                className={`palette-item circuit-${type}`}
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('nodeType', type)}
+              >
+                <span className="block-icon">{getIconForType(type)}</span>
+                <span>{blockConfigs[type].label}</span>
+              </div>
+            ))}
+
+            {/* Format Template Blocks */}
+            <div className="palette-section">
+              <h5>Format Templates</h5>
+            </div>
+            {(['format_persona', 'format_tools', 'format_lore_injection'] as const).map(type => (
+              <div
+                key={type}
+                className={`palette-item circuit-${type}`}
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('nodeType', type)}
+              >
+                <span className="block-icon">{getIconForType(type)}</span>
+                <span>{blockConfigs[type].label}</span>
+              </div>
+            ))}
+
+            {/* Character-based Prompt Blocks */}
+            <div className="palette-section">
+              <h5>Character Prompts</h5>
+            </div>
+            {(['char_system_prompt', 'char_personality', 'char_scenario', 'char_first_message'] as const).map(type => (
+              <div
+                key={type}
+                className={`palette-item circuit-${type}`}
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('nodeType', type)}
+              >
+                <span className="block-icon">{getIconForType(type)}</span>
+                <span>{blockConfigs[type].label}</span>
+              </div>
+            ))}
+
+            {/* Tool Message Blocks */}
+            <div className="palette-section">
+              <h5>Tool Messages</h5>
+            </div>
+            {(['tool_image_request', 'tool_phone_url', 'tool_lore_suggestions'] as const).map(type => (
+              <div
+                key={type}
+                className={`palette-item circuit-${type}`}
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('nodeType', type)}
+              >
+                <span className="block-icon">{getIconForType(type)}</span>
+                <span>{blockConfigs[type].label}</span>
+              </div>
+            ))}
+
+            {/* Content Blocks */}
+            <div className="palette-section">
+              <h5>Lore & Variables</h5>
+            </div>
+            {(['lorebook_content', 'variables_substitution', 'lore_active_display', 'lore_title_injection'] as const).map(type => (
+              <div
+                key={type}
+                className={`palette-item circuit-${type}`}
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('nodeType', type)}
+              >
+                <span className="block-icon">{getIconForType(type)}</span>
+                <span>{blockConfigs[type].label}</span>
               </div>
             ))}
           </div>
