@@ -198,8 +198,12 @@ export async function deleteLorebook(id) {
 
 // Chats
 // Lorebook search and advanced operations
-export async function searchLorebooks(query, limit = 10) {
-  const params = new URLSearchParams({ q: query || '', limit: limit.toString() });
+export async function searchLorebooks(query, limit = 10, use_rag = false) {
+  const params = new URLSearchParams({
+    q: query || '',
+    limit: limit.toString(),
+    use_rag: use_rag.toString()
+  });
   const res = await fetch(`/lorebooks/search?${params}`);
   if (!res.ok) throw new Error(`Search lorebooks failed: ${res.status}`);
   return res.json();

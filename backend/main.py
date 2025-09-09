@@ -35,6 +35,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Development bypass endpoint for testing
+@app.get("/test", summary="Development testing endpoint", include_in_schema=False)
+async def test_endpoint():
+    """Bypass endpoint for testing when auth issues occur in development.
+
+    This endpoint is for testing purposes only and bypasses any potential
+    authentication middleware issues during local development.
+    """
+    return {
+        "status": "ok",
+        "message": "CoolChat backend accessible",
+        "endpoint": "/test",
+        "bypass_for_testing": True,
+        "timestamp": time.time(),
+        "health_check": "/health",
+        "api_docs": "/docs"
+    }
+
 # Serve static files (e.g., imported character images) from repo ./public
 try:
     import os as _os
@@ -3014,6 +3032,72 @@ async def save_prompts(payload: Dict[str, object]):
         return {"status": "ok"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------------------------------------------------------------------pressure
+# RAG endpoints
+# ---------------------------------------------------------------------------
+
+
+class RAGStatsResponse(BaseModel):
+    """RAG statistics dashboard response."""
+    total_entries: int
+    embedded_entries: int
+    embedding_percentage: float
+    last_embedding_date: str | None
+    provider_type: str
+    provider_status: str
+    api_key_configured: bool
+
+
+@app.get("/rag/stats", response_model=RAGStatsResponse)
+async def get_rag_stats() -> RAGStatsResponse:
+    """Return dashboard statistics for RAG functionality."""
+    from .database import SessionLocal
+    from .models import LoreEntry
+    from .config import load_config
+    import os
+
+    db = SessionLocal()
+    try:
+        # Get total entries count
+        total_entries = db.query(LoreEntry).count()
+
+        # Get embedded entries count and most recent embedding date
+        embedded_entries = db.query(LoreEntry).filter(LoreEntry.embedding.isnot(None)).count()
+
+        # Calculate percentage
+        embedding_percentage = round((embedded_entries / total_entries * 100), 1) if total_entries > 0 else 0.0
+
+        # Get last embedding date from most recent entry
+        last_entry = db.query(LoreEntry).filter(LoreEntry.embedding.isnot(None)).order_by(LoreEntry.updated_at.desc()).first()
+        last_embedding_date = last_entry.updated_at.isoformat() if last_entry else None
+
+        # Get active provider information
+        cfg = load_config()
+        provider_type = cfg.active_provider.value if hasattr(cfg, 'active_provider') and cfg.active_provider else "unknown"
+
+        # Check API key status based on provider
+        api_key_configured = False
+        if cfg.active_provider and cfg.providers.get(cfg.active_provider):
+            provider_config = cfg.providers[cfg.active_provider]
+            api_key_configured = bool(provider_config.api_key)
+
+        # Determine provider status
+        provider_status = "Ready" if api_key_configured else "Requires API Key"
+
+        return RAGStatsResponse(
+            total_entries=total_entries,
+            embedded_entries=embedded_entries,
+            embedding_percentage=embedding_percentage,
+            last_embedding_date=last_embedding_date,
+            provider_type=provider_type,
+            provider_status=provider_status,
+            api_key_configured=api_key_configured
+        )
+
+    finally:
+        db.close()
 
 
 # Legacy lorebook export removed - now using database system

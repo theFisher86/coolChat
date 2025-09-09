@@ -37,7 +37,7 @@ coolChat is a lightweight, Python-based LLM client inspired by **SillyTavern**, 
   * ~~Lorebook UI completion~~ → **COMPLETED** with prompt manager scope expansion.
   * ~~Multi-chat/group bots capability.~~ → **DE-PRIORITIZED**
   * ~~Streaming responses and WebSocket real-time features.~~ → **DE-PRIORITIZED**
-  * Advanced RAG/vector search integration.
+  * Advanced RAG/vector search integration. ✅ **COMPLETED**
 
 ---
 

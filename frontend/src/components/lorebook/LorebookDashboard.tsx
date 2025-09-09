@@ -222,7 +222,7 @@ const LorebookDashboard: React.FC = () => {
 
       {/* Search Panel */}
       <LorebookSearch
-        onSearch={(query) => store.searchLoreAction(query)}
+        onSearch={(query, useRAG) => store.searchLoreAction(query, {}, useRAG)}
         onClear={() => store.clearSearch()}
         isSearching={store.isSearching}
         searchResults={store.searchResults}

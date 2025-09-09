@@ -142,7 +142,17 @@ This document outlines recommended features, changes, and improvements for the C
 - Prioritize prompt manager as the foundation for all AI interactions, then assess RAG integration needs.
 
 ## Appendix: Comprehensive Prompts & Variables Catalog
-This comprehensive catalog identifies all prompts, variables, and text strings sent to the AI or used in chat contexts, to ensure nothing is missed in the circuits system design.
+
+### RAG Integration Details
+- **Hybrid Search**: Combines semantic similarity (embeddings) with keyword matching
+- **Multi-Provider Support**:
+  - Ollama (local models, 384 dimensions)
+  - Gemini (Google API, 768 dimensions)
+  - OpenAI-compatible endpoints
+- **Configurable Weights**: Semantic (default 0.4) + Keyword (default 0.6) weight adjustment
+- **Embedding Management**: Automatic generation, batch processing, and dimension validation
+- **Search API**: `GET /lorebooks/search?q=query&use_rag=true` for RAG-enabled searches
+- **Stats Endpoint**: `GET /rag/stats` for dashboard statistics and system status
 
 ### A. Chat Messages
 - **User Input**: Direct user messages sent as `{"role": "user", "content": user_input}`
@@ -162,6 +172,9 @@ This comprehensive catalog identifies all prompts, variables, and text strings s
 - `keywords`: Primary and secondary keywords for trigger detection
 - `content`: Lore text injected into context
 - `title`: Optional content title
+- `embedding`: Base64-encoded vector representation for semantic search
+- `embedding_provider`: Source of embedding (ollama, gemini, openai)
+- `embedding_dimensions`: Vector size for compatibility checking
 
 ### D. System Prompts (Editable via Settings->Prompts)
 - `main`: Main system prompt template
@@ -186,5 +199,78 @@ This comprehensive catalog identifies all prompts, variables, and text strings s
 - Explicit prompts sent to image APIs as query strings or form data (e.g., "detailed image description")
 
 This catalog serves as the source of truth for refining the prompt manager scope and ensuring all AI text interactions are manageable within circuits.
+
+## 7. RAG API Documentation
+
+### RAG Statistics Endpoint
+```http
+GET /rag/stats
+```
+**Response Schema:**
+```json
+{
+  "total_entries": 125,
+  "embedded_entries": 95,
+  "embedding_percentage": 76.0,
+  "last_embedding_date": "2025-01-09T14:30:25Z",
+  "provider_type": "ollama",
+  "provider_status": "Ready",
+  "api_key_configured": true
+}
+```
+
+**Fields:**
+- `total_entries`: Total number of lore entries in database
+- `embedded_entries`: Number of entries with vector embeddings
+- `embedding_percentage`: Percentage of entries with embeddings (0.1 precision)
+- `last_embedding_date`: ISO timestamp of most recent embedding update
+- `provider_type`: Current embedding provider (ollama, gemini, openai)
+- `provider_status`: "Ready" or "Requires API Key"
+- `api_key_configured`: Boolean indicating if provider is properly configured
+
+### Lorebook Search with RAG
+```http
+GET /lorebooks/search?q=query&limit=10&use_rag=true
+```
+**Query Parameters:**
+- `q`: Search query (required)
+- `limit`: Maximum results (default: 10)
+- `use_rag`: Enable RAG hybrid search (default: false)
+
+**RAG Response Format (when use_rag=true):**
+```json
+[
+  {
+    "id": 42,
+    "title": "Dark Forest Village",
+    "content": "The forest village is surrounded by ancient oaks...",
+    "lorebook_name": "Fantasy World",
+    "lorebook_id": 2,
+    "keywords": ["village", "forest", "elves"],
+    "secondary_keywords": ["settlement"],
+    "logic": "AND ANY",
+    "trigger": 100.0,
+    "order": 0.0,
+    "score": 0.85,
+    "keyword_score": 15.2,
+    "semantic_score": 0.73,
+    "matched_terms": ["forest", "village"]
+  }
+]
+```
+
+### RAG Configuration
+Database-configured settings in `rag_config` table:
+- `provider`: Embedding provider (ollama/ollama, gemini, openai)
+- `ollama_base_url`: Ollama server address (default: localhost:11434)
+- `ollama_model`: Ollama model name (default: nomic-embed-text:latest)
+- `gemini_api_key`: API key for Gemini provider
+- `gemini_model`: Gemini model (default: text-embedding-004)
+- `top_k_candidates`: Keyword candidates for reranking (default: 200)
+- `keyword_weight`: Weight for exact matches (default: 0.6)
+- `semantic_weight`: Weight for similarity (default: 0.4)
+- `similarity_threshold`: Minimum similarity for matches (default: 0.5)
+- `batch_size`: Embedding generation batch size (default: 32)
+- `embedding_dimensions`: Expected vector dimensions (384 for Ollama, 768 for Gemini)
 
 This roadmap provides a strategic direction for the CoolChat project, focusing on improving its core architecture, expanding features, enhancing user experience, streamlining development, and empowering its extension ecosystem. The phased approach allows for incremental development and continuous improvement.

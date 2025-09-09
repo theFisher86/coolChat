@@ -25,6 +25,7 @@ export default defineConfig({
         '/themes': 'http://127.0.0.1:8001',
         '/phone': 'http://127.0.0.1:8001',
         '/tools': 'http://127.0.0.1:8001',
+        '/test': 'http://127.0.0.1:8001',
       },
     host: '0.0.0.0',
     allowedHosts: ['fisher7865.ddns.net']

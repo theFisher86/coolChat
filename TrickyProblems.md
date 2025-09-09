@@ -138,3 +138,51 @@ This applies to all async operations: image generation, API calls, file processi
 - For Zustand stores, prefer callback forms over direct state access in async handlers
 - Test with real async scenarios to catch closure issues early
 - Consider implementing useEffect with proper dependency arrays to handle prop/state changes
+
+## RAG System Troubleshooting
+
+### Problem: "Dimension mismatch: expected 384, got 768"
+
+### Description
+When switching between RAG embedding providers (Ollama vs Gemini), you encounter dimension mismatch errors:
+```
+Dimension mismatch: expected 384, got 768
+✅ Query embedding generated successfully
+❌ Error in hybrid search: cannot import name 'joinedload'
+```
+
+### Root Cause
+The database contains embeddings generated from a previous provider, but the current configuration expects a different vector dimension:
+- **Ollama**: Typically 384 dimensions (nomic-embed-text)
+- **Gemini**: 768 dimensions (text-embedding-004)
+
+The system tries to compare vectors of different sizes, causing cosine similarity calculations to fail.
+
+### Solution
+This has been resolved with automatic backward compatibility:
+1. **Provider automatically detects dimension mismatches**
+2. **System tries to match embedding dimensions with query dimensions**
+3. **Graceful fallback to keyword-only search if complete mismatch**
+4. **Detailed logging shows dimension compatibility status**
+
+### Prevention
+- **Switch providers through the UI** - avoids mid-search dimension conflicts
+- **Clear old embeddings** if switching providers: Truncate lore_entries embedding fields
+- **Monitor dimensions** in logs during provider changes
+
+### Example Fix Commands
+```bash
+# Reset embeddings to force regeneration with current provider
+python -c "
+from backend.database import SessionLocal
+from backend.models import LoreEntry
+
+db = SessionLocal()
+try:
+    db.query(LoreEntry).update({'embedding': None, 'embedding_dimensions': None})
+    db.commit()
+    print('Embeddings cleared - will regenerate with current provider')
+finally:
+    db.close()
+"
+```

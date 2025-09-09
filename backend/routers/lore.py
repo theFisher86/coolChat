@@ -7,9 +7,16 @@ from pathlib import Path
 import os
 import time
 from collections import defaultdict
+from collections import defaultdict
+import logging
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 from ..database import get_db
 from ..models import Lorebook, LoreEntry, Character
+from ..hybrid_search import HybridSearch
+from ..rag_service import get_rag_service
 
 # Simple in-memory rate limiter
 class RateLimiter:
@@ -111,14 +118,38 @@ async def create_lorebook(lorebook_data: dict, db: Session = Depends(get_db)):
 async def search_lorebooks(
     q: Optional[str] = Query(None, description="Search query"),
     limit: int = Query(10, description="Maximum number of results"),
+    use_rag: bool = Query(False, description="Enable RAG-powered semantic search"),
     db: Session = Depends(get_db)
 ):
-    """Search lore entries with advanced keyword matching logic"""
-    results = []
+    """Search lore entries with advanced keyword matching or RAG-powered search"""
+    if use_rag:
+        # Use RAG-powered semantic search
+        query_terms = [term.strip().lower() for term in (q or "").split() if term.strip()]
+        if not query_terms:
+            return {"results": [], "total_found": 0}
+
+        logger.info(f"[CoolChat] Using RAG search for query: '{q}' with use_rag=true")
+
+        try:
+            hybrid_search = HybridSearch()
+            results = await hybrid_search.search(q, db, limit)
+            total_found = len(results)
+
+            logger.info(f"[CoolChat] RAG search completed: found {total_found} results")
+            return {"results": results, "total_found": total_found}
+
+        except Exception as e:
+            logger.error(f"[CoolChat] RAG search failed, falling back to keyword search: {e}")
+            # Fall back to keyword search on error
+
+    # Keyword-based search (fallback or when use_rag=False)
+    logger.info(f"[CoolChat] Using keyword search for query: '{q}' with use_rag=false")
     query_terms = [term.strip().lower() for term in (q or "").split() if term.strip()]
 
     if not query_terms:
         return {"results": [], "total_found": 0}
+
+    results = []
 
     # Build database filter conditions for content and keywords
     content_filters = [LoreEntry.content.ilike(f"%{term}%") for term in query_terms]
@@ -224,6 +255,104 @@ async def search_lorebooks(
     # Sort by score, then by order (higher order = higher priority)
     results.sort(key=lambda x: (-x["score"], -x["order"]), reverse=False)
     return {"results": results[:limit], "total_found": len(results)}
+@router.post("/generate_embeddings", status_code=200)
+async def generate_embeddings(db: Session = Depends(get_db)):
+    """Generate embeddings for all lore entries without them"""
+    logger.info("[CoolChat] Starting embedding generation for all lore entries")
+
+    start_time = time.time()
+    successful_count = 0
+    failed_count = 0
+    skipped_count = 0
+
+    try:
+        # Get all entries without embeddings
+        entries_without_embeddings = db.query(LoreEntry).filter(
+            LoreEntry.embedding.is_(None) | (LoreEntry.embedding == "")
+        ).all()
+
+        logger.info(f"[CoolChat] Found {len(entries_without_embeddings)} entries without embeddings")
+
+        if not entries_without_embeddings:
+            logger.info("[CoolChat] No entries need embedding generation")
+            return {
+                "message": "All entries already have embeddings",
+                "total_entries": db.query(LoreEntry).count(),
+                "entries_processed": 0,
+                "successful": 0,
+                "failed": 0,
+                "skipped": 0,
+                "elapsed_time": 0.0
+            }
+
+        # Get RAG configuration info
+        rag_service = get_rag_service(db)
+        try:
+            rag_config = rag_service.config
+            logger.info(f"[CoolChat] Using RAG provider: {rag_config.provider}")
+        except Exception as config_e:
+            logger.warning(f"[CoolChat] Could not retrieve RAG config: {config_e}")
+
+        logger.info(f"[CoolChat] Starting batch processing of {len(entries_without_embeddings)} entries...")
+        logger.info(f"[CoolChat] Progress updates will be logged every 10 entries")
+
+        # Generate embeddings in batches
+        batch_size = 10  # Process in smaller batches to avoid timeout
+        processed_count = 0
+
+        for i in range(0, len(entries_without_embeddings), batch_size):
+            batch = entries_without_embeddings[i:i + batch_size]
+            batch_start_time = time.time()
+
+            try:
+                logger.info(f"[CoolChat] Processing batch {i//batch_size + 1}/{(len(entries_without_embeddings)-1)//batch_size + 1} ({len(batch)} entries)")
+                await rag_service.batch_process_lore_entries(batch)
+
+                successful_count += len(batch)
+                processed_count += len(batch)
+                batch_elapsed = time.time() - batch_start_time
+
+                logger.info(f"[CoolChat] ✓ Batch completed in {batch_elapsed:.2f}s - Success: {successful_count}, Processed: {processed_count}/{len(entries_without_embeddings)}")
+
+                # Progress update every 10 entries (or every batch with our batch_size)
+                if processed_count % 10 == 0 or processed_count == len(entries_without_embeddings):
+                    elapsed = time.time() - start_time
+                    remaining = len(entries_without_embeddings) - processed_count
+                    if processed_count > 0 and elapsed > 0:
+                        rate = processed_count / elapsed
+                        eta = remaining / rate if rate > 0 else 0
+                        logger.info(",.1f")
+            except Exception as batch_e:
+                failed_count += len(batch)
+                processed_count += len(batch)
+                logger.error(f"[CoolChat] ✗ Batch failed - Failed: {failed_count}, Error: {batch_e}")
+
+        total_elapsed = time.time() - start_time
+        skipped_count = len(entries_without_embeddings) - (successful_count + failed_count)
+
+        logger.info(f"[CoolChat] ===== FINAL SUMMARY =====")
+        logger.info(f"[CoolChat] Total entries processed: {len(entries_without_embeddings)}")
+        logger.info(f"[CoolChat] ✓ Successful: {successful_count}")
+        logger.info(f"[CoolChat] ✗ Failed: {failed_count}")
+        logger.info(".2f")
+        logger.info(".3f" if total_elapsed > 0 else 0)
+        logger.info("[CoolChat] Embedding generation completed")
+
+        return {
+            "message": "Embeddings generated successfully",
+            "total_entries": db.query(LoreEntry).count(),
+            "entries_processed": len(entries_without_embeddings),
+            "successful": successful_count,
+            "failed": failed_count,
+            "skipped": skipped_count,
+            "elapsed_time": total_elapsed
+        }
+
+    except Exception as e:
+        total_elapsed = time.time() - start_time
+        logger.error(f"[CoolChat] CRITICAL ERROR in embedding generation: {e}")
+        logger.error(f"[CoolChat] Processing stopped after {total_elapsed:.2f} seconds")
+        raise HTTPException(status_code=500, detail=f"Embedding generation failed: {str(e)}")
 
 @router.get("/{lorebook_id}")
 async def get_lorebook(lorebook_id: int, db: Session = Depends(get_db)):

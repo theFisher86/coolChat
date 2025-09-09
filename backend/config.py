@@ -1,47 +1,39 @@
-from __future__ import annotations
+#!/usr/bin/env python3
+"""CoolChat Configuration - Original + RAG Support"""
 
-from pathlib import Path
-from typing import Optional, Dict, Any
-from pydantic import BaseModel
-import json
 import os
+from typing import Dict, Optional
+from enum import Enum
+from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+import json
+from pathlib import Path
 
+load_dotenv()
 
-DEFAULT_MODEL = "gpt-4o-mini"
-
-
-def _repo_root() -> Path:
-    # backend/ -> repo root
-    return Path(__file__).resolve().parents[1]
-
-
-def _default_config_dir() -> Path:
-    # Store under ./public by default to keep user data local to repo
-    return _repo_root() / "public"
-
-
-def _default_config_path() -> Path:
-    env = os.getenv("COOLCHAT_CONFIG_PATH")
-    if env:
-        return Path(env)
-    return _default_config_dir() / "config.json"
-
-
-class Provider(str):
+# Provider enums
+class Provider(str, Enum):
     ECHO = "echo"
-    OPENAI = "openai"  # OpenAI or compatible endpoint
-    OPENROUTER = "openrouter"  # OpenRouter (OpenAI-compatible)
-    GEMINI = "gemini"  # Google Generative Language API
-    POLLINATIONS = "pollinations"  # text.pollinations.ai (OpenAI-compatible)
+    OPENAI = "openai"
+    OPENROUTER = "openrouter"
+    GEMINI = "gemini"
+    POLLINATIONS = "pollinations"
 
+class ImageProvider(str, Enum):
+    POLLINATIONS = "pollinations"
+    DEZGO = "dezgo"
 
+# Config models
 class ProviderConfig(BaseModel):
     api_key: Optional[str] = None
-    api_base: Optional[str] = None
-    model: Optional[str] = None
+    api_base: str = ""
+    model: str = ""
     temperature: float = 0.7
-    max_context_tokens: Optional[int] = None
 
+class ImagesConfig(BaseModel):
+    active: ImageProvider = ImageProvider.POLLINATIONS
+    pollinations: ProviderConfig = Field(default_factory=ProviderConfig)
+    dezgo: ProviderConfig = Field(default_factory=ProviderConfig)
 
 class UserPersona(BaseModel):
     name: str = "User"
@@ -50,133 +42,124 @@ class UserPersona(BaseModel):
     motivations: str = ""
     tracking: str = ""
 
-
 class DebugConfig(BaseModel):
     log_prompts: bool = False
     log_responses: bool = False
 
-
-class ImageProvider(str):
-    POLLINATIONS = "pollinations"
-    DEZGO = "dezgo"
-
-
-class PollinationsConfig(BaseModel):
-    api_key: Optional[str] = None  # not required by pollinations
-    model: Optional[str] = None
-
-
-class DezgoConfig(BaseModel):
-    api_key: Optional[str] = None
-    model: Optional[str] = None
-    lora_flux_1: Optional[str] = None
-    lora_flux_2: Optional[str] = None
-    lora_sd1_1: Optional[str] = None
-    lora_sd1_2: Optional[str] = None
-    lora1_strength: Optional[float] = None
-    lora2_strength: Optional[float] = None
-    transparent: bool = False
-    width: Optional[int] = None
-    height: Optional[int] = None
-    steps: Optional[int] = None
-    upscale: Optional[bool] = None
-
-
-class ImagesConfig(BaseModel):
-    active: str = ImageProvider.POLLINATIONS
-    pollinations: PollinationsConfig = PollinationsConfig()
-    dezgo: DezgoConfig = DezgoConfig()
-
-
 class AppearanceConfig(BaseModel):
-    primary: str = "#2563eb"
-    secondary: str = "#374151"
-    text1: str = "#e5e7eb"
-    text2: str = "#cbd5e1"
-    highlight: str = "#10b981"
-    lowlight: str = "#111827"
-    phone_style: str = "classic"
-    background_animations: list[str] = []
-
+    primary: str = "#3B82F6"
+    secondary: str = "#64748B"
+    text1: str = "#E5E7EB"
+    text2: str = "#CBD5E1"
+    highlight: str = "#FFFFFF"
+    lowlight: str = "#374151"
+    phone_style: str = "normal"
+    background_animations: bool = True
 
 class AppConfig(BaseModel):
-    active_provider: str = Provider.ECHO
-    providers: Dict[str, ProviderConfig]
+    active_provider: Provider = Provider.ECHO
     active_character_id: Optional[int] = None
-    user_persona: UserPersona = UserPersona()
-    debug: DebugConfig = DebugConfig()
+    providers: Dict[str, ProviderConfig] = Field(default_factory=lambda: {
+        Provider.ECHO.value: ProviderConfig(),
+        Provider.OPENAI.value: ProviderConfig(api_base="https://api.openai.com/v1"),
+        Provider.OPENROUTER.value: ProviderConfig(api_base="https://openrouter.ai/api/v1"),
+        Provider.GEMINI.value: ProviderConfig(),
+    })
+    debug: Optional[DebugConfig] = None
+    user_persona: Optional[UserPersona] = None
     max_context_tokens: int = 2048
-    images: ImagesConfig = ImagesConfig()
-    theme: AppearanceConfig = AppearanceConfig()
-    last_connection: Dict[str, Any] | None = None
-    active_lorebook_ids: Optional[list[int]] = []
     structured_output: bool = False
-    # Extension enabled state: { extension_id: true/false }
-    extensions: Dict[str, bool] = {}
+    images: ImagesConfig = Field(default_factory=ImagesConfig)
+    theme: Optional[AppearanceConfig] = None
+    active_lorebook_ids: Optional[list[int]] = None
+    extensions: Optional[dict] = None
 
+    # RAG Configuration (added)
+    rag_provider: str = Field(default_factory=lambda: os.getenv("RAG_PROVIDER", "ollama"))
+    rag_keyword_weight: float = 0.6
+    rag_semantic_weight: float = 0.4
+    rag_similarity_threshold: float = 0.5
 
-def ensure_parent(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+def _ensure_config_path() -> Path:
+    path = Path(__file__).parent.parent / "debug.json"
+    return path
 
-
-def _default_providers() -> Dict[str, ProviderConfig]:
-    return {
-        Provider.ECHO: ProviderConfig(),
-        Provider.OPENAI: ProviderConfig(api_base="https://api.openai.com/v1", model=DEFAULT_MODEL),
-        Provider.OPENROUTER: ProviderConfig(api_base="https://openrouter.ai/api/v1", model="openrouter/auto"),
-        Provider.GEMINI: ProviderConfig(api_base="https://generativelanguage.googleapis.com/v1beta/openai", model="gemini-1.5-flash"),
-    }
-
-
-def load_config(path: Optional[Path] = None) -> AppConfig:
-    cfg_path = path or _default_config_path()
-    if not cfg_path.exists():
-        # Create with defaults
-        cfg = AppConfig(active_provider=Provider.ECHO, providers=_default_providers())
-        save_config(cfg, cfg_path)
-        return cfg
+def load_config() -> AppConfig:
+    """Load configuration from debug.json"""
     try:
-        data = json.loads(cfg_path.read_text(encoding="utf-8"))
-        # Migrate from old flat schema if needed
-        if isinstance(data, dict) and "providers" not in data and "provider" in data:
-            old = data
-            active = old.get("provider", Provider.ECHO)
-            provs = _default_providers()
-            pc = provs.get(active, ProviderConfig())
-            # Copy fields where present
-            pc.api_key = old.get("api_key")
-            pc.api_base = old.get("api_base", pc.api_base)
-            pc.model = old.get("model", pc.model)
-            try:
-                pc.temperature = float(old.get("temperature", pc.temperature))
-            except Exception:
-                pass
-            migrated = AppConfig(active_provider=active, providers=provs)
-            # Save migration back
-            save_config(migrated, cfg_path)
-            return migrated
-        # Ensure default fields exist when older config versions are read
-        if "providers" in data and "active_provider" in data:
-            # backfill nested fields
-            if "user_persona" not in data:
-                data["user_persona"] = UserPersona().model_dump()
-            if "debug" not in data:
-                data["debug"] = DebugConfig().model_dump()
-        return AppConfig(**data)
+        path = _ensure_config_path()
+        if path.exists():
+            data = json.loads(path.read_text())
+            return AppConfig(**data)
+        else:
+            return AppConfig()
     except Exception:
-        # On error, fallback to defaults but do not overwrite user's file
-        return AppConfig(active_provider=Provider.ECHO, providers=_default_providers())
+        return AppConfig()
 
+def save_config(config: AppConfig) -> None:
+    """Save configuration to debug.json"""
+    try:
+        path = _ensure_config_path()
+        path.write_text(config.model_dump_json(indent=2))
+    except Exception as e:
+        print(f"Failed to save config: {e}")
 
-def save_config(cfg: AppConfig, path: Optional[Path] = None) -> None:
-    cfg_path = path or _default_config_path()
-    ensure_parent(cfg_path)
-    cfg_path.write_text(cfg.model_dump_json(indent=2), encoding="utf-8")
+def mask_secret(value: Optional[str]) -> Optional[str]:
+    """Mask sensitive values"""
+    if not value:
+        return None
+    if len(value) <= 4:
+        return "*" * len(value)
+    return value[:2] + "*" * (len(value) - 4) + value[-2:]
 
+# RAG-specific configuration helpers
+class Config:
+    """Application configuration with environment variable support"""
 
-def mask_secret(secret: Optional[str]) -> Optional[str]:
-    if not secret:
-        return secret
-    if len(secret) <= 6:
-        return "*" * len(secret)
-    return secret[:3] + "*" * (len(secret) - 7) + secret[-4:]
+    # Database
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///app.db")
+
+    # Ollama Configuration
+    OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "nomic-embed-text:latest")
+
+    # Google Gemini Configuration
+    GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "models/text-embedding-004")
+
+    # RAG Configuration Defaults
+    RAG_PROVIDER: str = os.getenv("RAG_PROVIDER", "ollama")
+    RAG_KEYWORD_WEIGHT: float = float(os.getenv("RAG_KEYWORD_WEIGHT", "0.6"))
+    RAG_SEMANTIC_WEIGHT: float = float(os.getenv("RAG_SEMANTIC_WEIGHT", "0.4"))
+    RAG_SIMILARITY_THRESHOLD: float = float(os.getenv("RAG_SIMILARITY_THRESHOLD", "0.5"))
+    RAG_TOP_K_CANDIDATES: int = int(os.getenv("RAG_TOP_K_CANDIDATES", "200"))
+    RAG_BATCH_SIZE: int = int(os.getenv("RAG_BATCH_SIZE", "32"))
+    RAG_AUTO_REGENERATE: bool = os.getenv("RAG_AUTO_REGENERATE", "true").lower() == "true"
+
+    # Debug Configuration
+    RAG_DEBUG: bool = os.getenv("RAG_DEBUG", "false").lower() == "true"
+    RAG_LOG_LEVEL: str = os.getenv("RAG_LOG_LEVEL", "INFO")
+
+    @classmethod
+    def create_rag_config_dict(cls) -> dict:
+        """Convert RAG config to dictionary for database insertion"""
+        return {
+            "provider": cls.RAG_PROVIDER,
+            "ollama_base_url": cls.OLLAMA_BASE_URL,
+            "ollama_model": cls.OLLAMA_MODEL,
+            "gemini_api_key": cls.GEMINI_API_KEY or "",
+            "gemini_model": cls.GEMINI_MODEL,
+            "top_k_candidates": cls.RAG_TOP_K_CANDIDATES,
+            "keyword_weight": cls.RAG_KEYWORD_WEIGHT,
+            "semantic_weight": cls.RAG_SEMANTIC_WEIGHT,
+            "similarity_threshold": cls.RAG_SIMILARITY_THRESHOLD,
+            "batch_size": cls.RAG_BATCH_SIZE,
+            "regenerate_on_content_update": cls.RAG_AUTO_REGENERATE,
+            "embedding_dimensions": 384 if cls.RAG_PROVIDER == "ollama" else 768
+        }
+
+# Global instances
+config = Config()
+
+# Original app config instance for backward compatibility
+app_config = AppConfig()

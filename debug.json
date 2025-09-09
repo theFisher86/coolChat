@@ -1,19 +1,71 @@
 {
-  "frontend": {
-    "tool_parsing": true,
-    "llm_responses": true,
-    "api_calls": false,
-    "store_actions": false,
-    "component_render": false,
-    "performance": false
+  "active_provider": "gemini",
+  "active_character_id": null,
+  "providers": {
+    "echo": {
+      "api_key": null,
+      "api_base": "",
+      "model": "",
+      "temperature": 0.7
+    },
+    "openai": {
+      "api_key": null,
+      "api_base": "https://api.openai.com/v1",
+      "model": "",
+      "temperature": 0.7
+    },
+    "openrouter": {
+      "api_key": null,
+      "api_base": "https://openrouter.ai/api/v1",
+      "model": "",
+      "temperature": 0.7
+    },
+    "gemini": {
+      "api_key": "AIzaSyAfJN0x26RJAfkPTbqCgkXV5U47aO-E4Lg",
+      "api_base": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "model": "models/gemini-2.5-flash",
+      "temperature": 0.7
+    }
   },
-  "backend": {
-    "tool_calls": true,
-    "llm_requests": false,
-    "llm_responses": false,
-    "database_operations": false,
-    "file_operations": false,
-    "performance": false
+  "debug": null,
+  "user_persona": {
+    "name": "User",
+    "description": "",
+    "personality": "",
+    "motivations": "",
+    "tracking": ""
   },
-  "enabled": true
+  "max_context_tokens": 2048,
+  "structured_output": true,
+  "images": {
+    "active": "pollinations",
+    "pollinations": {
+      "api_key": null,
+      "api_base": "",
+      "model": "",
+      "temperature": 0.7
+    },
+    "dezgo": {
+      "api_key": null,
+      "api_base": "",
+      "model": "",
+      "temperature": 0.7
+    }
+  },
+  "theme": {
+    "primary": "#059669",
+    "secondary": "#064e3b",
+    "text1": "#ecfdf5",
+    "text2": "#a7f3d0",
+    "highlight": "#f59e0b",
+    "lowlight": "#022c22",
+    "phone_style": "classic",
+    "background_animations": true
+  },
+  "active_lorebook_ids": null,
+  "extensions": null,
+  "rag_provider": "ollama",
+  "rag_keyword_weight": 0.6,
+  "rag_semantic_weight": 0.4,
+  "rag_similarity_threshold": 0.5
 }

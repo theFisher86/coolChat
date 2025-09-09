@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RAG Test</title>
+</head>
+<body>
+    <h1>RAG Search Test</h1>
+    <input type="text" id="searchQuery" placeholder="Enter search query">
+    <button onclick="testSearch()">Search with RAG</button>
+    <button onclick="testNormalSearch()">Normal Search</button>
+    <br><br>
+    <textarea id="results" rows="20" cols="80"></textarea>
+    
+    <script>
+        async function testSearch() {
+            const query = document.getElementById('searchQuery').value;
+            const results = document.getElementById('results');
+            
+            try {
+                results.value = "Loading RAG search...";
+                const response = await fetch(`/lorebooks/search?q=${encodeURIComponent(query)}&use_rag=true&limit=5`);
+                const data = await response.json();
+                
+                results.value = "RAG RESULTS:\n" + JSON.stringify(data, null, 2);
+                
+                // Also log to console for detailed debug output
+                console.log("RAG Search Results:", data);
+                
+            } catch(e) {
+                results.value = "Error: " + e.message;
+                console.error(e);
+            }
+        }
+        
+        async function testNormalSearch() {
+            const query = document.getElementById('searchQuery').value;
+            const results = document.getElementById('results');
+            
+            try {
+                results.value = "Loading normal search...";
+                const response = await fetch(`/lorebooks/search?q=${encodeURIComponent(query)}&limit=5`);
+                const data = await response.json();
+                
+                results.value = "NORMAL RESULTS:\n" + JSON.stringify(data, null, 2);
+                
+            } catch(e) {
+                results.value = "Error: " + e.message;
+            }
+        }
+    </script>
+</body>
+</html>

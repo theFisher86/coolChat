@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { SearchResult } from '../../stores/lorebookStore';
 
 interface LorebookSearchProps {
-  onSearch: (query: string) => Promise<void>;
+  onSearch: (query: string, useRAG?: boolean) => Promise<void>;
   onClear: () => void;
   isSearching: boolean;
   searchResults: SearchResult[];
@@ -25,22 +25,23 @@ export const LorebookSearch: React.FC<LorebookSearchProps> = ({
     maxTrigger: '',
     limit: 50
   });
+  const [useRAG, setUseRAG] = useState(false);
 
-  const debouncedSearch = useCallback((query: string) => {
-    if (debounceTimeout) {
-      clearTimeout(debounceTimeout);
-    }
+ const debouncedSearch = useCallback((query: string) => {
+   if (debounceTimeout) {
+     clearTimeout(debounceTimeout);
+   }
 
-    const timeout = setTimeout(async () => {
-      if (query.trim()) {
-        await onSearch(query);
-      } else {
-        onClear();
-      }
-    }, 300);
+   const timeout = setTimeout(async () => {
+     if (query.trim()) {
+       await onSearch(query, useRAG);
+     } else {
+       onClear();
+     }
+   }, 300);
 
-    setDebounceTimeout(timeout);
-  }, [onSearch, onClear, debounceTimeout]);
+   setDebounceTimeout(timeout);
+ }, [onSearch, onClear, debounceTimeout, useRAG]);
 
   const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -48,11 +49,11 @@ export const LorebookSearch: React.FC<LorebookSearchProps> = ({
     debouncedSearch(value);
   };
 
-  const handleAdvancedSearch = async () => {
-    if (searchQuery || searchFilters.keywords.length > 0) {
-      await onSearch(searchQuery);
-    }
-  };
+ const handleAdvancedSearch = async () => {
+   if (searchQuery || searchFilters.keywords.length > 0) {
+     await onSearch(searchQuery, useRAG);
+   }
+ };
 
   const clearSearch = () => {
     setSearchQuery('');
@@ -186,6 +187,24 @@ export const LorebookSearch: React.FC<LorebookSearchProps> = ({
             {/* Logic and Trigger Filters */}
             <div className="filter-row">
               <div className="filter-group">
+            {/* RAG Search Toggle */}
+            <div className="filter-row">
+              <div className="filter-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={useRAG}
+                    onChange={(e) => setUseRAG(e.target.checked)}
+                  />
+                  Enable Semantic Search (RAG)
+                </label>
+                <div className="rag-info">
+                  <small>
+                    Use semantic search for better results based on meaning rather than exact keywords
+                  </small>
+                </div>
+              </div>
+            </div>
                 <h4>Logic</h4>
                 <select
                   value={searchFilters.logic}

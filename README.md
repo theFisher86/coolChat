@@ -11,9 +11,11 @@ A completely AI-built LLM client inspired by SillyTavern, implemented in Python 
 - **Persistent Conversations**: SQLite-backed chat history and session management
 - **Plugin System**: Extensible with animated backgrounds and tool integrations
 
-### Lorebook System (In Development)
+### Lorebook System with RAG Integration
 - **Structured Knowledge Base**: World information and context injection
-- **Advanced Search**: Semantic keyword matching with scoring
+- **RAG Hybrid Search**: Semantic similarity + keyword matching with configurable weights
+- **Multi-Provider Support**: Ollama, Gemini, OpenAI-compatible embedding providers
+- **Progress Tracking**: Embedding generation and status monitoring
 - **Modal Editor**: Full-viewport editing interface (UI improvements needed)
 - **JSON Field Support**: Keywords with spaces and multiple formats
 
@@ -27,10 +29,10 @@ A completely AI-built LLM client inspired by SillyTavern, implemented in Python 
 - ✅ Extensions support (animatedBackgrounds plugin)
 - ✅ Debug system with runtime configuration
 - ✅ Test suites (backend: chat, characters, lore, memory)
-- 🔶 Lorebook system (backend complete, UI needs completion with keyword fixes and search improvements)
+- ✅ RAG hybrid search with multi-provider embedding support
+- 🔶 Lorebook system (backend with RAG complete, UI needs completion with keyword fixes and search improvements)
 - ~~🔲 Multi-chat and group bot support~~ → **DE-PRIORITIZED**
 - ~~🔲 Streaming LLM responses and WebSocket features~~ → **DE-PRIORITIZED**
-- 🔲 Advanced RAG/vector search integration
 - 🔆 Prompt Manager & Circuits System (new priority): Flowchart-based UI for comprehensive prompt management with logic blocks, variables, and visual workflow design
 
 ## Architecture

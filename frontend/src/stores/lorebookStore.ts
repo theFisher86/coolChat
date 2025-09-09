@@ -115,7 +115,7 @@ interface LorebookStoreState {
   deleteLoreEntryAction: (id: number, updateLocal?: boolean) => Promise<void>;
 
   // Search
-  searchLoreAction: (query: string, filters?: any) => Promise<void>;
+  searchLoreAction: (query: string, filters?: any, useRAG?: boolean) => Promise<void>;
   clearSearch: () => void;
 
   // Bulk Operations
@@ -373,12 +373,12 @@ export const useLorebookStore = create<LorebookStoreState>()(
       },
 
       // Search
-      searchLoreAction: async (query, filters = {}) => {
+      searchLoreAction: async (query, filters = {}, useRAG = false) => {
         try {
           set({ isSearching: true, searchQuery: query });
 
-          // Determine search endpoint based on filters
-          const response = await searchLorebooks(query, 100);
+          // Use searchLorebooks with the use_rag parameter
+          const response = await searchLorebooks(query, 100, useRAG);
 
           set({
             searchResults: response.results || [],
