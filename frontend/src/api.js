@@ -1,6 +1,9 @@
+// Configurable API base URL; default is same-origin for development
+export const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '');
+
 export async function checkHealth() {
   try {
-    const res = await fetch('/health');
+    const res = await fetch(`${API_BASE}/health`);
     return res.ok;
   } catch (err) {
     console.error('Health check failed', err);
@@ -9,7 +12,7 @@ export async function checkHealth() {
 }
 
 export async function sendChat(message, sessionId = 'default') {
-  const res = await fetch('/chat', {
+  const res = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, session_id: sessionId }),
@@ -24,13 +27,13 @@ export async function sendChat(message, sessionId = 'default') {
 
 // Characters API
 export async function listCharacters() {
-  const res = await fetch('/characters');
+  const res = await fetch(`${API_BASE}/characters`);
   if (!res.ok) throw new Error(`List characters failed: ${res.status}`);
   return res.json();
 }
 
 export async function createCharacter({ name, description = '', avatar_url = null }) {
-  const res = await fetch('/characters', {
+  const res = await fetch(`${API_BASE}/characters`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, description, avatar_url }),
@@ -40,12 +43,12 @@ export async function createCharacter({ name, description = '', avatar_url = nul
 }
 
 export async function deleteCharacter(id) {
-  const res = await fetch(`/characters/${id}`, { method: 'DELETE' });
+  const res = await fetch(`${API_BASE}/characters/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error(`Delete character failed: ${res.status}`);
 }
 
 export async function getConfig() {
-  const res = await fetch('/config');
+  const res = await fetch(`${API_BASE}/config`);
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Get config failed: ${res.status} ${text}`);
@@ -54,14 +57,14 @@ export async function getConfig() {
 }
 
 export async function getConfigRaw() {
-  const res = await fetch('/config/raw');
+  const res = await fetch(`${API_BASE}/config/raw`);
   if (!res.ok) throw new Error(`Get raw config failed: ${res.status}`);
   return res.json();
 }
 
 // partial can include { active_provider, providers: { [provider]: { api_base, api_key, model, temperature } } }
 export async function updateConfig(partial) {
-  const res = await fetch('/config', {
+  const res = await fetch(`${API_BASE}/config`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(partial),
@@ -81,7 +84,7 @@ export async function updateConfig(partial) {
 
 export async function getModels(provider) {
   const qs = provider ? `?provider=${encodeURIComponent(provider)}` : '';
-  const res = await fetch(`/models${qs}`);
+  const res = await fetch(`${API_BASE}/models${qs}`);
   if (!res.ok) {
     const text = await res.text();
     try {
@@ -97,13 +100,13 @@ export async function getModels(provider) {
 
 // Lorebooks API
 export async function listLorebooks() {
-  const res = await fetch('/lorebooks/');
+  const res = await fetch(`${API_BASE}/lorebooks/`);
   if (!res.ok) throw new Error(`List lorebooks failed: ${res.status}`);
   return res.json();
 }
 
 export async function createLorebook({ name, description = '', entries = [] }) {
-  const res = await fetch('/lorebooks', {
+  const res = await fetch(`${API_BASE}/lorebooks`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, description, entries }),
@@ -115,13 +118,13 @@ export async function createLorebook({ name, description = '', entries = [] }) {
 export async function importLorebook(file) {
   const fd = new FormData();
   fd.append('file', file);
-  const res = await fetch('/lorebooks/import', { method: 'POST', body: fd });
+  const res = await fetch(`${API_BASE}/lorebooks/import`, { method: 'POST', body: fd });
   if (!res.ok) throw new Error(`Import lorebook failed: ${res.status}`);
   return res.json();
 }
 
 export async function updateCharacter(id, data) {
-  const res = await fetch(`/characters/${id}`, {
+  const res = await fetch(`${API_BASE}/characters/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -131,7 +134,7 @@ export async function updateCharacter(id, data) {
 }
 
 export async function suggestCharacterField(field, characterDraft) {
-  const res = await fetch('/characters/suggest_field', {
+  const res = await fetch(`${API_BASE}/characters/suggest_field`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ field, character: characterDraft }),
@@ -141,13 +144,13 @@ export async function suggestCharacterField(field, characterDraft) {
 }
 
 export async function getImageModels(provider) {
-  const res = await fetch(`/image/models?provider=${encodeURIComponent(provider)}`);
+  const res = await fetch(`${API_BASE}/image/models?provider=${encodeURIComponent(provider)}`);
   if (!res.ok) throw new Error(`Get image models failed: ${res.status}`);
   return res.json();
 }
 
 export async function generateImageFromChat(sessionId = 'default') {
-  const res = await fetch('/images/generate_from_chat', {
+  const res = await fetch(`${API_BASE}/images/generate_from_chat`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId }),
   });
   if (!res.ok) throw new Error(`Generate image failed: ${res.status}`);
@@ -155,43 +158,43 @@ export async function generateImageFromChat(sessionId = 'default') {
 }
 
 export async function generateImageDirect(prompt, sessionId = 'default') {
-  const res = await fetch('/images/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, session_id: sessionId }) });
+  const res = await fetch(`${API_BASE}/images/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, session_id: sessionId }) });
   if (!res.ok) throw new Error(`Generate image failed: ${res.status}`);
   return res.json();
 }
 
 export async function updateLoreEntry(id, data) {
-  const res = await fetch(`/lorebooks/entries/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  const res = await fetch(`${API_BASE}/lorebooks/entries/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
   if (!res.ok) throw new Error(`Update lore failed: ${res.status}`);
   return res.json();
 }
 
 export async function updateLorebook(id, data) {
-  const res = await fetch(`/lorebooks/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  const res = await fetch(`${API_BASE}/lorebooks/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
   if (!res.ok) throw new Error(`Update lorebook failed: ${res.status}`);
   return res.json();
 }
 
 export async function getLorebook(id) {
-  const res = await fetch(`/lorebooks/${id}`);
+  const res = await fetch(`${API_BASE}/lorebooks/${id}`);
   if (!res.ok) throw new Error(`Get lorebook failed: ${res.status}`);
   return res.json();
 }
 
 export async function createLoreEntry(data) {
-  const res = await fetch('/lorebooks/entries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  const res = await fetch(`${API_BASE}/lorebooks/entries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
   if (!res.ok) throw new Error(`Create lore entry failed: ${res.status}`);
   return res.json();
 }
 
 export async function deleteLoreEntry(id) {
-  const res = await fetch(`/lorebooks/entries/${id}`, { method: 'DELETE' });
+  const res = await fetch(`${API_BASE}/lorebooks/entries/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error(`Delete lore entry failed: ${res.status}`);
   return res.json();
 }
 
 export async function deleteLorebook(id) {
-  const res = await fetch(`/lorebooks/${id}`, { method: 'DELETE' });
+  const res = await fetch(`${API_BASE}/lorebooks/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error(`Delete lorebook failed: ${res.status}`);
   return res.json();
 }
@@ -204,13 +207,13 @@ export async function searchLorebooks(query, limit = 10, use_rag = false) {
     limit: limit.toString(),
     use_rag: use_rag.toString()
   });
-  const res = await fetch(`/lorebooks/search?${params}`);
+  const res = await fetch(`${API_BASE}/lorebooks/search?${params}`);
   if (!res.ok) throw new Error(`Search lorebooks failed: ${res.status}`);
   return res.json();
 }
 
 export async function bulkCreateLoreEntries(bulkData) {
-  const res = await fetch('/lorebooks/entries/bulk', {
+  const res = await fetch(`${API_BASE}/lorebooks/entries/bulk`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(bulkData),
@@ -220,7 +223,7 @@ export async function bulkCreateLoreEntries(bulkData) {
 }
 
 export async function linkCharacterToLorebook(characterId, lorebookId) {
-  const res = await fetch(`/lorebooks/characters/${characterId}/lorebooks/${lorebookId}`, {
+  const res = await fetch(`${API_BASE}/lorebooks/characters/${characterId}/lorebooks/${lorebookId}`, {
     method: 'POST',
   });
   if (!res.ok) throw new Error(`Link character to lorebook failed: ${res.status}`);
@@ -228,7 +231,7 @@ export async function linkCharacterToLorebook(characterId, lorebookId) {
 }
 
 export async function unlinkCharacterFromLorebook(characterId, lorebookId) {
-  const res = await fetch(`/lorebooks/characters/${characterId}/lorebooks/${lorebookId}`, {
+  const res = await fetch(`${API_BASE}/lorebooks/characters/${characterId}/lorebooks/${lorebookId}`, {
     method: 'DELETE',
   });
   if (!res.ok) throw new Error(`Unlink character from lorebook failed: ${res.status}`);
@@ -236,13 +239,13 @@ export async function unlinkCharacterFromLorebook(characterId, lorebookId) {
 }
 
 export async function getCharacterLorebooks(characterId) {
-  const res = await fetch(`/lorebooks/characters/${characterId}/lorebooks`);
+  const res = await fetch(`${API_BASE}/lorebooks/characters/${characterId}/lorebooks`);
   if (!res.ok) throw new Error(`Get character lorebooks failed: ${res.status}`);
   return res.json();
 }
 
 export async function injectLoreContext(requestData) {
-  const res = await fetch('/lorebooks/inject_context', {
+  const res = await fetch(`${API_BASE}/lorebooks/inject_context`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(requestData),
@@ -251,66 +254,66 @@ export async function injectLoreContext(requestData) {
   return res.json();
 }
 export async function listChats() {
-  const res = await fetch('/chats');
+  const res = await fetch(`${API_BASE}/chats`);
   if (!res.ok) throw new Error(`List chats failed: ${res.status}`);
   return res.json(); // { sessions: string[] }
 }
 export async function getChat(sessionId) {
-  const res = await fetch(`/chats/${encodeURIComponent(sessionId)}`);
+  const res = await fetch(`${API_BASE}/chats/${encodeURIComponent(sessionId)}`);
   if (!res.ok) throw new Error(`Get chat failed: ${res.status}`);
   return res.json(); // { messages: [{role, content}] }
 }
 export async function resetChat(sessionId) {
-  const res = await fetch(`/chats/${encodeURIComponent(sessionId)}/reset`, { method: 'POST' });
+  const res = await fetch(`${API_BASE}/chats/${encodeURIComponent(sessionId)}/reset`, { method: 'POST' });
   if (!res.ok) throw new Error(`Reset chat failed: ${res.status}`);
   return res.json();
 }
 
 // Prompts
 export async function getPrompts() {
-  const res = await fetch('/prompts');
+  const res = await fetch(`${API_BASE}/prompts`);
   if (!res.ok) throw new Error(`Get prompts failed: ${res.status}`);
   return res.json();
 }
 export async function savePrompts(data) {
-  const res = await fetch('/prompts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  const res = await fetch(`${API_BASE}/prompts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
   if (!res.ok) throw new Error(`Save prompts failed: ${res.status}`);
   return res.json();
 }
 
 // Lore suggestions
 export async function suggestLoreFromChat(sessionId = 'default') {
-  const res = await fetch('/lore/suggest_from_chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId }) });
+  const res = await fetch(`${API_BASE}/lore/suggest_from_chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId }) });
   if (!res.ok) throw new Error(`Suggest lore failed: ${res.status}`);
   return res.json(); // { suggestions: [{ keyword, content }] }
 }
 
 // Tools / MCP
 export async function getMcpServers() {
-  const res = await fetch('/tools/mcp');
+  const res = await fetch(`${API_BASE}/tools/mcp`);
   if (!res.ok) throw new Error(`Get MCP servers failed: ${res.status}`);
   return res.json(); // { servers: [] }
 }
 export async function saveMcpServers(data) {
-  const res = await fetch('/tools/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  const res = await fetch(`${API_BASE}/tools/mcp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
   if (!res.ok) throw new Error(`Save MCP servers failed: ${res.status}`);
   return res.json();
 }
 
 export async function getMcpAwesome() {
-  const res = await fetch('/tools/mcp/awesome');
+  const res = await fetch(`${API_BASE}/tools/mcp/awesome`);
   if (!res.ok) throw new Error(`Fetch MCP awesome failed: ${res.status}`);
   return res.json(); // { items: [{name,url,description}] }
 }
 
 // Tool settings
 export async function getToolSettings() {
-  const res = await fetch('/tools/settings');
+  const res = await fetch(`${API_BASE}/tools/settings`);
   if (!res.ok) throw new Error(`Get tool settings failed: ${res.status}`);
   return res.json();
 }
 export async function saveToolSettings(data) {
-  const res = await fetch('/tools/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  const res = await fetch(`${API_BASE}/tools/settings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
   if (!res.ok) throw new Error(`Save tool settings failed: ${res.status}`);
   return res.json();
 }

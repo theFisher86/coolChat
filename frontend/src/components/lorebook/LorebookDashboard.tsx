@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLorebookStore } from '../../stores/lorebookStore';
+import { API_BASE } from '../../api.js';
 import { Lorebook, LoreEntry } from '../../stores/lorebookStore';
 import { LorebookGrid } from './LorebookGrid';
 import { LorebookSearch } from './LorebookSearch';
@@ -63,7 +64,7 @@ const LorebookDashboard: React.FC = () => {
     setEditingLorebook(lorebook);
     try {
       // Load the lorebook entries for editing using API directly
-      const lorebookData = await fetch(`/lorebooks/${lorebook.id}`);
+      const lorebookData = await fetch(`${API_BASE}/lorebooks/${lorebook.id}`);
       if (lorebookData.ok) {
         const data = await lorebookData.json();
         setEditingLorebookEntries(data.entries || []);
@@ -91,7 +92,7 @@ const LorebookDashboard: React.FC = () => {
       const originalEntries = editingLorebookEntries;
 
       // Load current entries from server for comparison
-      const currentResponse = await fetch(`/lorebooks/${editingLorebook.id}`);
+      const currentResponse = await fetch(`${API_BASE}/lorebooks/${editingLorebook.id}`);
       if (!currentResponse.ok) {
         throw new Error('Failed to load current entries');
       }
@@ -142,7 +143,7 @@ const LorebookDashboard: React.FC = () => {
             order: entry.order
           };
 
-          await fetch('/lorebooks/entries', {
+          await fetch(`${API_BASE}/lorebooks/entries`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(newEntryData)
@@ -165,7 +166,7 @@ const LorebookDashboard: React.FC = () => {
             order: entry.order
           };
 
-          await fetch(`/lorebooks/entries/${entry.id}`, {
+          await fetch(`${API_BASE}/lorebooks/entries/${entry.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(updateData)
@@ -178,7 +179,7 @@ const LorebookDashboard: React.FC = () => {
       // Delete removed entries
       for (const entryId of toDelete) {
         try {
-          await fetch(`/lorebooks/entries/${entryId}`, {
+          await fetch(`${API_BASE}/lorebooks/entries/${entryId}`, {
             method: 'DELETE'
           });
         } catch (error) {

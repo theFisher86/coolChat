@@ -1,13 +1,15 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import { vi, describe, it, expect } from 'vitest';
 import App from './App';
 
 describe('App chat', () => {
   it('shows user and bot messages after sending', async () => {
-    vi.spyOn(global, 'fetch').mockResolvedValue({
-      ok: true,
-      json: async () => ({ reply: 'Hi there' }),
+    vi.spyOn(global, 'fetch').mockImplementation((url) => {
+      if (typeof url === 'string' && url.endsWith('/chat')) {
+        return Promise.resolve({ ok: true, json: async () => ({ reply: 'Hi there' }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
     });
 
     render(<App />);
@@ -18,6 +20,7 @@ describe('App chat', () => {
 
     expect(await screen.findByText('Hello')).toBeInTheDocument();
     expect(await screen.findByText('Hi there')).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledWith('http://test/chat', expect.any(Object));
 
     global.fetch.mockRestore();
   });

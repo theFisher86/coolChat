@@ -1,4 +1,5 @@
 // Simple plugin host for CoolChat frontend
+import { API_BASE } from './api.js';
 
 const state = {
   backgroundAnimations: [], // [{ id, label }]
@@ -76,7 +77,7 @@ export async function loadPlugins(manifestData) {
       plugins = Array.isArray(manifestData.plugins) ? manifestData.plugins : [];
       enabled = manifestData.enabled || {};
     } else {
-      const res = await fetch('/plugins');
+      const res = await fetch(`${API_BASE}/plugins`);
       if (!res.ok) {
         console.warn('Failed to fetch /plugins');
         return;
@@ -105,7 +106,7 @@ export async function loadPlugins(manifestData) {
       }
       try {
         const entry = p?.client?.entry || 'plugin.js';
-        const url = `/plugins/static/${p.id}/${entry}`;
+        const url = `${API_BASE}/plugins/static/${p.id}/${entry}`;
         // Vite needs @vite-ignore for fully dynamic imports
         console.log('Loading plugin:', p.id, 'from', url);
         const mod = await import(/* @vite-ignore */ url);
