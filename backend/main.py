@@ -73,8 +73,9 @@ try:
 except Exception:
     pass
 
-# Include the lore router
+# Include routers
 app.include_router(lore.router, tags=["lore"])
+app.include_router(characters.router, tags=["characters"])
 
 # Serve debug.json file for frontend access
 @app.get("/debug.json")
