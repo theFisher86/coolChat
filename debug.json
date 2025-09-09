@@ -21,7 +21,7 @@
       "temperature": 0.7
     },
     "gemini": {
-      "api_key": "AIzaSyAfJN0x26RJAfkPTbqCgkXV5U47aO-E4Lg",
+      "api_key": "",
       "api_base": "https://generativelanguage.googleapis.com/v1beta/openai",
       "model": "models/gemini-2.5-flash",
       "temperature": 0.7
