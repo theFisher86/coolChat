@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { flushSync } from 'react-dom';
+import { Routes, Route } from 'react-router-dom';
 import './App.css';
 import * as pluginHost from './pluginHost';
 
@@ -101,6 +102,7 @@ import { useLorebookStore } from './stores/lorebookStore';
 
 // Circuit editor imports
 import { CircuitEditor } from './components/circuits/CircuitEditor';
+import { CircuitEditor2 } from './components/circuits/CircuitEditor2';
 
 function App() {
   // Zustand store connections
@@ -1125,7 +1127,7 @@ function App() {
               <h2>Circuits</h2>
               <button className="secondary" onClick={() => uiStore.setShowCircuits(false)}>Close</button>
             </div>
-            <CircuitEditor />
+            <CircuitEditor2 />
           </section>
         )}
 

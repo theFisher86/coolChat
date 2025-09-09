@@ -34,7 +34,7 @@ export const CircuitEditor: React.FC = () => {
   return (
     <div className="circuit-editor">
       <div className="toolbar panel">
-        <span className="title">Circuits</span>
+        <span className="title">Circuits1</span>
         <div className="toolbar-actions">
           <button
             className="secondary"
