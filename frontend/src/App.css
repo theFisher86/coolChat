@@ -693,8 +693,8 @@ a { color: var(--muted); }
   padding: 6px 12px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 6px;
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   opacity: 0;
   pointer-events: none;
   z-index: 10;
@@ -931,6 +931,7 @@ a { color: var(--muted); }
   align-items: center;
   justify-content: center;
   padding: 16px;
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
 
@@ -2027,7 +2028,8 @@ a { color: var(--muted); }
 
 /*Lorebook editor stuff*/
 .entries-editor {
-  backdrop-filter: blur(8px);;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1rem;

@@ -1,5 +1,10 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useCircuitStore } from '../../stores/circuitStore';
+import { useCircuitStore, Circuit } from '../../stores/circuitStore';
+
+
+import { useConfigStore } from '../../stores/configStore';
+import { useDataStore } from '../../stores/dataStore';
+import { useLorebookStore } from '../../stores/lorebookStore';
 import ReactFlow, { Node, Edge, addEdge, Connection, useNodesState, useEdgesState, Controls, MiniMap, Handle, Position } from 'reactflow';
 import 'reactflow/dist/style.css';
 import './CircuitEditor.css';
@@ -297,14 +302,8 @@ const BlockNode = ({ data }: any) => {
           id={`input-${inputName}`}
           type="target"
           position={Position.Left}
+          className="handle-input"
           style={{
-            background: '#10b981',
-            border: '2px solid #059669',
-            width: 12,
-            height: 12,
-            borderRadius: '50%',
-            position: 'absolute',
-            left: -6,
             top: getConnectorTop(index, config.inputs.length) - 6
           }}
           title={`Input: ${inputName}`}
@@ -318,14 +317,8 @@ const BlockNode = ({ data }: any) => {
           id={`output-${outputName}`}
           type="source"
           position={Position.Right}
+          className="handle-output"
           style={{
-            background: '#f59e0b',
-            border: '2px solid #d97706',
-            width: 12,
-            height: 12,
-            borderRadius: '50%',
-            position: 'absolute',
-            right: -6,
             top: getConnectorTop(index, config.outputs.length) - 6
           }}
           title={`Output: ${outputName}`}
@@ -333,29 +326,14 @@ const BlockNode = ({ data }: any) => {
       ))}
 
       {/* Block content */}
-      <div className="block-content" style={{
-        padding: '8px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <span className="block-icon" style={{ fontSize: '16px', marginBottom: '4px' }}>
+      <div className="block-content-flex">
+        <span className="block-icon-large">
           {data.icon}
         </span>
-        <span style={{
-          fontSize: '12px',
-          fontWeight: 'bold',
-          textAlign: 'center',
-          wordBreak: 'break-word'
-        }}>
+        <span className="block-label">
           {config.label}
         </span>
-        <span style={{
-          fontSize: '10px',
-          opacity: 0.7,
-          marginTop: '2px'
-        }}>
+        <span className="block-connector-count">
           {totalConnectors} connections
         </span>
       </div>
@@ -396,9 +374,20 @@ const nodeTypes = {
 };
 
 export const CircuitEditor2: React.FC = () => {
+  const circuitStore = useCircuitStore();
+  const { userPersona, providers, activeProvider, loadConfig } = useConfigStore();
+  const { characters, loadCharacters, lorebooks, findCharacterById } = useDataStore();
+  const { loreEntries, selectedLorebook, selectLorebook, fetchLorebooks, refreshLoreEntries } = useLorebookStore();
+  const [entryLoading, setEntryLoading] = useState(false);
   const { circuits, current, fetchCircuits, saveCircuit } = useCircuitStore();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] = useState({ name: '', description: '' });
+  // Live data states
+  const [liveDataLoading, setLiveDataLoading] = useState<{ [key: string]: boolean }>({});
+  const [liveDataErrors, setLiveDataErrors] = useState<{ [key: string]: string }>({});
+  const [blockData, setBlockData] = useState<{ [key: string]: any }>({});
+  const [promptsData, setPromptsData] = useState<{ variables: Record<string, string> } | null>(null);
+  const [dataInitialized, setDataInitialized] = useState(false);
 
   // React Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -446,12 +435,110 @@ export const CircuitEditor2: React.FC = () => {
   }, [selectedNode, setNodes, setEdges]);
 
   useEffect(() => {
-    if (current) {
-      setNodes((current.data as any).nodes || []);
-      setEdges((current.data as any).edges || []);
+    if (circuitStore.current) {
+      setNodes((circuitStore.current.data as any).nodes || []);
+      setEdges((circuitStore.current.data as any).edges || []);
       setSelectedNode(null);
     }
-  }, [current, setNodes, setEdges]);
+  }, [circuitStore.current, setNodes, setEdges, setSelectedNode]);
+
+  // Live data initialization and subscriptions
+  useEffect(() => {
+    const initializeData = async () => {
+      if (dataInitialized) return;
+
+      try {
+        setLiveDataLoading(prev => ({ ...prev, config: true, data: true, lorebook: true }));
+
+        // Load configuration data (persona, providers)
+        await loadConfig();
+
+        // Load character and lorebook data
+        await Promise.all([
+          loadCharacters(),
+          fetchLorebooks()
+        ]);
+
+        // Load prompts.json for variables
+        try {
+          const response = await fetch('/backend/prompts.json');
+          if (response.ok) {
+            const prompts = await response.json();
+            setPromptsData(prompts);
+          }
+        } catch (error) {
+          console.warn('Failed to load prompts.json:', error);
+          setLiveDataErrors(prev => ({ ...prev, prompts: 'Failed to load variables' }));
+        }
+
+        setDataInitialized(true);
+        setLiveDataLoading(prev => ({ config: false, data: false, lorebook: false }));
+
+      } catch (error) {
+        console.error('Failed to initialize live data:', error);
+        setLiveDataErrors(prev => ({ ...prev, init: 'Failed to load application data' }));
+        setLiveDataLoading(prev => ({ config: false, data: false, lorebook: false }));
+      }
+    };
+
+    initializeData();
+  }, [dataInitialized, loadConfig, loadCharacters, fetchLorebooks]);
+
+  // Refresh function for manual data updates
+  const refreshBlockData = useCallback(async (blockType?: string) => {
+    try {
+      setLiveDataLoading(prev => ({ ...prev, [blockType || 'all']: true }));
+
+      switch (blockType) {
+        case 'persona':
+        case 'format_persona':
+          await loadConfig();
+          break;
+        case 'tools':
+        case 'format_tools':
+          await loadConfig();
+          break;
+        case 'lore':
+        case 'format_lore_injection':
+          await fetchLorebooks();
+          if (selectedLorebook) await refreshLoreEntries();
+          break;
+        case 'character':
+          await loadCharacters();
+          break;
+        case 'variables':
+        case 'variables_substitution':
+          try {
+            const response = await fetch('/backend/prompts.json');
+            if (response.ok) {
+              const prompts = await response.json();
+              setPromptsData(prompts);
+            }
+          } catch (error) {
+            setLiveDataErrors(prev => ({ ...prev, prompts: 'Failed to reload variables' }));
+          }
+          break;
+        default:
+          // Refresh all data
+          await loadConfig();
+          await Promise.all([
+            loadCharacters(),
+            fetchLorebooks()
+          ]);
+          if (selectedLorebook) await refreshLoreEntries();
+          break;
+      }
+
+      setLiveDataLoading(prev => ({ ...prev, [blockType || 'all']: false }));
+    } catch (error) {
+      console.error(`Failed to refresh ${blockType || 'all'} data:`, error);
+      setLiveDataErrors(prev => ({
+        ...prev,
+        [blockType || 'all']: `Failed to refresh ${blockType || 'all'} data`
+      }));
+      setLiveDataLoading(prev => ({ ...prev, [blockType || 'all']: false }));
+    }
+  }, [loadConfig, loadCharacters, fetchLorebooks, refreshLoreEntries, selectedLorebook]);
 
   // Handle keyboard events for deleting nodes
   useEffect(() => {
@@ -464,7 +551,7 @@ export const CircuitEditor2: React.FC = () => {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNode, deleteSelectedNode]);
+  }, [circuitStore.current, setNodes, setEdges, setSelectedNode]);
 
   const onConnect = useCallback((params: Connection) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
 
@@ -505,8 +592,9 @@ export const CircuitEditor2: React.FC = () => {
   };
 
   const onSave = () => {
-    if (!current) return;
-    saveCircuit({ ...current, data: { nodes, edges } }).catch(err => console.error('Failed to save:', err));
+    const currentCircuit = circuitStore.current;
+    if (!currentCircuit) return;
+    saveCircuit({ ...currentCircuit, data: { nodes, edges } }).catch(err => console.error('Failed to save:', err));
   };
 
   const handleCreateCircuit = async () => {
@@ -542,7 +630,7 @@ export const CircuitEditor2: React.FC = () => {
           <button
             className="secondary"
             onClick={onSave}
-            disabled={!current}
+            disabled={!circuitStore.current}
             title="Save circuit"
           >
             Save Circuit
@@ -699,10 +787,10 @@ export const CircuitEditor2: React.FC = () => {
 
           {circuits.length > 0 && !current && (
             <div className="circuits-list">
-              {circuits.map((circuit) => (
+              {circuits.map((circuit: Circuit) => (
                 <div
-                  key={circuit.id}
-                  className={`circuit-item ${current?.id === circuit.id ? 'active' : ''}`}
+                  key={circuit.id || circuit.name}
+                  className="circuit-item"
                   onClick={() => useCircuitStore.setState({ current: circuit })}
                 >
                   <span className="circuit-name">{circuit.name}</span>
@@ -873,16 +961,212 @@ export const CircuitEditor2: React.FC = () => {
                             ))}
                           </div>
                         )}
+
+                        {/* Live Data Section */}
+                        {(selectedNode.data.type === 'format_persona' ||
+                          selectedNode.data.type === 'format_tools' ||
+                          selectedNode.data.type === 'format_lore_injection' ||
+                          selectedNode.data.type.startsWith('char_') ||
+                          selectedNode.data.type === 'variables_substitution' ||
+                          selectedNode.data.type === 'lorebook_content' ||
+                          selectedNode.data.type === 'lore_active_display' ||
+                          selectedNode.data.type === 'lore_title_injection') && (
+                          <div className="properties-section">
+                            <h5>📊 Live Data</h5>
+                            <div className="live-data-section">
+                              {/* Format Persona Block */}
+                              {selectedNode.data.type === 'format_persona' && (
+                                <>
+                                  <div className="live-data-item">
+                                    <strong>User Name:</strong>
+                                    <span className="data-display">
+                                      {userPersona?.name || <span className="data-empty">Not set</span>}
+                                    </span>
+                                  </div>
+                                  <div className="live-data-item">
+                                    <strong>Description:</strong>
+                                    <span className="data-display">
+                                      {userPersona?.description || <span className="data-empty">Not set</span>}
+                                    </span>
+                                  </div>
+                                </>
+                              )}
+
+                              {/* Format Tools Block */}
+                              {selectedNode.data.type === 'format_tools' && (
+                                <>
+                                  <div className="live-data-item">
+                                    <strong>Active Provider:</strong>
+                                    <span className="data-display">{activeProvider || 'None'}</span>
+                                  </div>
+                                  <div className="live-data-item">
+                                    <strong>Available Providers:</strong>
+                                    <span className="data-display">{Object.keys(providers).length} configured</span>
+                                  </div>
+                                  <div className="live-data-details">
+                                    {Object.entries(providers).map(([key, config]: [string, any]) => (
+                                      <div key={key} className="provider-detail">
+                                        <span className="provider-name">{key}</span>
+                                        {config.model && <span className="provider-model">({config.model})</span>}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
+
+                              {/* Format Lore Injection Block */}
+                              {selectedNode.data.type === 'format_lore_injection' && (
+                                <>
+                                  <div className="live-data-item">
+                                    <strong>Active Lorebook:</strong>
+                                    <span className="data-display">
+                                      {selectedLorebook?.name || <span className="data-empty">None selected</span>}
+                                    </span>
+                                  </div>
+                                  <div className="live-data-item">
+                                    <strong>Lore Entries:</strong>
+                                    <span className="data-display">{loreEntries.length} entries</span>
+                                  </div>
+                                  <div className="live-data-details" style={{ maxHeight: '120px', overflowY: 'auto' }}>
+                                    {loreEntries.slice(0, 5).map((entry: any) => (
+                                      <div key={entry.id} className="lore-detail">
+                                        <span className="lore-title">{entry.title}</span>
+                                        <div className="lore-keywords">
+                                          {entry.keywords?.length > 0 && (
+                                            <small>Keys: {entry.keywords.slice(0, 3).join(', ')}</small>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                    {loreEntries.length > 5 && (
+                                      <div className="lore-more">... and {loreEntries.length - 5} more entries</div>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+
+                              {/* Character Blocks */}
+                              {selectedNode.data.type.startsWith('char_') && (
+                                <>
+                                  <div className="live-data-item">
+                                    <strong>Loaded Characters:</strong>
+                                    <span className="data-display">{characters.length} characters</span>
+                                  </div>
+                                  <div className="live-data-details live-data-details-scroll">
+                                    {characters.slice(0, 5).map((char: any) => (
+                                      <div key={char.id} className="character-detail">
+                                        <span className="character-name">{char.name || 'Unnamed'}</span>
+                                        {char.description && (
+                                          <div className="character-desc">
+                                            <small>{char.description.slice(0, 50)}...</small>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                    {characters.length > 5 && (
+                                      <div className="character-more">... and {characters.length - 5} more characters</div>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+
+                              {/* Variables Substitution Block */}
+                              {selectedNode.data.type === 'variables_substitution' && (
+                                <>
+                                  <div className="live-data-item">
+                                    <strong>Variables Status:</strong>
+                                    <span className="data-display">
+                                      {promptsData ? 'Loaded' : <span className="data-empty">Not loaded</span>}
+                                    </span>
+                                  </div>
+                                  {promptsData?.variables && (
+                                    <div className="live-data-item">
+                                      <strong>Variable Count:</strong>
+                                      <span className="data-display">{Object.keys(promptsData.variables).length}</span>
+                                    </div>
+                                  )}
+                                  {promptsData?.variables && (
+                                    <div className="live-data-details live-data-details-scroll">
+                                      {Object.entries(promptsData.variables).slice(0, 5).map(([key, value]: [string, any]) => (
+                                        <div key={key} className="variable-detail">
+                                          <span className="variable-key">{key}:</span>
+                                          <span className="variable-value">{String(value).slice(0, 30)}...</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </>
+                              )}
+
+                              {/* Lorebook Content Block */}
+                              {(selectedNode.data.type === 'lorebook_content' ||
+                                selectedNode.data.type === 'lore_active_display' ||
+                                selectedNode.data.type === 'lore_title_injection') && (
+                                <>
+                                  <div className="live-data-item">
+                                    <strong>Lorebook:</strong>
+                                    <span className="data-display">
+                                      {selectedLorebook?.name || <span className="data-empty">None selected</span>}
+                                    </span>
+                                  </div>
+                                  <div className="live-data-item">
+                                    <strong>Total Entries:</strong>
+                                    <span className="data-display">{loreEntries.length}</span>
+                                  </div>
+                                  {false && (
+                                    <div className="loading-state">
+                                      <small>Loading lore entries...</small>
+                                    </div>
+                                  )}
+                                  {loreEntries.length > 0 && (
+                                    <div className="live-data-details live-data-details-scroll">
+                                      {loreEntries.slice(0, 3).map((entry: any) => (
+                                        <div key={entry.id} className="entry-detail">
+                                          <div className="entry-header">
+                                            <span className="entry-title">{entry.title}</span>
+                                            <small className="entry-trigger">T:{entry.trigger}</small>
+                                          </div>
+                                          <div className="entry-keywords">
+                                            {entry.keywords?.length > 0 && (
+                                              <small>K: {entry.keywords.slice(0, 2).join(', ')}</small>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </>
+                              )}
+
+                              {/* Refresh button for all live data sections */}
+                              <div className="live-data-actions live-data-actions-bordered">
+                                <button
+                                  className="secondary refresh-btn refresh-btn-small"
+                                  onClick={() => refreshBlockData(selectedNode.data.type)}
+                                  disabled={liveDataLoading[selectedNode.data.type]}
+                                >
+                                  {liveDataLoading[selectedNode.data.type] ? '⏳' : '🔄'} Refresh
+                                </button>
+                                {liveDataErrors[selectedNode.data.type] && (
+                                  <div className="error-state">
+                                    <small style={{ color: '#e74c3c' }}>
+                                      ❌ {liveDataErrors[selectedNode.data.type]}
+                                    </small>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </>
                     );
                   })()}
 
                   <div className="property-item">
                     <button
-                      className="secondary delete-btn"
+                      className="secondary delete-btn delete-btn-full"
                       onClick={deleteSelectedNode}
                       title="Delete selected node (or press Delete key)"
-                      style={{ marginTop: '8px', width: '100%' }}
                     >
                       🗑️ Delete Node
                     </button>

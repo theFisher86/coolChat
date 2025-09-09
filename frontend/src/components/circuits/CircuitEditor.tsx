@@ -142,7 +142,7 @@ export const CircuitEditor: React.FC = () => {
             <div className="circuit-canvas">
               <h3>{current.name}</h3>
               <div className="canvas-grid">
-                <div className="muted" style={{ textAlign: 'center', padding: '2rem' }}>
+                <div className="muted canvas-placeholder">
                   Canvas for {current.name}<br />
                   Circuit editing features coming soon...
                 </div>

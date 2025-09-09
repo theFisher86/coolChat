@@ -5,7 +5,10 @@ export interface Circuit {
   id?: number;
   name: string;
   description?: string;
-  data: object;
+  data: {
+    nodes?: any[];
+    edges?: any[];
+  };
 }
 
 interface CircuitState {
