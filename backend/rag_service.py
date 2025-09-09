@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from .models import RAGConfig, LoreEntry
 from .rag_providers import create_provider, EmbeddingProvider
-from .database import get_db
+from .database import SessionLocal
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -68,10 +68,10 @@ class EmbeddingService:
         config_record = await self._get_db_config()
         self._config = EmbeddingConfig.from_db_config(config_record)
 
-    async def _get_db_config(self) -> RAGConfig:
+    async def _get_db_config(self, session: Optional[Session] = None) -> RAGConfig:
         """Get RAG configuration from database"""
-        db = self._db if self._db else next(get_db())
-        try:
+        db = session or self._db
+        if db is not None:
             config = db.query(RAGConfig).first()
             if not config:
                 # Create default config if none exists
@@ -80,9 +80,15 @@ class EmbeddingService:
                 db.commit()
                 db.refresh(config)
             return config
-        finally:
-            if not self._db:
-                db.close()
+        # Fallback to context-managed session
+        with SessionLocal() as db:
+            config = db.query(RAGConfig).first()
+            if not config:
+                config = RAGConfig()
+                db.add(config)
+                db.commit()
+                db.refresh(config)
+            return config
 
     async def generate_embedding(self, text: str) -> str:
         """Generate embedding and return as base64 encoded string"""
@@ -110,8 +116,8 @@ class EmbeddingService:
         embedding_b64 = await self.generate_embedding(text)
 
         # Update the lore entry in database
-        db = self._db if self._db else next(get_db())
-        try:
+        if self._db:
+            db = self._db
             entry = db.query(LoreEntry).filter(LoreEntry.id == lore_entry.id).first()
             if entry:
                 await self._load_config()
@@ -120,12 +126,20 @@ class EmbeddingService:
                 entry.embedding_dimensions = self._config.dimensions
                 entry.embedding_updated_at = datetime.now()
                 entry.embedding_provider = self._provider.provider_name
-
                 db.commit()
                 logger.info(f"Updated embedding for lore entry {lore_entry.id}")
-        finally:
-            if not self._db:
-                db.close()
+        else:
+            with SessionLocal() as db:
+                entry = db.query(LoreEntry).filter(LoreEntry.id == lore_entry.id).first()
+                if entry:
+                    await self._load_config()
+                    entry.embedding = embedding_b64
+                    entry.embedding_model = self._config.model
+                    entry.embedding_dimensions = self._config.dimensions
+                    entry.embedding_updated_at = datetime.now()
+                    entry.embedding_provider = self._provider.provider_name
+                    db.commit()
+                    logger.info(f"Updated embedding for lore entry {lore_entry.id}")
 
         return embedding_b64
 
@@ -174,8 +188,8 @@ class EmbeddingService:
         embedding_strings = await self.generate_embeddings_batch(texts)
 
         # Update database
-        db = self._db if self._db else next(get_db())
-        try:
+        if self._db:
+            db = self._db
             for entry, embedding_b64 in zip(entries, embedding_strings):
                 entry_db = db.query(LoreEntry).filter(LoreEntry.id == entry.id).first()
                 if entry_db:
@@ -184,23 +198,31 @@ class EmbeddingService:
                     entry_db.embedding_dimensions = self._config.dimensions
                     entry_db.embedding_updated_at = datetime.now()
                     entry_db.embedding_provider = self._provider.provider_name
-
             db.commit()
             logger.info(f"Batch processed {len(entries)} lore entries")
-        finally:
-            if not self._db:
-                db.close()
+        else:
+            with SessionLocal() as db:
+                for entry, embedding_b64 in zip(entries, embedding_strings):
+                    entry_db = db.query(LoreEntry).filter(LoreEntry.id == entry.id).first()
+                    if entry_db:
+                        entry_db.embedding = embedding_b64
+                        entry_db.embedding_model = self._config.model
+                        entry_db.embedding_dimensions = self._config.dimensions
+                        entry_db.embedding_updated_at = datetime.now()
+                        entry_db.embedding_provider = self._provider.provider_name
+                db.commit()
+                logger.info(f"Batch processed {len(entries)} lore entries")
 
     async def get_similar_entries(self, query_embedding: str, limit: int = 10) -> List[LoreEntry]:
         """Find lore entries similar to query embedding"""
         await self._ensure_initialized()
 
         query_vector = self.decode_embedding(query_embedding)
+        query_dims = len(query_vector)
 
         # Get all entries with embeddings
-        db = self._db if self._db else next(get_db())
-        try:
-            # Use flexible dimension matching - prefer config dimensions, but allow backward compatibility
+        if self._db:
+            db = self._db
             entries_exact = db.query(LoreEntry).filter(
                 LoreEntry.embedding.isnot(None),
                 LoreEntry.embedding_dimensions == self._config.dimensions
@@ -210,34 +232,43 @@ class EmbeddingService:
                 LoreEntry.embedding.isnot(None),
                 LoreEntry.embedding_dimensions == query_dims
             ).all()
+        else:
+            with SessionLocal() as db:
+                entries_exact = db.query(LoreEntry).filter(
+                    LoreEntry.embedding.isnot(None),
+                    LoreEntry.embedding_dimensions == self._config.dimensions
+                ).all()
 
-            # Combine and deduplicate
-            all_entries = list({entry.id: entry for entry in entries_exact + entries_compatible}.values())
+                entries_compatible = db.query(LoreEntry).filter(
+                    LoreEntry.embedding.isnot(None),
+                    LoreEntry.embedding_dimensions == query_dims
+                ).all()
 
-            logger.info(f"Found {len(entries_exact)} entries with config dimensions, "
-                       f"{len(entries_compatible)} with query dimensions")
+        # Combine and deduplicate
+        all_entries = list({entry.id: entry for entry in entries_exact + entries_compatible}.values())
 
-            similarities = []
-            for entry in all_entries:
-                try:
-                    entry_vector = self.decode_embedding(entry.embedding)
-                    similarity = self.cosine_similarity(query_vector, entry_vector)
-                    if similarity >= self._config.similarity_threshold:
-                        similarities.append((entry, similarity))
-                except Exception as e:
-                    logger.warning(f"Error processing embedding for entry {entry.id}: {e}")
+        logger.info(
+            f"Found {len(entries_exact)} entries with config dimensions, "
+            f"{len(entries_compatible)} with query dimensions"
+        )
 
-            # Sort by similarity (highest first)
-            similarities.sort(key=lambda x: x[1], reverse=True)
+        similarities = []
+        for entry in all_entries:
+            try:
+                entry_vector = self.decode_embedding(entry.embedding)
+                similarity = self.cosine_similarity(query_vector, entry_vector)
+                if similarity >= self._config.similarity_threshold:
+                    similarities.append((entry, similarity))
+            except Exception as e:
+                logger.warning(f"Error processing embedding for entry {entry.id}: {e}")
 
-            # Return top results
-            similar_entries = [entry for entry, _ in similarities[:limit]]
-            logger.info(f"Found {len(similar_entries)} similar entries for query")
-            return similar_entries
+        # Sort by similarity (highest first)
+        similarities.sort(key=lambda x: x[1], reverse=True)
 
-        finally:
-            if not self._db:
-                db.close()
+        # Return top results
+        similar_entries = [entry for entry, _ in similarities[:limit]]
+        logger.info(f"Found {len(similar_entries)} similar entries for query")
+        return similar_entries
 
     async def close(self):
         """Close provider resources"""

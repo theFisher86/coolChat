@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from .models import LoreEntry
 from .rag_service import EmbeddingService
-from .database import get_db
+from .database import SessionLocal
 
 
 @dataclass
@@ -26,8 +26,8 @@ class SearchResult:
 class HybridSearch:
     """Hybrid search combining keyword and semantic similarity"""
 
-    def __init__(self, embedding_service: EmbeddingService = None):
-        self.embedding_service = embedding_service or EmbeddingService()
+    def __init__(self, embedding_service: EmbeddingService):
+        self.embedding_service = embedding_service
 
     async def search(self, query: str, db_session: Optional[Session] = None, limit: int = 10) -> List[Dict[str, Any]]:
         """
@@ -110,7 +110,15 @@ class HybridSearch:
         from sqlalchemy import or_
         from sqlalchemy.orm import joinedload
 
-        db = db_session or next(get_db())
+        if db_session:
+            db = db_session
+            close = False
+        elif self.embedding_service._db:
+            db = self.embedding_service._db
+            close = False
+        else:
+            db = SessionLocal()
+            close = True
         try:
             query_terms = [term.strip().lower() for term in query.split() if term.strip()]
 
@@ -135,7 +143,7 @@ class HybridSearch:
             return entries
 
         finally:
-            if not db_session:
+            if close:
                 db.close()
 
     def _calculate_keyword_score(self, entry: LoreEntry, query_terms: List[str]) -> float:

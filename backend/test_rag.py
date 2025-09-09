@@ -127,7 +127,7 @@ async def test_hybrid_search():
         try:
             from hybrid_search import HybridSearch
 
-            hybrid_search = HybridSearch()
+            hybrid_search = HybridSearch(get_rag_service())
             results = await hybrid_search.search(query, limit=5)
 
             print(f"🎯 Found {len(results)} results")
