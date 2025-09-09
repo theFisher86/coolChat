@@ -131,7 +131,7 @@ async def search_lorebooks(
         logger.info(f"[CoolChat] Using RAG search for query: '{q}' with use_rag=true")
 
         try:
-            hybrid_search = HybridSearch()
+            hybrid_search = HybridSearch(get_rag_service(db))
             results = await hybrid_search.search(q, db, limit)
             total_found = len(results)
 

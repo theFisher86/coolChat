@@ -123,7 +123,7 @@ async def test_search():
     for query in test_queries:
         print(f"\n--- Testing Query: '{query}' ---")
         try:
-            hybrid_search = HybridSearch()
+            hybrid_search = HybridSearch(get_rag_service())
             results = await hybrid_search.search(query, limit=3)
 
             print(f"🎯 Found {len(results)} results")
