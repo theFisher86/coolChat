@@ -1,0 +1,33 @@
+.circuit-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.editor-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 200px 1fr 250px;
+  gap: 8px;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.toolbar {
+  padding: 8px;
+  border-bottom: 1px solid var(--muted);
+}
+
+.block-palette,
+.canvas,
+.properties {
+  background: var(--panel);
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.title {
+  font-weight: 600;
+}

@@ -136,6 +136,18 @@ class LoreEntry(Base):
     lorebook = relationship("Lorebook", back_populates="entries", lazy="joined")
 
 
+class Circuit(Base):
+    """Stored prompt circuit definitions."""
+    __tablename__ = "circuits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    data = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class RAGConfig(Base):
     """Configuration for RAG embedding service"""
     __tablename__ = "rag_config"
