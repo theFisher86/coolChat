@@ -1492,7 +1492,9 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
             pass
 
     if payload.images is not None:
+        print(f"[CoolChat] DEBUG: payload.images received: {payload.images}")
         imgs = getattr(cfg, 'images', ImagesConfig())
+        print(f"[CoolChat] DEBUG: current imgs: {imgs}")
         active = payload.images.get("active") if isinstance(payload.images, dict) else None
         if isinstance(active, str):
             imgs.active = active
@@ -1504,35 +1506,57 @@ async def update_config(payload: ConfigUpdate) -> ConfigResponse:
                 imgs.pollinations.api_key = poll.get("api_key")
         dez = payload.images.get("dezgo") if isinstance(payload.images, dict) else None
         if isinstance(dez, dict):
+            print(f"[CoolChat] DEBUG: dez dict keys: {list(dez.keys())}")
+            print(f"[CoolChat] DEBUG: dez values: {dez}")
             for k in ("model","api_key","lora_flux_1","lora_flux_2","lora_sd1_1","lora_sd1_2","lora1_strength","lora2_strength"):
                 if k in dez:
                     setattr(imgs.dezgo, k, dez.get(k))
             # Coerce numeric/boolean fields to correct types
-            if "transparent" in dez:
-                try:
+            try:
+                if "transparent" in dez:
+                    print(f"[CoolChat] DEBUG: transparent value: {repr(dez.get('transparent'))} type:{type(dez.get('transparent'))}")
+                    old_val = getattr(imgs.dezgo, 'transparent', None)
                     imgs.dezgo.transparent = bool(dez.get("transparent"))
-                except Exception:
-                    pass
-            if "upscale" in dez:
-                try:
+                    print(f"[CoolChat] DEBUG: transparent coerced from {old_val} to {imgs.dezgo.transparent}")
+            except Exception as e:
+                print(f"[CoolChat] DEBUG: transparent coercion failed: {e}")
+                pass
+            try:
+                if "upscale" in dez:
+                    print(f"[CoolChat] DEBUG: upscale value: {repr(dez.get('upscale'))} type:{type(dez.get('upscale'))}")
+                    old_val = getattr(imgs.dezgo, 'upscale', None)
                     imgs.dezgo.upscale = bool(dez.get("upscale"))
-                except Exception:
-                    pass
-            if "width" in dez:
-                try:
+                    print(f"[CoolChat] DEBUG: upscale coerced from {old_val} to {imgs.dezgo.upscale}")
+            except Exception as e:
+                print(f"[CoolChat] DEBUG: upscale coercion failed: {e}")
+                pass
+            try:
+                if "width" in dez:
+                    print(f"[CoolChat] DEBUG: width value: {repr(dez.get('width'))} type:{type(dez.get('width'))}")
+                    old_val = getattr(imgs.dezgo, 'width', None)
                     imgs.dezgo.width = int(dez.get("width")) if dez.get("width") not in ("", None) else None
-                except Exception:
-                    pass
-            if "height" in dez:
-                try:
+                    print(f"[CoolChat] DEBUG: width coerced from {old_val} to {imgs.dezgo.width}")
+            except Exception as e:
+                print(f"[CoolChat] DEBUG: width coercion failed: {e}")
+                pass
+            try:
+                if "height" in dez:
+                    print(f"[CoolChat] DEBUG: height value: {repr(dez.get('height'))} type:{type(dez.get('height'))}")
+                    old_val = getattr(imgs.dezgo, 'height', None)
                     imgs.dezgo.height = int(dez.get("height")) if dez.get("height") not in ("", None) else None
-                except Exception:
-                    pass
-            if "steps" in dez:
-                try:
+                    print(f"[CoolChat] DEBUG: height coerced from {old_val} to {imgs.dezgo.height}")
+            except Exception as e:
+                print(f"[CoolChat] DEBUG: height coercion failed: {e}")
+                pass
+            try:
+                if "steps" in dez:
+                    print(f"[CoolChat] DEBUG: steps value: {repr(dez.get('steps'))} type:{type(dez.get('steps'))}")
+                    old_val = getattr(imgs.dezgo, 'steps', None)
                     imgs.dezgo.steps = int(dez.get("steps")) if dez.get("steps") not in ("", None) else None
-                except Exception:
-                    pass
+                    print(f"[CoolChat] DEBUG: steps coerced from {old_val} to {imgs.dezgo.steps}")
+            except Exception as e:
+                print(f"[CoolChat] DEBUG: steps coercion failed: {e}")
+                pass
         cfg.images = imgs
     if payload.theme is not None:
         if not hasattr(cfg, 'theme') or cfg.theme is None:

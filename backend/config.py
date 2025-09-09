@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CoolChat Configuration - Original + RAG Support"""
+"""CoolChat Configuration - Database-backed with JSON backup support"""
 
 import os
 from typing import Dict, Optional
@@ -10,6 +10,10 @@ import json
 from pathlib import Path
 
 load_dotenv()
+
+# Database imports for settings persistence
+from .database import SessionLocal
+from .models import AppSettings
 
 # Provider enums
 class Provider(str, Enum):
@@ -29,6 +33,18 @@ class ProviderConfig(BaseModel):
     api_base: str = ""
     model: str = ""
     temperature: float = 0.7
+    # Image provider specific fields
+    lora_flux_1: Optional[str] = None
+    lora_flux_2: Optional[str] = None
+    lora_sd1_1: Optional[str] = None
+    lora_sd1_2: Optional[str] = None
+    lora1_strength: Optional[float] = None
+    lora2_strength: Optional[float] = None
+    transparent: Optional[bool] = None
+    upscale: Optional[bool] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    steps: Optional[int] = None
 
 class ImagesConfig(BaseModel):
     active: ImageProvider = ImageProvider.POLLINATIONS
@@ -54,7 +70,7 @@ class AppearanceConfig(BaseModel):
     highlight: str = "#FFFFFF"
     lowlight: str = "#374151"
     phone_style: str = "normal"
-    background_animations: bool = True
+    background_animations: list[str] = []
 
 class AppConfig(BaseModel):
     active_provider: Provider = Provider.ECHO
@@ -81,28 +97,75 @@ class AppConfig(BaseModel):
     rag_similarity_threshold: float = 0.5
 
 def _ensure_config_path() -> Path:
-    path = Path(__file__).parent.parent / "debug.json"
+    path = Path(__file__).parent.parent / "config.json"
     return path
 
 def load_config() -> AppConfig:
-    """Load configuration from debug.json"""
+    """Load configuration from database, with fallback to config.json"""
+    # First try loading from database
+    try:
+        with SessionLocal() as db:
+            setting = db.query(AppSettings).filter(AppSettings.key == "main_config").first()
+            if setting:
+                print(f"[Config] Loaded from database: active_provider={setting.value.get('active_provider', 'unknown')}")
+                data = setting.value
+                return AppConfig(**data)
+            else:
+                print("[Config] No config found in database, will try fallback")
+    except Exception as e:
+        print(f"[Config] Database load failed: {e}, trying fallback file")
+
+    # Fallback to config.json if database load fails
     try:
         path = _ensure_config_path()
         if path.exists():
             data = json.loads(path.read_text())
+            print(f"[Config] Loading from fallback file: {path.name} (active_provider={data.get('active_provider', 'unknown')})")
+            # Migrate to database on first load
+            try:
+                with SessionLocal() as db:
+                    existing = db.query(AppSettings).filter(AppSettings.key == "main_config").first()
+                    if not existing:
+                        setting = AppSettings(key="main_config", value=data)
+                        db.add(setting)
+                        db.commit()
+                        print("[Config] Migrated fallback data to database")
+                    else:
+                        print("[Config] Migration skipped (database already has data)")
+            except Exception as e:
+                print(f"[Config] Migration failed: {e}")
             return AppConfig(**data)
         else:
+            print(f"[Config] Fallback file not found: {path}, using default config")
             return AppConfig()
-    except Exception:
+    except Exception as e:
+        print(f"[Config] Fallback load failed: {e}, using default config")
         return AppConfig()
 
 def save_config(config: AppConfig) -> None:
-    """Save configuration to debug.json"""
+    """Save configuration to database and config.json for backup/sharing"""
+    config_dict = config.model_dump()
+
+    # Save to database (primary storage)
     try:
-        path = _ensure_config_path()
-        path.write_text(config.model_dump_json(indent=2))
+        with SessionLocal() as db:
+            setting = db.query(AppSettings).filter(AppSettings.key == "main_config").first()
+            if setting:
+                setting.value = config_dict
+                setting.updated_at = None  # Auto-update timestamp
+            else:
+                setting = AppSettings(key="main_config", value=config_dict)
+                db.add(setting)
+            db.commit()
     except Exception as e:
-        print(f"Failed to save config: {e}")
+        print(f"Failed to save config to database: {e}")
+
+    # Also save to config.json for backup and sharing
+    try:
+        path = Path(__file__).parent.parent / "config.json"
+        path.write_text(json.dumps(config_dict, indent=2))
+    except Exception as e:
+        print(f"Failed to save config.json backup: {e}")
 
 def mask_secret(value: Optional[str]) -> Optional[str]:
     """Mask sensitive values"""
@@ -117,7 +180,7 @@ class Config:
     """Application configuration with environment variable support"""
 
     # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///app.db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///backend/app.db")
 
     # Ollama Configuration
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
