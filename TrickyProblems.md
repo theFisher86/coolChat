@@ -186,3 +186,135 @@ finally:
     db.close()
 "
 ```
+"
+
+## Problem 6: React Flow Error #004 "parent container needs width and height"
+
+### Description
+React Flow error #004 occurs when the ReactFlow component's parent container doesn't have explicit width and height dimensions set. This results in:
+- Canvas failing to render properly
+- Nodes not appearing on the screen
+- Error message in DevTools: "parent container needs width and height"
+- Graph viewport becoming unusable
+
+### Symptoms
+- White/blank canvas area where React Flow should be displayed
+- Console error: "React Flow: parent container needs width and height"
+- No nodes visible despite data being present
+- Zoom controls (Controls component) may be visible but ineffective
+
+### Root Cause
+React Flow requires concrete pixel dimensions on the parent container at render time. CSS properties like:
+- `height: 100%`
+- `height: 100vh`
+- `flex: 1` without explicit pixel boundaries
+- Relative units that can't be resolved at render time
+
+Don't work because React Flow uses the container's bounding client rectangle to calculate canvas transformations. When the container dimensions are not explicitly set in pixels, this calculation fails.
+
+### Solution
+The working solution implemented in `CircuitEditor2.tsx` uses dynamic viewport height calculation with explicit pixel values.
+
+**Before (Broken):**
+```css
+.react-flow-container {
+  height: 100vh; /* CSS percentage - doesn't work */
+}
+
+.react-flow-container {
+  height: 100%; /* CSS percentage - doesn't work */
+}
+```
+
+**After (Fixed):**
+```typescript
+// In CircuitEditor2.tsx
+const [containerHeight, setContainerHeight] = useState<number>(400);
+
+// Calculate available height for ReactFlow container
+const calculateAvailableHeight = useCallback(() => {
+  const availableHeight = window.innerHeight * 0.64; // Dynamic pixel calculation
+  return Math.max(availableHeight, 300); // Ensure minimum height
+}, []);
+
+// Apply pixel dimensions to parent container
+<div ref={reactFlowWrapper} style={{ height: `${containerHeight}px` }}>
+  <ReactFlow
+    nodes={nodes}
+    edges={edges}
+    // ... other props
+  >
+    <Controls />
+    <MiniMap />
+  </ReactFlow>
+</div>
+```
+
+**Key Implementation Details:**
+```typescript
+// Dynamic height calculation with window size responsiveness
+useEffect(() => {
+  const updateHeight = () => setContainerHeight(calculateAvailableHeight());
+
+  updateHeight();
+
+  // Handle window resize for responsive behavior
+  const handleResize = () => updateHeight();
+  window.addEventListener('resize', handleResize);
+
+  return () => window.removeEventListener('resize', handleResize);
+}, [calculateAvailableHeight]);
+```
+
+### Prevention
+When using React Flow, always ensure the parent container has:
+
+#### ✅ **Correct Approaches:**
+```typescript
+// 1. Fixed pixel dimensions
+<div style={{ width: '100%', height: '600px' }}>
+  <ReactFlow />
+</div>
+
+// 2. Dynamic calculation using window measurements
+const height = Math.max(window.innerHeight * 0.6, 400);
+<div style={{ height: `${height}px` }}>
+  <ReactFlow />
+</div>
+
+// 3. ref-based measurements
+const containerRef = useRef<HTMLDivElement>(null);
+const height = containerRef.current?.parentElement?.clientHeight || 400;
+```
+
+#### ❌ **Avoid These:**
+```typescript
+// CSS-only heights (will cause Error #004)
+<div style={{ height: '100%' }}>
+  <ReactFlow />
+</div>
+
+<div style={{ height: '100vh' }}>
+  <ReactFlow />
+</div>
+
+<div className="flex-1"> {/* CSS flex without explicit pixels */}
+  <ReactFlow />
+</div>
+```
+
+#### **Best Practices for Container Sizing:**
+
+1. **Use Explicit Pixels**: Always calculate and set concrete pixel values
+2. **Dynamic Responsiveness**: Calculate dimensions based on window measurements
+3. **Minimum Heights**: Set minimum dimensions to prevent collapse (e.g., 300-400px)
+4. **Resize Handling**: Listen for window resize events to update dimensions
+5. **Viewport Calculations**: Use `window.innerHeight` for full-screen applications
+6. **Percentage-to-Pixel Conversion**: Convert percentages to pixels at render time
+
+#### **Testing Checklist:**
+- ✅ Container renders with correct dimensions in DevTools
+- ✅ Nodes are visible and interactive on initial load
+- ✅ Canvas adjusts properly on window resize
+- ✅ Zoom/pan controls function correctly
+- ✅ No React Flow Error #004 appears in console

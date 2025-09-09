@@ -129,7 +129,7 @@
 .properties-content {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .property-item {
@@ -139,6 +139,156 @@
 
 .property-item strong {
   color: var(--text1);
+}
+
+/* Enhanced Properties Section Styles */
+.properties-section {
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+  margin: 8px 0;
+}
+
+.properties-section h5 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text1);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.properties-section h5::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 12px;
+  background: var(--primary);
+  border-radius: 1px;
+}
+
+/* Connector Details Styles */
+.connector-group {
+  margin-bottom: 8px;
+}
+
+.connector-header {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text2);
+  margin-bottom: 4px;
+}
+
+.connector-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 3px;
+  margin-bottom: 2px;
+}
+
+.connector-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text1);
+  flex: 1;
+}
+
+.connector-type {
+  font-size: 10px;
+  color: var(--text2);
+  font-style: italic;
+}
+
+.connector-status {
+  font-size: 10px;
+  color: #10b981;
+}
+
+/* Configuration Item Styles */
+.config-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--lowlight);
+}
+
+.config-item strong {
+  font-size: 11px;
+  color: var(--text1);
+  min-width: 120px;
+}
+
+.config-value {
+  font-size: 11px;
+  color: var(--text2);
+  font-style: italic;
+}
+
+.config-type {
+  font-size: 10px;
+  color: var(--text2);
+  font-weight: 500;
+}
+
+/* Value Item Styles */
+.value-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.value-item strong {
+  font-size: 11px;
+  color: var(--text1);
+  min-width: 80px;
+}
+
+.value-item span {
+  font-size: 11px;
+  color: var(--text2);
+  word-break: break-all;
+}
+
+/* Metadata Item Styles */
+.metadata-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--lowlight);
+}
+
+.metadata-item strong {
+  font-size: 11px;
+  color: var(--text1);
+  min-width: 100px;
+}
+
+.metadata-item span {
+  font-size: 11px;
+  color: var(--text2);
+  flex: 1;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .properties-section h5 {
+    font-size: 11px;
+  }
+
+  .connector-name, .config-item strong, .metadata-item strong {
+    min-width: auto;
+  }
 }
 
 /* Canvas Styles */
@@ -185,4 +335,9 @@
 
 .muted {
   color: var(--text2);
+.circuit-canvas {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
 }

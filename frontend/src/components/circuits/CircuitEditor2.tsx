@@ -125,6 +125,153 @@ const blockConfigs = {
   }
 };
 
+// Block extended configurations for properties panel
+const blockExtendedConfigs: Record<string, {
+  connectorTypes?: { inputs: Record<string, string>, outputs: Record<string, string> };
+  configuration?: Array<{ name: string; type: string; description?: string }>;
+  metadata?: Array<{ label: string; value: string; description?: string }>;
+}> = {
+  // System Prompt Blocks
+  system_main: {
+    connectorTypes: { inputs: { character_data: 'JSON' }, outputs: { main_prompt: 'string' } },
+    configuration: [
+      { name: 'Template Source', type: 'select', description: 'Full character card or summary' },
+      { name: 'System Message Format', type: 'text', description: 'Opening system prompt pattern' }
+    ],
+    metadata: [
+      { label: 'Block Type', value: 'System Prompt Generator', description: 'Generates main system prompt from character data' },
+      { label: 'Input Data', value: 'Character Definition', description: 'Full character configuration' }
+    ]
+  },
+  system_tool_call: {
+    connectorTypes: { inputs: { tools_data: 'JSON', character_data: 'JSON' }, outputs: { tool_instructions: 'string' } },
+    configuration: [{ name: 'Tool Format Schema', type: 'select', description: 'Expected tool call format' }],
+    metadata: []
+  },
+  system_lore_suggest: {
+    connectorTypes: { inputs: { lorebook_context: 'JSON' }, outputs: { lore_suggest_prompt: 'string' } },
+    configuration: [{ name: 'Lore Selection Strategy', type: 'select', description: 'How to select relevant lore entries' }],
+    metadata: []
+  },
+  system_image_summary: {
+    connectorTypes: { inputs: { scene_data: 'JSON', character_data: 'JSON' }, outputs: { image_summary_prompt: 'string' } },
+    configuration: [
+      { name: 'Image Style Preferences', type: 'text', description: 'Artistic style hints' },
+      { name: 'Level of Detail', type: 'select', description: 'Summary depth' }
+    ],
+    metadata: []
+  },
+  // Format Template Blocks
+  format_persona: {
+    connectorTypes: { inputs: { user_persona: 'string' }, outputs: { persona_formatted: 'string' } },
+    configuration: [
+      { name: 'Format Template', type: 'text', description: 'Variable substitution pattern' },
+      { name: 'Variable Delimiters', type: 'select', description: '{{ }} or << >> style' }
+    ],
+    metadata: []
+  },
+  format_tools: {
+    connectorTypes: { inputs: { tools_config: 'JSON' }, outputs: { tools_formatted: 'string' } },
+    configuration: [{ name: 'Tool Documentation Format', type: 'text', description: 'How to format tool descriptions' }],
+    metadata: []
+  },
+  format_lore_injection: {
+    connectorTypes: { inputs: { lore_entries: 'array' }, outputs: { lore_formatted: 'string' } },
+    configuration: [
+      { name: 'Injection Pattern', type: 'text', description: 'How to merge lore entries' },
+      { name: 'Separator Style', type: 'select', description: 'Newlines, bullets, or paragraphs' }
+    ],
+    metadata: []
+  },
+  // Character-based Prompt Blocks
+  char_system_prompt: {
+    connectorTypes: { inputs: { character_settings: 'JSON' }, outputs: { system_preprompt: 'string' } },
+    configuration: [{ name: 'System Prompt Structure', type: 'text', description: 'Character role and behavior' }],
+    metadata: []
+  },
+  char_personality: {
+    connectorTypes: { inputs: { character_data: 'JSON' }, outputs: { personality_text: 'string' } },
+    configuration: [{ name: 'Personality Format', type: 'select', description: 'Narrative or list style' }],
+    metadata: []
+  },
+  char_scenario: {
+    connectorTypes: { inputs: { character_data: 'JSON', scenario_data: 'string' }, outputs: { scenario_text: 'string' } },
+    configuration: [
+      { name: 'Scenario Enhancement', type: 'text', description: 'Additional context to add' },
+      { name: 'Time Period', type: 'select', description: 'Story setting time' }
+    ],
+    metadata: []
+  },
+  char_first_message: {
+    connectorTypes: { inputs: { character_data: 'JSON', greetings: 'string' }, outputs: { first_message_text: 'string' } },
+    configuration: [
+      { name: 'Greeting Style', type: 'select', description: 'Formal, casual, or character-specific' },
+      { name: 'Message Length', type: 'select', description: 'Short, medium, or detailed opening' }
+    ],
+    metadata: []
+  },
+  // Tool Message Blocks
+  tool_image_request: {
+    connectorTypes: { inputs: { prompt_text: 'string', generation_params: 'JSON' }, outputs: { tool_call_json: 'JSON' } },
+    configuration: [
+      { name: 'Image Model', type: 'select', description: 'AI image generation model' },
+      { name: 'Output Format', type: 'select', description: 'JSON structure for tool call' }
+    ],
+    metadata: []
+  },
+  tool_phone_url: {
+    connectorTypes: { inputs: { phone_number: 'string', url_params: 'JSON' }, outputs: { tool_call_json: 'JSON' } },
+    configuration: [{ name: 'URL Pattern', type: 'text', description: 'Format for URL construction' }],
+    metadata: []
+  },
+  tool_lore_suggestions: {
+    connectorTypes: { inputs: { suggestions_array: 'array', validation_params: 'JSON' }, outputs: { tool_call_json: 'JSON' } },
+    configuration: [
+      { name: 'Suggestion Limits', type: 'number', description: 'Maximum suggestions to include' },
+      { name: 'Validation Rules', type: 'text', description: 'Criteria for valid suggestions' }
+    ],
+    metadata: []
+  },
+  // Lorebook Content Blocks
+  lorebook_content: {
+    connectorTypes: { inputs: { keywords: 'string', content_text: 'string', trigger_logic: 'string' }, outputs: { lore_entry: 'JSON' } },
+    configuration: [
+      { name: 'Entry Priority', type: 'select', description: 'How to rank this entry' },
+      { name: 'Trigger Sensitivity', type: 'select', description: 'Keyword matching strictness' }
+    ],
+    metadata: []
+  },
+  // Variables Block
+  variables_substitution: {
+    connectorTypes: { inputs: { template_text: 'string', variables_map: 'JSON' }, outputs: { processed_text: 'string' } },
+    configuration: [
+      { name: 'Variable Syntax', type: 'select', description: '{{var}} or ${var} substitution' },
+      { name: 'Error Handling', type: 'select', description: 'How to handle missing variables' }
+    ],
+    metadata: [
+      { label: 'Substitution Type', value: 'Key/Value Replacement', description: 'Replaces markers with data values' },
+      { label: 'Supported Formats', value: 'JSON Map/Object', description: 'Variables input structure' }
+    ]
+  },
+  // Dynamic Active Lore Blocks
+  lore_active_display: {
+    connectorTypes: { inputs: { active_lore_entries: 'array' }, outputs: { formatted_lore_display: 'string' } },
+    configuration: [
+      { name: 'Display Format', type: 'select', description: 'How to present active lore' },
+      { name: 'Max Length', type: 'number', description: 'Character limit for display' }
+    ],
+    metadata: []
+  },
+  lore_title_injection: {
+    connectorTypes: { inputs: { active_lore_entries: 'array', title_template: 'string' }, outputs: { titled_lore_block: 'string' } },
+    configuration: [
+      { name: 'Title Format', type: 'text', description: 'Prefix pattern for lore entries' },
+      { name: 'Sorting Order', type: 'select', description: 'How to order entries' }
+    ],
+    metadata: []
+  }
+};
+
 // Block components with dynamic connectors
 const BlockNode = ({ data }: any) => {
   const config = blockConfigs[data.type] || { inputs: [], outputs: [], label: 'Unknown Block' };
@@ -258,6 +405,32 @@ export const CircuitEditor2: React.FC = () => {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  // Height calculation state
+  const [containerHeight, setContainerHeight] = useState<number>(400);
+
+  // Calculate available height for ReactFlow container
+  const calculateAvailableHeight = useCallback(() => {
+//    const headerHeight = 310; // Height of the toolbar/header
+//    const padding = 16; // Total padding (top + bottom)
+//    const availableHeight = window.innerHeight - headerHeight - padding;
+      const availableHeight = window.innerHeight * 0.64 //Just make the canvas 64% of the screen 
+    return Math.max(availableHeight, 300); // Minimum height of 300px to prevent collapse
+  }, []);
+
+  // Initialize and update container height on mount and window resize
+  useEffect(() => {
+    const updateHeight = () => setContainerHeight(calculateAvailableHeight());
+
+    // Set initial height
+    updateHeight();
+
+    // Add resize listener for responsive behavior
+    const handleResize = () => updateHeight();
+    window.addEventListener('resize', handleResize);
+
+    // Cleanup
+    return () => window.removeEventListener('resize', handleResize);
+  }, [calculateAvailableHeight]);
 
   useEffect(() => {
     fetchCircuits().catch(err => {
@@ -558,8 +731,8 @@ export const CircuitEditor2: React.FC = () => {
                *    - Clicking the "Delete Node" button in the properties panel
                * 7. Use the Controls panel for zoom/pan and MiniMap for overview navigation
                */}
-              <div style={{ height: '400px', position: 'relative' }}>
-                <div ref={reactFlowWrapper} style={{ height: '100%' }}>
+              <div style={{ height: '100%', position: 'relative' }}>
+                <div ref={reactFlowWrapper} style={{ height: `${containerHeight}px` }}>
                   <ReactFlow
                     nodes={nodes}
                     edges={edges}
@@ -616,6 +789,94 @@ export const CircuitEditor2: React.FC = () => {
                   <div className="property-item">
                     <strong>Position:</strong> ({Math.round(selectedNode.position.x)}, {Math.round(selectedNode.position.y)})
                   </div>
+
+                  {/* Enhanced Properties for Content Blocks */}
+                  {(() => {
+                    const extendedConfig = blockExtendedConfigs[selectedNode.data.type];
+                    if (!extendedConfig) return null;
+
+                    return (
+                      <>
+                        {/* Connector Details Section */}
+                        {(extendedConfig.connectorTypes?.inputs || extendedConfig.connectorTypes?.outputs) && (
+                          <div className="properties-section">
+                            <h5>🔗 Connector Details</h5>
+                            {extendedConfig.connectorTypes.inputs && Object.keys(extendedConfig.connectorTypes.inputs).length > 0 && (
+                              <div className="connector-group">
+                                <div className="connector-header"><strong>Inputs:</strong></div>
+                                {Object.entries(extendedConfig.connectorTypes.inputs).map(([name, type]) => (
+                                  <div key={name} className="connector-item"
+                                       title={`Input connector: ${name} (${type}) - Data flows into this connector`}>
+                                    <span className="connector-name">{name}</span>
+                                    <span className="connector-type">{type}</span>
+                                    <span className="connector-status">●</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {extendedConfig.connectorTypes.outputs && Object.keys(extendedConfig.connectorTypes.outputs).length > 0 && (
+                              <div className="connector-group">
+                                <div className="connector-header"><strong>Outputs:</strong></div>
+                                {Object.entries(extendedConfig.connectorTypes.outputs).map(([name, type]) => (
+                                  <div key={name} className="connector-item"
+                                       title={`Output connector: ${name} (${type}) - Data flows out from this connector`}>
+                                    <span className="connector-name">{name}</span>
+                                    <span className="connector-type">{type}</span>
+                                    <span className="connector-status">●</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Block Configuration Section */}
+                        {extendedConfig.configuration && extendedConfig.configuration.length > 0 && (
+                          <div className="properties-section">
+                            <h5>⚙️ Configuration</h5>
+                            {extendedConfig.configuration.map((config, index) => (
+                              <div key={index} className="config-item"
+                                   title={config.description || `${config.name} (${config.type})`}>
+                                <strong>{config.name}:</strong>
+                                <span className="config-value">[Not set]</span>
+                                <span className="config-type">({config.type})</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Current Values Section */}
+                        {selectedNode.data && Object.keys(selectedNode.data).length > 2 && (
+                          <div className="properties-section">
+                            <h5>📊 Current Values</h5>
+                            {Object.entries(selectedNode.data).map(([key, value]) => {
+                              if (['label', 'type', 'icon', 'inputs', 'outputs'].includes(key)) return null;
+                              return (
+                                <div key={key} className="value-item" title={`Current value for ${key}`}>
+                                  <strong>{key}:</strong>
+                                  <span>{typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Metadata Section */}
+                        {extendedConfig.metadata && extendedConfig.metadata.length > 0 && (
+                          <div className="properties-section">
+                            <h5>📋 Metadata</h5>
+                            {extendedConfig.metadata.map((meta, index) => (
+                              <div key={index} className="metadata-item" title={meta.description || meta.label}>
+                                <strong>{meta.label}:</strong>
+                                <span>{meta.value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+
                   <div className="property-item">
                     <button
                       className="secondary delete-btn"
