@@ -3,6 +3,7 @@
  *
  * Loads and manages debug configurations from debug.json file.
  */
+import { API_BASE } from './api.js';
 
 class DebugLogger {
   constructor() {
@@ -22,7 +23,7 @@ class DebugLogger {
     }
 
     try {
-      const response = await fetch('/debug.json');
+      const response = await fetch(`${API_BASE}/debug.json`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }

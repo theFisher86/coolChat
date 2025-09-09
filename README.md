@@ -53,6 +53,16 @@ automatically to keep memory usage minimal.
 3. Start backend: `cd backend && python main.py`
 4. Start frontend: `cd frontend && npm run dev`
 
+### API Base URL
+
+The frontend reads an optional `VITE_API_BASE` environment variable to determine the
+base URL for API requests. During development it defaults to the same origin (handled
+by the Vite proxy). For production builds, set this variable to your backend URL:
+
+```bash
+VITE_API_BASE=https://api.example.com npm run build
+```
+
 ## Next Steps & Priority Tasks
 1. **Implement Prompt Manager & Circuits System** - Develop visual flowchart UI for managing all prompts, variables, and logic blocks with if/then/else, random choices, counters, etc.
 2. **Enhance System Prompt Editing** - Add user-editable fields for previously hardcoded text sent to AI (persona format, tool descriptions, lore injection format)

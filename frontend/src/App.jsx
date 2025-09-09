@@ -91,6 +91,7 @@ import {
   savePrompts,
   getImageModels,
   sendChat,
+  API_BASE,
 } from './api.js';
 
 // Enhanced lorebook imports
@@ -675,7 +676,7 @@ function App() {
   useEffect(() => {
     (async () => {
       try {
-        const r = await fetch('/plugins');
+        const r = await fetch(`${API_BASE}/plugins`);
         if (r.ok) {
           const data = await r.json();
           // Plugins loaded successfully
@@ -692,13 +693,13 @@ function App() {
 
   const saveExtensionsEnabled = async (map) => {
     try {
-      const r = await fetch('/plugins/enabled', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(map) });
+      const r = await fetch(`${API_BASE}/plugins/enabled`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(map) });
       if (!r.ok) throw new Error('Save failed');
       setExtensionsEnabled(map);
       try {
         pluginHost.setEnabledExtensions(map);
         // Give pluginHost the already-fetched manifest so it can reload deterministically
-        const manifestResp = await fetch('/plugins');
+        const manifestResp = await fetch(`${API_BASE}/plugins`);
         const manifestData = manifestResp.ok ? await manifestResp.json() : null;
         if (manifestData) pluginHost.setExtensionsList(manifestData.plugins || []);
         await pluginHost.loadPlugins(manifestData);
@@ -767,7 +768,7 @@ function App() {
               <button className="secondary" onClick={()=> { let u = phoneUrl; if (!/^https?:/i.test(u)) u = 'https://' + u; setPhoneUrl(u); }}>Go</button>
               <button className="secondary" title="Open in new tab" onClick={()=> { try { let u = phoneUrl; if (!/^https?:/i.test(u)) u = 'https://' + u; window.open(u, '_blank'); } catch (e) { console.error(e);} }}>✨</button>
             </div>
-            <iframe src={/^https?:/i.test(phoneUrl) ? phoneUrl : ('https://' + phoneUrl)} title="Phone" onLoad={()=>{ try { fetch('/phone/debug', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ event:'load', url: phoneUrl }) }); } catch (e) { console.error(e);} }} onError={()=>{ try { fetch('/phone/debug', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ event:'error', url: phoneUrl }) }); } catch (e) { console.error(e);} }} />
+            <iframe src={/^https?:/i.test(phoneUrl) ? phoneUrl : ('https://' + phoneUrl)} title="Phone" onLoad={()=>{ try { fetch(`${API_BASE}/phone/debug`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ event:'load', url: phoneUrl }) }); } catch (e) { console.error(e);} }} onError={()=>{ try { fetch(`${API_BASE}/phone/debug`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ event:'error', url: phoneUrl }) }); } catch (e) { console.error(e);} }} />
           </div>
         </div>
       )}
@@ -787,7 +788,7 @@ function App() {
                   try {
                     if (f.type === 'image/png') {
                       const fd = new FormData(); fd.append('file', f);
-                      const res = await fetch('/characters/import', { method: 'POST', body: fd });
+                      const res = await fetch(`${API_BASE}/characters/import`, { method: 'POST', body: fd });
                       if (!res.ok) throw new Error('Import failed');
                     } else {
                       const text = await f.text(); const data = JSON.parse(text); if (!data.name) throw new Error('JSON must include name'); await createCharacter({ name: data.name, description: data.description || '', avatar_url: data.avatar_url || null });
@@ -1330,11 +1331,11 @@ function App() {
               if (!lbId) { alert('No active lorebooks set'); return; }
               const newIds = [];
               for (const sug of edited.filter(x=>x.include)) {
-                const r = await fetch('/lore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword: sug.keyword, content: sug.content })});
+                const r = await fetch(`${API_BASE}/lore`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword: sug.keyword, content: sug.content })});
                 if (r.ok) { const e = await r.json(); newIds.push(e.id); }
               }
               if (newIds.length) {
-                const lbcur = await (await fetch(`/lorebooks/${lbId}`)).json();
+                const lbcur = await (await fetch(`${API_BASE}/lorebooks/${lbId}`)).json();
                 const ids = [...(lbcur.entry_ids||[]), ...newIds];
                 await updateLorebook(lbId, { entry_ids: ids });
               }
@@ -1680,8 +1681,8 @@ function ToolsOverlay({ onClose }) {
   const [selIdx, setSelIdx] = useState('');
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
-  useEffect(() => { (async () => { try { const cfg = await getConfig(); setStructured(!!cfg.structured_output); const cid = cfg.active_character_id; const t = await (await fetch(`/tools/settings${cid?`?character_id=${cid}`:''}`)).json(); setEnabled(t.enabled || {}); } catch (e) { console.error(e);} })(); }, []);
-  const save = async (en) => { try { const cfg = await getConfig(); const cid = cfg.active_character_id; await fetch(`/tools/settings${cid?`?character_id=${cid}`:''}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: en }) }); setEnabled(en); if (!notified && (en.phone||en.image_gen||en.lore_suggest) && !structured) { alert('Enabling tools benefits from Structured Output. You can toggle it in Connection settings.'); setNotified(true);} } catch (e) { console.error(e); alert('Save failed'); } };
+  useEffect(() => { (async () => { try { const cfg = await getConfig(); setStructured(!!cfg.structured_output); const cid = cfg.active_character_id; const t = await (await fetch(`${API_BASE}/tools/settings${cid?`?character_id=${cid}`:''}`)).json(); setEnabled(t.enabled || {}); } catch (e) { console.error(e);} })(); }, []);
+  const save = async (en) => { try { const cfg = await getConfig(); const cid = cfg.active_character_id; await fetch(`${API_BASE}/tools/settings${cid?`?character_id=${cid}`:''}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: en }) }); setEnabled(en); if (!notified && (en.phone||en.image_gen||en.lore_suggest) && !structured) { alert('Enabling tools benefits from Structured Output. You can toggle it in Connection settings.'); setNotified(true);} } catch (e) { console.error(e); alert('Save failed'); } };
   useEffect(() => { (async () => { try { const d = await getMcpServers(); setServers(d.servers || []); const c = await getMcpAwesome(); setCatalog(c.items || []);} catch (e) { console.error(e);} })(); }, []);
   const saveServers = async (list) => { try { await saveMcpServers({ servers: list }); setServers(list);} catch (e) { console.error(e); alert('Save failed'); } };
   return (
@@ -1774,7 +1775,7 @@ function AdvancedTab() {
   useEffect(() => { (async () => {
     try {
       setLoading(true);
-      const r = await fetch('/config/raw');
+      const r = await fetch(`${API_BASE}/config/raw`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
       setRaw(JSON.stringify(data, null, 2));
@@ -1801,10 +1802,10 @@ function AdvancedTab() {
           Import settings.json
           <input type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={async (e) => {
             const f = e.target.files?.[0]; if (!f) return;
-            try { const text = await f.text(); const data = JSON.parse(text); const r = await fetch('/config/raw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); if (!r.ok) throw new Error('Import failed'); alert('Imported. Reloading...'); location.reload(); } catch (err) { console.error(err); alert(err.message); } finally { e.target.value=''; }
+            try { const text = await f.text(); const data = JSON.parse(text); const r = await fetch(`${API_BASE}/config/raw`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); if (!r.ok) throw new Error('Import failed'); alert('Imported. Reloading...'); location.reload(); } catch (err) { console.error(err); alert(err.message); } finally { e.target.value=''; }
           }} />
         </label>
-        <button onClick={async ()=>{ try { const data = JSON.parse(raw); const r = await fetch('/config/raw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); if (!r.ok) throw new Error('Save failed'); alert('Saved. Reloading...'); location.reload(); } catch (e) { console.error(e); alert(e.message);} }}>Save settings.json</button>
+        <button onClick={async ()=>{ try { const data = JSON.parse(raw); const r = await fetch(`${API_BASE}/config/raw`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); if (!r.ok) throw new Error('Save failed'); alert('Saved. Reloading...'); location.reload(); } catch (e) { console.error(e); alert(e.message);} }}>Save settings.json</button>
       </div>
       <hr />
       <p className="muted">Advanced settings</p>
@@ -1816,7 +1817,7 @@ function ThemesManager() {
   const [names, setNames] = useState([]);
   const [sel, setSel] = useState('');
   const [theme, setTheme] = useState(null);
-  const load = async () => { try { const r = await fetch('/themes'); if (r.ok) { const d = await r.json(); setNames(d.names || []); } } catch (e) { console.error(e);} };
+  const load = async () => { try { const r = await fetch(`${API_BASE}/themes`); if (r.ok) { const d = await r.json(); setNames(d.names || []); } } catch (e) { console.error(e);} };
   useEffect(() => { load(); }, []);
   return (
     <div className="row" style={{ gap: 8 }}>
@@ -1824,8 +1825,8 @@ function ThemesManager() {
         <option value="">(select)</option>
         {names.map(n => (<option key={n} value={n}>{n}</option>))}
       </select>
-      <button className="secondary" onClick={async ()=>{ if (!sel) return; try { const r = await fetch(`/themes/${sel}`); if (!r.ok) throw new Error('Load failed'); const t = await r.json(); await fetch('/config', { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ theme: t }) }); try { const root = document.documentElement; root.style.setProperty('--primary', t.primary); root.style.setProperty('--panel', t.secondary); root.style.setProperty('--text', t.text1); root.style.setProperty('--muted', t.text2); root.style.setProperty('--assistant', t.highlight); root.style.setProperty('--bg', t.lowlight);} catch (e) { console.error(e);} alert('Theme loaded'); } catch (e) { console.error(e); alert(e.message);} }}>Load Theme</button>
-      <button onClick={async ()=>{ const name = prompt('Save theme as:'); if (!name) return; try { const cfg = await getConfig(); const t = cfg.theme || {}; const r = await fetch('/themes', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, theme: t })}); if (!r.ok) throw new Error('Save theme failed'); alert('Theme saved'); load(); } catch (e) { console.error(e); alert(e.message);} }}>Save Current Theme</button>
+      <button className="secondary" onClick={async ()=>{ if (!sel) return; try { const r = await fetch(`${API_BASE}/themes/${sel}`); if (!r.ok) throw new Error('Load failed'); const t = await r.json(); await fetch(`${API_BASE}/config`, { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ theme: t }) }); try { const root = document.documentElement; root.style.setProperty('--primary', t.primary); root.style.setProperty('--panel', t.secondary); root.style.setProperty('--text', t.text1); root.style.setProperty('--muted', t.text2); root.style.setProperty('--assistant', t.highlight); root.style.setProperty('--bg', t.lowlight);} catch (e) { console.error(e);} alert('Theme loaded'); } catch (e) { console.error(e); alert(e.message);} }}>Load Theme</button>
+      <button onClick={async ()=>{ const name = prompt('Save theme as:'); if (!name) return; try { const cfg = await getConfig(); const t = cfg.theme || {}; const r = await fetch(`${API_BASE}/themes`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, theme: t })}); if (!r.ok) throw new Error('Save theme failed'); alert('Theme saved'); load(); } catch (e) { console.error(e); alert(e.message);} }}>Save Current Theme</button>
     </div>
   );
 }
@@ -1856,7 +1857,7 @@ function AppearanceTab() {
 
   const suggest = async () => {
     try {
-      const r = await fetch('/theme/suggest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ primary: theme.primary }) });
+      const r = await fetch(`${API_BASE}/theme/suggest`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ primary: theme.primary }) });
       if (!r.ok) throw new Error('Suggest failed');
       const { colors } = await r.json();
       if (colors.length >= 5) {
@@ -2030,7 +2031,7 @@ function AppearanceTab() {
           <button className="secondary" onClick={async () => {
             const name = prompt('Export current theme as:');
             if (name && name.trim()) {
-              await fetch('/themes', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: name.trim(), theme: { ...theme } })});
+              await fetch(`${API_BASE}/themes`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: name.trim(), theme: { ...theme } })});
               alert('Theme exported: ' + name.trim());
             }
           }} title="Export current theme to saved themes">📤 Export</button>
@@ -2152,7 +2153,7 @@ function CharacterEditor({ character, onClose, onSave, onThink, lorebooks }) {
               try {
                 setUploading(true);
                 const fd = new FormData(); fd.append('file', f);
-                const res = await fetch('/characters/upload_avatar', { method: 'POST', body: fd });
+                const res = await fetch(`${API_BASE}/characters/upload_avatar`, { method: 'POST', body: fd });
                 if (!res.ok) throw new Error('Upload failed');
                 const data = await res.json();
                 setDraft(d => ({ ...d, avatar_url: data.avatar_url }));
@@ -2161,7 +2162,7 @@ function CharacterEditor({ character, onClose, onSave, onThink, lorebooks }) {
             <button className={`paint ${painting ? 'thinking' : ''}`} onClick={async () => {
               try {
                 setPainting(true);
-                const res = await fetch('/characters/generate_avatar', {
+                const res = await fetch(`${API_BASE}/characters/generate_avatar`, {
                   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ character: draft }),
                 });
                 if (!res.ok) throw new Error('Generate failed');

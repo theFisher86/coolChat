@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { API_BASE } from '../../api.js';
 
 interface Lorebook {
   id: number;
@@ -16,7 +17,7 @@ const ActiveLorebooks: React.FC<ActiveLorebooksProps> = ({ lorebooks }) => {
   useEffect(() => {
     const loadActiveIds = async () => {
       try {
-        const response = await fetch('/config');
+        const response = await fetch(`${API_BASE}/config`);
         if (response.ok) {
           const cfg = await response.json();
           setActiveIds(cfg.active_lorebook_ids || []);
@@ -33,7 +34,7 @@ const ActiveLorebooks: React.FC<ActiveLorebooksProps> = ({ lorebooks }) => {
     const newList = [...activeIds, id];
     setActiveIds(newList);
     try {
-      await fetch('/config/active_lorebook_ids', {
+      await fetch(`${API_BASE}/config/active_lorebook_ids`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: newList })
@@ -47,7 +48,7 @@ const ActiveLorebooks: React.FC<ActiveLorebooksProps> = ({ lorebooks }) => {
     const newList = activeIds.filter(x => x !== id);
     setActiveIds(newList);
     try {
-      await fetch('/config/active_lorebook_ids', {
+      await fetch(`${API_BASE}/config/active_lorebook_ids`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: newList })

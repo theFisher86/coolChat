@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { listCharacters, deleteCharacter, listLorebooks, updateLoreEntry, getLorebook } from '../api.js';
+import { listCharacters, deleteCharacter, listLorebooks, updateLoreEntry, getLorebook, API_BASE } from '../api.js';
 
 export interface DataState {
   // Characters
@@ -154,7 +154,7 @@ export const useDataStore = create<DataState>((set, get) => ({
 
       if (persist) {
         // Persist to backend if available
-        const response = await fetch('/plugins/enabled', {
+        const response = await fetch(`${API_BASE}/plugins/enabled`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ enabled }),
