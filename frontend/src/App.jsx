@@ -96,6 +96,7 @@ import {
 
 // Enhanced lorebook imports
 import { LorebookDashboard } from './components/lorebook/LorebookDashboard';
+import { CircuitEditor } from './components/circuits/CircuitEditor';
 import { useChatStore } from './stores';
 import { useLorebookStore } from './stores/lorebookStore';
 
@@ -864,6 +865,16 @@ function App() {
           </section>
         )}
 
+        {uiStore.showCircuitEditor && (
+          <section className="panel overlay">
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2>Circuit Editor</h2>
+              <button className="secondary" onClick={() => uiStore.setShowCircuitEditor(false)}>Close</button>
+            </div>
+            <CircuitEditor />
+          </section>
+        )}
+
         {uiStore.showConfig && (
           <section className="panel overlay">
             <h2>Configuration</h2>
@@ -873,6 +884,7 @@ function App() {
               <button className="secondary" onClick={(e) => { e.preventDefault(); uiStore.setSettingsTab('appearance'); }}>Appearance</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); uiStore.setSettingsTab('images'); }}>Images</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); uiStore.setSettingsTab('prompts'); }}>Prompts</button>
+              <button className="secondary" onClick={(e) => { e.preventDefault(); uiStore.setSettingsTab('memories'); }}>Memories</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); uiStore.setSettingsTab('advanced'); }}>Advanced</button>
               <button className="secondary" onClick={(e) => { e.preventDefault(); uiStore.setSettingsTab('extensions'); }}>Extensions</button>
             </div>
@@ -1069,6 +1081,11 @@ function App() {
             )}
             {uiStore.settingsTab === 'prompts' && (
               <PromptsTab />
+            )}
+            {uiStore.settingsTab === 'memories' && (
+              <div className="config-form">
+                <button onClick={() => { uiStore.setShowConfig(false); uiStore.setShowCircuitEditor(true); }}>Circuit Editor</button>
+              </div>
             )}
             {uiStore.settingsTab === 'advanced' && (
               <AdvancedTab />

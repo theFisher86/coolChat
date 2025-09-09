@@ -22,7 +22,7 @@ from .models import Lorebook, LoreEntry, Character as CharacterModel
 from .storage import load_json, save_json, public_dir
 from .database import SessionLocal, get_db
 from sqlalchemy.orm import Session
-from .routers import lore
+from .routers import lore, circuits
 import os
 
 app = FastAPI(title="CoolChat")
@@ -76,6 +76,7 @@ except Exception:
 # Include routers
 # Include routers
 app.include_router(lore.router, tags=["lore"])
+app.include_router(circuits.router, tags=["circuits"])
 
 # Characters router not included - using direct endpoints instead to avoid model conflicts
 # app.include_router(characters.router, tags=["characters"])
