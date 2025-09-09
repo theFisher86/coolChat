@@ -54,9 +54,9 @@
 ### 2.1 **Core Feature Implementation**
 - [ ] **Complete lorebook system fixes (HIGH PRIORITY)**:
   - [ ] Fix keywords field to support spaces in keywords (e.g., "crystal power", "safe haven")
-  - [ ] Fix 422 search error in lorebook search endpoint
-  - [ ] Complete lorebook editor modal UI improvements
-  - [ ] Improve form layout with better space allocation for keywords/content fields
+  - [x] Fix 422 search error in lorebook search endpoint
+  - [x] Complete lorebook editor modal UI improvements
+  - [x] Improve form layout with better space allocation for keywords/content fields
 - [ ] Complete lorebook injection system (backend implemented, UI needs work)
 - [ ] ~~Implement multi-chat/group bots capability~~ → **DE-PRIORITIZED**
 - [ ] Add comprehensive session management (save/load/delete)

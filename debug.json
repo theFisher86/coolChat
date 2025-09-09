@@ -1,6 +1,6 @@
 {
   "active_provider": "gemini",
-  "active_character_id": null,
+  "active_character_id": 1,
   "providers": {
     "echo": {
       "api_key": null,
