@@ -21,7 +21,7 @@ from .config import AppConfig, ProviderConfig, load_config, save_config, mask_se
 from .models import Lorebook, LoreEntry
 from .storage import load_json, save_json, public_dir
 from .database import SessionLocal
-from .routers import lore
+from .routers import lore, characters
 import os
 
 app = FastAPI(title="CoolChat")
@@ -72,8 +72,9 @@ try:
 except Exception:
     pass
 
-# Include the lore router
+# Include routers
 app.include_router(lore.router, tags=["lore"])
+app.include_router(characters.router, tags=["characters"])
 
 # Serve debug.json file for frontend access
 @app.get("/debug.json")
