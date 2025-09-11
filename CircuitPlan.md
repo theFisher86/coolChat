@@ -19,6 +19,96 @@ The Circuit Editor has been successfully implemented as a **React-based drag-and
 - ↗️ **Flow Block**: 1 input, 2 outputs - for conditional branching (next/alternate paths)
 - 🔗 **Integration Block**: 2 inputs, 3 outputs - comprehensive API and external integration support
 
+**Additional Blocks:**
+- **Basic Text Block**  
+This block is for basic text input. It outputs a string.  The user may type in any string into this block's settings to be output. This block can have it's label changed by the user in the circuits editor to help identify it's purpose.
+  - No Inputs
+  - 1 Output (str)
+  - Example Use: Set the value in settings to "You are a helpful Assistant." and change label to Basic System Prompt for the most basic ai chat setup.
+
+- **Boolean Block**  
+This block will compare the two inputs. If they're equal the top TRUE output will pass on the input and the bottom FALSE output will be null. If they're not equal then the bottom FALSE output will pass on the Top Input and the top TRUE output will be null.
+   - 2 Inputs (Main and comparison)
+   - 2 Outputs (top output is corresponds with TRUE bottom output with FALSE)  
+
+        **Example Use:**  
+        *True Example:*
+        ```
+            Mickey Mouse --> {Input 1}[Boolean]{Output 1} --> Mickey Mouse
+            Mickey Mouse --> {Input 2}[ Block ]{Output 2} -->
+        ```
+        *False Example:*
+        ```
+            Mickey Mouse --> {Input 1}[Boolean]{Output 1} --> 
+            Donald Duck  --> {Input 2}[ Block ]{Output 2} --> Mickey Mouse
+        ```  
+
+- **Switch Block**  
+ This block only outputs it's input when it receives a non-null signal on it's signal input.
+    - 2 Inputs (input and signal)
+    - 1 Output (output)
+
+        **Positive Signal Examples:**  
+        ```
+         Hello --> {Input 1}[Switch]{Output} -->  Hello
+            1  -->  {Signal}[Block ]
+
+        -or-
+
+         Hello       --> {Input 1}[Switch]{Output} -->  Hello
+         Some String -->  {Signal}[Block ]
+
+        ```
+        **null Signal Example:**
+        ```
+
+         Hello       --> {Input 1}[Switch]{Output} -->  
+                     -->  {Signal}[Block ]
+        ```
+- **Format: Persona**  
+This block can output data from the User Persona.  It contains a User name output and a description output.
+    - 0 Inputs
+    - 2 Outputs (User Name and Description)
+
+        **Example:**
+        ```
+        [Persona]{User Name Output} --> Aaron
+        [ Block ]{Description Output} --> 38 year old tall lanky man
+        ```
+- **Character: Currently Selected Character**  
+This block just outputs the name and unique id of the currently selected (active) character. It's mainly used to feed into the other character blocks.
+    - 0 Inputs
+    - 2 Outputs (Charcter and character id)
+
+        **Example:**
+        ```
+        [Character]{Character Output} --> Seraphina
+        [  Block  ]{character id Output} --> 3
+        ```
+
+- **AI Command**  
+This block accepts text input (textinput) and a prompt (promptinput) and sends it to the AI. When the AI replies it outputs that reply (output)
+    - 2 Inputs (textinput and promptinput)
+    - 1 Outputs (output)
+
+        **Example:**
+        ```
+                            [Character Description Output] --> {textinput}[AI Command]{output} --> "A tall statuesque gentleman with a powdered wig..."
+        "Summarize only the visual aspects of this character" --> {prompt}[   Block  ]
+        ```
+
+- **Character: Description**  
+This block outputs the description field from the character card of the matching character id from the input
+    - 1 Input (character id)
+    - 1 Outputs (description)
+
+        **Example:**
+        ```
+        1 --> {character id}[Character Description]{Description Output} --> The first President of the United States, a tall and imposing figure...
+                            [       Block         ]
+        ```
+
+
 **Connector System:**
 - 🟢 **Input Connectors** (Left side, Green): "input1", "text", "source", "request", "trigger"
 - 🟠 **Output Connectors** (Right side, Orange): "output", "result", "next", "branched", "success", "error", "response"
@@ -57,7 +147,8 @@ The Circuit Editor has been successfully implemented as a **React-based drag-and
 - ✅ **Phase 1**: UI/UX Design and ReactFlow Integration (COMPLETED)
 - ✅ **Phase 2**: Full Connector System with Color Coding (COMPLETED)
 - ✅ **Phase 3**: Block Management and Persistence (COMPLETED)
-- ⏳ **Phase 4**: Backend Logic Implementation (NEXT DEVELOPMENT PHASE)
+- ⏳ **Phase 3.2**: Additional Blocks (NEXT DEVELOPMENT PHASE)
+- ⏳ **Phase 4**: Backend Logic Implementation (Future Enhancement)
 - ⏳ **Phase 5**: Advanced Features (Future Enhancement)
 
 ### **Next Development Steps**
