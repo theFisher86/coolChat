@@ -171,6 +171,70 @@ async def test_endpoint_circuit():
     print()
 
 
+async def test_logic_comparator_circuit():
+    """Test the logic comparator with new comparison operators"""
+
+    circuit_data = {
+        "nodes": [
+            {
+                "id": "comparator1",
+                "type": "logic_comparator",
+                "data": {
+                    "label": "Comparator Block",
+                    "type": "logic_comparator",
+                    "operation": "=="
+                }
+            }
+        ],
+        "edges": []
+    }
+
+    context_data = {
+        "value1": 5,
+        "value2": 5
+    }
+
+    print("Testing logic comparator circuit with == operator...")
+    result = await execute_circuit(circuit_data, context_data)
+
+    print(f"Execution ID: {result['execution_id']}")
+    print(f"Success: {result['success']}")
+    print(f"Outputs: {json.dumps(result['outputs'], indent=2)}")
+    print(f"Logs: {result['logs']}")
+    print()
+
+
+async def test_ai_max_context_tokens():
+    """Test the AI max context tokens block"""
+
+    circuit_data = {
+        "nodes": [
+            {
+                "id": "max_tokens1",
+                "type": "ai_max_context_tokens",
+                "data": {
+                    "label": "Max Context Tokens Block",
+                    "type": "ai_max_context_tokens"
+                }
+            }
+        ],
+        "edges": []
+    }
+
+    context_data = {
+        "max_context_tokens": 8192
+    }
+
+    print("Testing AI max context tokens block...")
+    result = await execute_circuit(circuit_data, context_data)
+
+    print(f"Execution ID: {result['execution_id']}")
+    print(f"Success: {result['success']}")
+    print(f"Outputs: {json.dumps(result['outputs'], indent=2)}")
+    print(f"Logs: {result['logs']}")
+    print()
+
+
 async def main():
     """Run all circuit tests"""
     print("🧪 Starting Circuit Execution Tests")
@@ -181,6 +245,8 @@ async def main():
         await test_template_circuit()
         await test_logic_circuit()
         await test_endpoint_circuit()
+        await test_logic_comparator_circuit()
+        await test_ai_max_context_tokens()
 
         print("✅ All tests completed successfully!")
 

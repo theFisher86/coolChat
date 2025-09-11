@@ -136,6 +136,7 @@ class CircuitExecutor:
             'ai_command': self._process_ai_command,
             'ai_model_selector': self._process_ai_model_selector,
             'ai_temperature': self._process_ai_temperature,
+            'ai_max_context_tokens': self._process_ai_max_context_tokens,
 
             # Endpoints
             'endpoint_chat_reply': self._process_endpoint_chat_reply,
@@ -432,19 +433,24 @@ class CircuitExecutor:
         """Process comparator block"""
         value1 = ctx.get_input_value(block_id, 'value1')
         value2 = ctx.get_input_value(block_id, 'value2')
-        operation = ctx.get_input_value(block_id, 'operation') or 'equal'
+        operation = ctx.get_input_value(block_id, 'operation') or '=='
 
-        if operation == 'equal':
-            result = value1 == value2
-        elif operation == 'not_equal':
-            result = value1 != value2
-        elif operation == 'greater':
-            result = float(value1 or 0) > float(value2 or 0)
-        elif operation == 'less':
-            result = float(value1 or 0) < float(value2 or 0)
-        elif operation == 'contains':
-            result = str(value2 or '') in str(value1 or '')
-        else:
+        try:
+            if operation == '==':
+                result = value1 == value2
+            elif operation == '!=':
+                result = value1 != value2
+            elif operation == '>':
+                result = float(value1 or 0) > float(value2 or 0)
+            elif operation == '<':
+                result = float(value1 or 0) < float(value2 or 0)
+            elif operation == '>=':
+                result = float(value1 or 0) >= float(value2 or 0)
+            elif operation == '<=':
+                result = float(value1 or 0) <= float(value2 or 0)
+            else:
+                result = False
+        except (ValueError, TypeError):
             result = False
 
         ctx.set_block_output(block_id, 'result', result)
@@ -606,25 +612,30 @@ class CircuitExecutor:
         temperature = ctx.get_input_value(block_id, 'temperature') or 0.7
         ctx.set_block_output(block_id, 'temperature_setting', float(temperature))
 
+    async def _process_ai_max_context_tokens(self, ctx: BlockExecutionContext, block_id: str, block_data: Dict[str, Any]):
+        """Process AI max context tokens block"""
+        max_tokens = ctx.context_data.get('max_context_tokens', 4096)  # Default to 4096 if not set
+        ctx.set_block_output(block_id, 'max_context_tokens', int(max_tokens))
+
     async def _process_endpoint_chat_reply(self, ctx: BlockExecutionContext, block_id: str, block_data: Dict[str, Any]):
         """Process chat reply endpoint block"""
         prompt = ctx.get_input_value(block_id, 'prompt') or ''
 
         # This would send the prompt to the AI and get a response
-        # For now, return placeholder
-        reply = f"Chat reply for prompt: {prompt[:100]}..."
+        # For now, just log that the endpoint was triggered
+        ctx.log(f"Chat reply endpoint triggered with prompt: {prompt[:100]}...")
 
-        ctx.set_block_output(block_id, 'reply', reply)
+        # End-of-line endpoint has no outputs
 
     async def _process_endpoint_image_generator(self, ctx: BlockExecutionContext, block_id: str, block_data: Dict[str, Any]):
         """Process image generator endpoint block"""
         prompt = ctx.get_input_value(block_id, 'prompt') or ''
 
         # This would trigger image generation
-        # For now, return placeholder
-        image_url = f"Generated image for: {prompt[:50]}..."
+        # For now, just log that the endpoint was triggered
+        ctx.log(f"Image generator endpoint triggered with prompt: {prompt[:50]}...")
 
-        ctx.set_block_output(block_id, 'image_url', image_url)
+        # End-of-line endpoint has no outputs
 
 
 # Global executor instance

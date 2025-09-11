@@ -88,7 +88,7 @@ const blockConfigs = {
     outputs: ['result'],
     label: 'Logic: Conditional'
   },
-  logic_comparator: {       // Logic operator accepts string values +, -, *, and / and performs the corresponding mathematical operation to value1 and value2 outputing the answer to result
+  logic_comparator: {       // Logic comparator accepts comparison operators ==, !=, <, >, <=, >= and compares value1 and value2, outputting the boolean result
     inputs: ['value1', 'value2', 'operation'],
     outputs: ['result'],
     label: 'Logic: Comparator'
@@ -171,7 +171,11 @@ const blockConfigs = {
     outputs: ['temperature_setting'],
     label: 'AI: Temperature'
   },
-  // Let's also add a block that outputs the currently selected max context tokens
+  ai_max_context_tokens: {    // Outputs the currently selected max context tokens from the Connection tab
+    inputs: [],
+    outputs: ['max_context_tokens'],
+    label: 'AI: Max Context Tokens'
+  },
 
   // Endpoints
   endpoint_chat_reply: {    // This is the primary chat function and is triggered everytime the user sends a message to the AI in the chat. The circuit ending with this endpoint will output the result to the AI to reply in chat.
@@ -505,6 +509,192 @@ const BlockNode = ({ data }: any) => {
   );
 };
 
+// Helper functions for properties pane
+const getBlockDescription = (blockType: string): string => {
+  const descriptions: Record<string, string> = {
+    // Basic blocks
+    basic_text: "Outputs whatever string or number is entered into this block's settings. Can be configured to accept text or numbers only.",
+    boolean: "Compares two inputs and outputs to 'true' if they match, otherwise outputs to 'false'.",
+    switch: "If signal input is not null the output will echo the input, otherwise outputs nothing.",
+
+    // Data source blocks
+    format_persona: "Outputs the currently active user's name and description from their persona settings.",
+    character_current: "Outputs the currently active character's name and numerical character ID.",
+    character_description: "Outputs character description. If no character_id input provided, returns all character descriptions.",
+    chat_history: "Outputs chat history. With messages input, returns the x most recent messages where x is the input value.",
+
+    // Variables and templates
+    variables_substitution: "Replaces {{variable}} placeholders in template_text with values from variables_map.",
+    template_text_formatter: "Combines up to 5 input strings using a custom template format.",
+    template_system_prompt: "Outputs the currently configured system prompt template.",
+
+    // Logic blocks
+    logic_counter: "Increments count each time action input is triggered. Resets when reset input is triggered.",
+    logic_random_number: "Outputs a random number between min and max inputs (or 0-100 if not specified).",
+    logic_random_choice: "Outputs one randomly selected choice from the configured number of available choices.",
+    logic_conditional: "Outputs true_value if condition is truthy, otherwise outputs false_value.",
+    logic_comparator: "Compares value1 and value2 using the selected comparison operator (==, !=, <, >, >=, <=).",
+
+    // Data manipulation
+    data_string_concat: "Concatenates up to 5 input strings with an optional separator.",
+    data_string_split: "Splits input string by separator and returns array of parts.",
+    data_string_replace: "Replaces occurrences of 'old' substring with 'new' substring in input string.",
+    data_math_operation: "Performs mathematical operations (+, -, *, /, ^, %) on value1 and value2.",
+    data_array_filter: "Filters array input based on condition ('not_empty' or 'unique').",
+
+    // Time and context
+    time_current: "Outputs current timestamp, date, and time information.",
+    time_formatter: "Formats timestamp input using specified format pattern.",
+    context_user_message: "Outputs the most recent user message, or the last x messages if amount specified.",
+    context_ai_response: "Outputs the most recent AI response.",
+
+    // Memory blocks
+    memory_recent_messages: "Outputs recent messages from chat history, filtered by role if specified.",
+    memory_search: "Searches chat history for messages containing the query string.",
+
+    // AI integration
+    ai_command: "Sends textinput to AI with promptinput as system prompt, outputs AI response.",
+    ai_model_selector: "Outputs the currently selected AI model name and provider.",
+    ai_temperature: "Outputs the currently configured AI temperature setting.",
+    ai_max_context_tokens: "Outputs the currently configured maximum context tokens for AI.",
+
+    // Endpoints
+    endpoint_chat_reply: "Circuit endpoint that sends prompt to AI for chat response. End-of-line block with no outputs.",
+    endpoint_image_generator: "Circuit endpoint that triggers AI image generation from prompt. End-of-line block with no outputs."
+  };
+  return descriptions[blockType] || "No description available.";
+};
+
+const renderBlockSettings = (node: Node, onUpdateNode: (nodeId: string, updates: any) => void): JSX.Element | null => {
+  const blockType = node.data.type;
+  const blockData = node.data;
+  console.log('renderBlockSettings called for node:', node.id, 'data:', blockData);
+
+  switch (blockType) {
+    case 'basic_text':
+      return (
+        <div className="block-settings-content">
+          <div className="setting-item">
+            <label htmlFor="basic-text-input">Text Content:</label>
+            <input
+              id="basic-text-input"
+              type="text"
+              value={blockData.text || ''}
+              onChange={(e) => {
+                console.log('Text input changed:', e.target.value);
+                onUpdateNode(node.id, { text: e.target.value });
+              }}
+              placeholder="Enter text to output..."
+            />
+          </div>
+          <div className="setting-item">
+            <label htmlFor="basic-text-mode">Output Type:</label>
+            <select
+              id="basic-text-mode"
+              value={blockData.outputMode || 'string'}
+              onChange={(e) => {
+                onUpdateNode(node.id, { outputMode: e.target.value });
+              }}
+            >
+              <option value="string">String (Text)</option>
+              <option value="number">Number Only</option>
+            </select>
+          </div>
+        </div>
+      );
+
+    case 'logic_comparator':
+      return (
+        <div className="block-settings-content">
+          <div className="setting-item">
+            <label htmlFor="comparator-op">Comparison Operator:</label>
+            <select
+              id="comparator-op"
+              value={blockData.operation || '=='}
+              onChange={(e) => {
+                onUpdateNode(node.id, { operation: e.target.value });
+              }}
+            >
+              <option value="==">Equal</option>
+              <option value="!=">Not Equal</option>
+              <option value="<">Less Than</option>
+              <option value=">">Greater Than</option>
+              <option value="<=">Less Than or Equal</option>
+              <option value=">=">Greater Than or Equal</option>
+            </select>
+          </div>
+        </div>
+      );
+
+    case 'logic_random_choice':
+      return (
+        <div className="block-settings-content">
+          <div className="setting-item">
+            <label htmlFor="choice-count">Number of Choices: {blockData.choiceCount || 3}</label>
+            <input
+              id="choice-count"
+              type="range"
+              min="2"
+              max="10"
+              value={blockData.choiceCount || 3}
+              onChange={(e) => {
+                onUpdateNode(node.id, { choiceCount: parseInt(e.target.value) });
+              }}
+            />
+          </div>
+        </div>
+      );
+
+    default:
+      return <div className="no-settings">No settings available for this block type.</div>;
+  }
+};
+
+const renderCurrentValues = (node: Node): JSX.Element => {
+  const blockType = node.data.type;
+  const config = blockConfigs[blockType];
+
+  return (
+    <div className="current-values-content">
+      {/* Input Values */}
+      {config.inputs.length > 0 && (
+        <div className="values-section">
+          <h6>📥 Input Values</h6>
+          {config.inputs.map((inputName, index) => (
+            <div key={inputName} className="value-item">
+              <span className="value-label">{inputName}:</span>
+              <span className="value-display">
+                {/* This would show actual input values from connected blocks */}
+                <em>Not connected</em>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Output Values */}
+      {config.outputs.length > 0 && (
+        <div className="values-section">
+          <h6>📤 Output Values</h6>
+          {config.outputs.map((outputName, index) => (
+            <div key={outputName} className="value-item">
+              <span className="value-label">{outputName}:</span>
+              <span className="value-display">
+                {/* This would show actual output values from execution */}
+                <em>Not executed</em>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {config.inputs.length === 0 && config.outputs.length === 0 && (
+        <div className="no-values">This block has no inputs or outputs.</div>
+      )}
+    </div>
+  );
+};
+
 const nodeTypes = {
   // Basic blocks
   basic_text: BlockNode,
@@ -550,6 +740,7 @@ const nodeTypes = {
   ai_command: BlockNode,
   ai_model_selector: BlockNode,
   ai_temperature: BlockNode,
+  ai_max_context_tokens: BlockNode,
 
   // Endpoints
   endpoint_chat_reply: BlockNode,
@@ -610,6 +801,8 @@ export const CircuitEditor2: React.FC = () => {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   // Height calculation state
   const [containerHeight, setContainerHeight] = useState<number>(400);
+  // Force re-render counter for properties panel
+  const [propertiesKey, setPropertiesKey] = useState<number>(0);
 
   // Calculate available height for ReactFlow container
   const calculateAvailableHeight = useCallback(() => {
@@ -655,6 +848,17 @@ export const CircuitEditor2: React.FC = () => {
       setSelectedNode(null);
     }
   }, [circuitStore.current, setNodes, setEdges, setSelectedNode]);
+
+  // Update selectedNode when nodes data changes
+  useEffect(() => {
+    if (selectedNode) {
+      const currentNode = nodes.find(node => node.id === selectedNode.id);
+      if (currentNode && currentNode.data !== selectedNode.data) {
+        console.log('Updating selectedNode to match current node data');
+        setSelectedNode(currentNode);
+      }
+    }
+  }, [nodes, selectedNode, setSelectedNode]);
 
   // Live data initialization and subscriptions
   useEffect(() => {
@@ -800,6 +1004,23 @@ export const CircuitEditor2: React.FC = () => {
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => setSelectedNode(node), []);
 
+  // Function to update node data
+  const updateNodeData = useCallback((nodeId: string, updates: any) => {
+    console.log('updateNodeData called:', nodeId, updates);
+    setNodes((prevNodes) => {
+      return prevNodes.map((node) => {
+        if (node.id === nodeId) {
+          console.log('Updating node:', node.id, 'with:', updates);
+          return {
+            ...node,
+            data: { ...node.data, ...updates }
+          };
+        }
+        return node;
+      });
+    });
+  }, [setNodes]);
+
   const getIconForType = (type: string) => {
     const icons: Record<string, string> = {
       // Basic blocks
@@ -846,6 +1067,7 @@ export const CircuitEditor2: React.FC = () => {
       ai_command: '🧠',
       ai_model_selector: '🎭',
       ai_temperature: '🌡️',
+      ai_max_context_tokens: '📏',
 
       // Endpoints
       endpoint_chat_reply: '💬',
@@ -1103,7 +1325,7 @@ export const CircuitEditor2: React.FC = () => {
             <div className="palette-section">
               <h5>AI Integration</h5>
             </div>
-            {(['ai_command', 'ai_model_selector', 'ai_temperature'] as const).map(type => (
+            {(['ai_command', 'ai_model_selector', 'ai_temperature', 'ai_max_context_tokens'] as const).map(type => (
               <div
                 key={type}
                 className={`palette-item circuit-${type}`}
@@ -1294,11 +1516,33 @@ export const CircuitEditor2: React.FC = () => {
           )}
         </main>
 
-        <aside className="properties panel">
-          <h4>Properties</h4>
-          {current ? (
-            <div className="properties-content">
-              {!selectedNode ? (
+        <aside className="properties panel" key={propertiesKey}>
+            <h4>Properties</h4>
+           {current ? (
+             <div className="properties-content">
+               {selectedNode ? (
+                 <>
+                   {/* Block Settings Section */}
+                   <div className="properties-section block-settings">
+                     <h5>⚙️ Block Settings</h5>
+                     {renderBlockSettings(selectedNode, updateNodeData)}
+                   </div>
+
+                   {/* Block Description */}
+                   <div className="properties-section block-description">
+                     <h5>📋 Block Description</h5>
+                     <p className="block-description-text">{getBlockDescription(selectedNode.data.type)}</p>
+                   </div>
+
+                   {/* Current Values Section */}
+                   <div className="properties-section current-values">
+                     <h5>🔄 Current Values</h5>
+                     {renderCurrentValues(selectedNode)}
+                   </div>
+                 </>
+               ) : null}
+
+               {!selectedNode ? (
                 <>
                   <div className="property-item">
                     <strong>Name:</strong> {current.name}

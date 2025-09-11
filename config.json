@@ -54,7 +54,7 @@
       "steps": null
     },
     "gemini": {
-      "api_key": "AIzaSyAfJN0x26RJAfkPTbqCgkXV5U47aO-E4Lg",
+      "api_key": "AIzaSyAM8EcW6PXJVoF4Y_hgcYtWQOrGeTz5nTo",
       "api_base": "https://generativelanguage.googleapis.com/v1beta/openai",
       "model": "models/gemini-2.5-flash",
       "temperature": 0.7,
@@ -79,7 +79,7 @@
     "motivations": "",
     "tracking": ""
   },
-  "max_context_tokens": 2048,
+  "max_context_tokens": 2816,
   "structured_output": true,
   "images": {
     "active": "dezgo",
