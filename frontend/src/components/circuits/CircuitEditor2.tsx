@@ -11,6 +11,181 @@ import './CircuitEditor.css';
 
 // Block connector configurations
 const blockConfigs = {
+  // Basic blocks
+  basic_text: {     // Outputs whatever string is entered into this block's settings
+    inputs: [],
+    outputs: ['output'],
+    label: 'Basic Text'
+  },
+  boolean: {        // If input1 = input2 this will output input1 from the true output. Otherwise the false output will output input1
+    inputs: ['input1', 'input2'],
+    outputs: ['true', 'false'],
+    label: 'Boolean Compare'
+  },
+  switch: {         // If signal input is not null the output will echo the input
+    inputs: ['input', 'signal'],
+    outputs: ['output'],
+    label: 'Switch'
+  },
+
+  // Data source blocks
+  format_persona: { // Outputs the Persona Username from name and Description from description
+    inputs: [],
+    outputs: ['name', 'description'],
+    label: 'Format: Persona'
+  },
+  character_current: {  // Outputs the currently active character's name from character and numerical character id from character_id
+    inputs: [],
+    outputs: ['character', 'character_id'],
+    label: 'Character: Current'
+  },
+  character_description: {    // Will output a JSON object of all character descriptions if there is no input. If character_id receives numerical input description will output the character desciption that corresponds with that character_id
+    inputs: ['character_id'],
+    outputs: ['description'],
+    label: 'Character: Description'
+  },
+  chat_history: {    // Outputs the entire active chat history from chathistory unless messages receives a numerical input then chathistory will output the x most recent messages where x is the numerical input received.
+    inputs: ['messages'],
+    outputs: ['chathistory'],
+    label: 'Chat: History'
+  },
+
+  // Variables and templates
+  variables_substitution: {
+    inputs: ['template_text', 'variables_map'],
+    outputs: ['processed_text'],
+    label: 'Variables: Substitution'
+  },
+  template_text_formatter: {
+    inputs: ['input1', 'input2', 'input3', 'input4', 'input5'],
+    outputs: ['formatted_text'],
+    label: 'Template: Text Formatter'
+  },
+  template_system_prompt: {
+    inputs: [],
+    outputs: ['system_prompt'],
+    label: 'Template: System Prompt'
+  },
+
+  // Logic blocks
+  logic_counter: {    // Everytime this block receives an input on action it will iterate the number being output on count (starting on 0). When this receives any input on reset it resets the count to 0
+    inputs: ['action', 'reset'],
+    outputs: ['count'],
+    label: 'Logic: Counter'
+  },
+  logic_random_number: {    // Outputs a random number between 0 and 256 unless min and max are each receiving numerical input then will output a random number between those two numbers
+    inputs: ['min', 'max'],
+    outputs: ['random_number'],
+    label: 'Logic: Random Number'
+  },
+  logic_random_choice: {    // Will output one of the 5 choice inputs, while ignoring empty inputs. Will choose a new choice at random whenever it receives any input on reset.
+    inputs: ['choice1', 'choice2', 'choice3', 'choice4', 'choice5', 'reset'],
+    outputs: ['selected_choice'],
+    label: 'Logic: Random Choice'
+  },
+  logic_conditional: {
+    inputs: ['condition', 'true_value', 'false_value'],
+    outputs: ['result'],
+    label: 'Logic: Conditional'
+  },
+  logic_comparator: {       // Logic operator accepts string values +, -, *, and / and performs the corresponding mathematical operation to value1 and value2 outputing the answer to result
+    inputs: ['value1', 'value2', 'operation'],
+    outputs: ['result'],
+    label: 'Logic: Comparator'
+  },
+
+  // Data manipulation
+  data_string_concat: {
+    inputs: ['input1', 'input2', 'input3', 'input4', 'input5', 'separator'],
+    outputs: ['result'],
+    label: 'Data: String Concat'
+  },
+  data_string_split: {
+    inputs: ['input', 'separator'],
+    outputs: ['result'],
+    label: 'Data: String Split'
+  },
+  data_string_replace: {
+    inputs: ['input', 'old', 'new'],
+    outputs: ['result'],
+    label: 'Data: String Replace'
+  },
+  data_math_operation: {
+    inputs: ['value1', 'value2', 'operation'],
+    outputs: ['result'],
+    label: 'Data: Math Operation'
+  },
+  data_array_filter: {
+    inputs: ['input', 'condition'],
+    outputs: ['result'],
+    label: 'Data: Array Filter'
+  },
+
+  // Time and context
+  time_current: {
+    inputs: [],
+    outputs: ['timestamp', 'date', 'time'],
+    label: 'Time: Current'
+  },
+  time_formatter: {
+    inputs: ['timestamp', 'format'],
+    outputs: ['formatted_time'],
+    label: 'Time: Formatter'
+  },
+  context_user_message: {     // Outputs the most recent user message when receiving no input. When receiving numerical input in amount output that many of most recent user messages.
+    inputs: ['amount'],
+    outputs: ['message'],
+    label: 'Context: User Message'
+  },
+  context_ai_response: {      // Outputs the most recent ai reply when receiving no input. When receiving numerical input in amount output that many of most recent ai replies.
+    inputs: [],
+    outputs: ['response'],
+    label: 'Context: AI Response'
+  },
+
+  // Memory blocks
+  memory_recent_messages: {
+    inputs: ['limit', 'role_filter'],
+    outputs: ['messages'],
+    label: 'Memory: Recent Messages'
+  },
+  memory_search: {
+    inputs: ['query'],
+    outputs: ['matching_messages'],
+    label: 'Memory: Search'
+  },
+
+  // AI integration
+  ai_command: {       // Accepts a string in textinput and sends that to the AI preceded by promptinput. When the AI replies that is output from output
+    inputs: ['textinput', 'promptinput'],
+    outputs: ['output'],
+    label: 'AI: Command'
+  },
+  ai_model_selector: {    // Outputs the name of the currently selected AI model from selected_model and the provider from provider
+    inputs: [],
+    outputs: ['selected_model', 'provider'],
+    label: 'AI: Model Selector'
+  },
+  ai_temperature: {       // Outputs the currently selected temperature from the Connection tab
+    inputs: [],
+    outputs: ['temperature_setting'],
+    label: 'AI: Temperature'
+  },
+  // Let's also add a block that outputs the currently selected max context tokens
+
+  // Endpoints
+  endpoint_chat_reply: {    // This is the primary chat function and is triggered everytime the user sends a message to the AI in the chat. The circuit ending with this endpoint will output the result to the AI to reply in chat.
+    inputs: ['prompt'],
+    outputs: [],
+    label: 'Endpoint: Chat Reply'
+  },
+  endpoint_image_generator: {   // The prompt fed into this endpoint is what will be sent to the AI whenever the image generator tool is called (either via the AI using tool calling or the user clicking the button)
+    inputs: ['prompt'],
+    outputs: [],
+    label: 'Endpoint: Image Generator'
+  },
+
+  // Legacy blocks (keeping for backward compatibility)
   logic: {
     inputs: ['input1'],
     outputs: ['output'],
@@ -53,11 +228,6 @@ const blockConfigs = {
     label: 'System: Image Summary'
   },
   // Personalized Format Template Blocks
-  format_persona: {
-    inputs: ['user_persona'],
-    outputs: ['persona_formatted'],
-    label: 'Format: Persona'
-  },
   format_tools: {
     inputs: ['tools_config'],
     outputs: ['tools_formatted'],
@@ -110,12 +280,6 @@ const blockConfigs = {
     inputs: ['keywords', 'content_text', 'trigger_logic'],
     outputs: ['lore_entry'],
     label: 'Lorebook: Content Block'
-  },
-  // Variables Block
-  variables_substitution: {
-    inputs: ['template_text', 'variables_map'],
-    outputs: ['processed_text'],
-    label: 'Variables: K/V Substitution'
   },
   // Dynamic Active Lore Blocks
   lore_active_display: {
@@ -342,6 +506,56 @@ const BlockNode = ({ data }: any) => {
 };
 
 const nodeTypes = {
+  // Basic blocks
+  basic_text: BlockNode,
+  boolean: BlockNode,
+  switch: BlockNode,
+
+  // Data source blocks
+  format_persona: BlockNode,
+  character_current: BlockNode,
+  character_description: BlockNode,
+  chat_history: BlockNode,
+
+  // Variables and templates
+  variables_substitution: BlockNode,
+  template_text_formatter: BlockNode,
+  template_system_prompt: BlockNode,
+
+  // Logic blocks
+  logic_counter: BlockNode,
+  logic_random_number: BlockNode,
+  logic_random_choice: BlockNode,
+  logic_conditional: BlockNode,
+  logic_comparator: BlockNode,
+
+  // Data manipulation
+  data_string_concat: BlockNode,
+  data_string_split: BlockNode,
+  data_string_replace: BlockNode,
+  data_math_operation: BlockNode,
+  data_array_filter: BlockNode,
+
+  // Time and context
+  time_current: BlockNode,
+  time_formatter: BlockNode,
+  context_user_message: BlockNode,
+  context_ai_response: BlockNode,
+
+  // Memory blocks
+  memory_recent_messages: BlockNode,
+  memory_search: BlockNode,
+
+  // AI integration
+  ai_command: BlockNode,
+  ai_model_selector: BlockNode,
+  ai_temperature: BlockNode,
+
+  // Endpoints
+  endpoint_chat_reply: BlockNode,
+  endpoint_image_generator: BlockNode,
+
+  // Legacy blocks (keeping for backward compatibility)
   logic: BlockNode,
   content: BlockNode,
   flow: BlockNode,
@@ -352,7 +566,6 @@ const nodeTypes = {
   system_lore_suggest: BlockNode,
   system_image_summary: BlockNode,
   // Format Template Blocks
-  format_persona: BlockNode,
   format_tools: BlockNode,
   format_lore_injection: BlockNode,
   // Character-based Blocks
@@ -366,8 +579,6 @@ const nodeTypes = {
   tool_lore_suggestions: BlockNode,
   // Lorebook Content Blocks
   lorebook_content: BlockNode,
-  // Variables Block
-  variables_substitution: BlockNode,
   // Dynamic Active Lore Blocks
   lore_active_display: BlockNode,
   lore_title_injection: BlockNode,
@@ -379,9 +590,12 @@ export const CircuitEditor2: React.FC = () => {
   const { characters, loadCharacters, lorebooks, findCharacterById } = useDataStore();
   const { loreEntries, selectedLorebook, selectLorebook, fetchLorebooks, refreshLoreEntries } = useLorebookStore();
   const [entryLoading, setEntryLoading] = useState(false);
-  const { circuits, current, fetchCircuits, saveCircuit } = useCircuitStore();
+  const { circuits, current, fetchCircuits, saveCircuit, executeCircuit, executionResult, isExecuting } = useCircuitStore();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] = useState({ name: '', description: '' });
+  const [showExecutionResults, setShowExecutionResults] = useState(false);
+  const [executionLogs, setExecutionLogs] = useState<string[]>([]);
+  const [executionOutputs, setExecutionOutputs] = useState<Record<string, any>>({});
   // Live data states
   const [liveDataLoading, setLiveDataLoading] = useState<{ [key: string]: boolean }>({});
   const [liveDataErrors, setLiveDataErrors] = useState<{ [key: string]: string }>({});
@@ -587,7 +801,62 @@ export const CircuitEditor2: React.FC = () => {
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => setSelectedNode(node), []);
 
   const getIconForType = (type: string) => {
-    const icons: Record<string, string> = { logic: '🌟', content: '📖', flow: '↗️', integration: '🔗' };
+    const icons: Record<string, string> = {
+      // Basic blocks
+      basic_text: '📝',
+      boolean: '⚖️',
+      switch: '🔀',
+
+      // Data source blocks
+      format_persona: '👤',
+      character_current: '🎭',
+      character_description: '📋',
+      chat_history: '💬',
+
+      // Variables and templates
+      variables_substitution: '🔧',
+      template_text_formatter: '📄',
+      template_system_prompt: '⚙️',
+
+      // Logic blocks
+      logic_counter: '🔢',
+      logic_random_number: '🎲',
+      logic_random_choice: '🎯',
+      logic_conditional: '🤔',
+      logic_comparator: '⚖️',
+
+      // Data manipulation
+      data_string_concat: '🔗',
+      data_string_split: '✂️',
+      data_string_replace: '🔄',
+      data_math_operation: '🧮',
+      data_array_filter: '🔍',
+
+      // Time and context
+      time_current: '🕐',
+      time_formatter: '📅',
+      context_user_message: '💭',
+      context_ai_response: '🤖',
+
+      // Memory blocks
+      memory_recent_messages: '🧠',
+      memory_search: '🔎',
+
+      // AI integration
+      ai_command: '🧠',
+      ai_model_selector: '🎭',
+      ai_temperature: '🌡️',
+
+      // Endpoints
+      endpoint_chat_reply: '💬',
+      endpoint_image_generator: '🎨',
+
+      // Legacy blocks
+      logic: '',
+      content: '📖',
+      flow: '↗️',
+      integration: '🔗',
+    };
     return icons[type] || '⚡';
   };
 
@@ -615,6 +884,32 @@ export const CircuitEditor2: React.FC = () => {
     }
   };
 
+  const handleExecuteCircuit = async () => {
+    if (!current) return;
+
+    try {
+      // Prepare context data for execution
+      const contextData = {
+        user_persona: userPersona,
+        current_character_name: 'Test Character', // This would come from selected character
+        current_character_id: 1, // This would come from selected character
+        chat_history: [
+          { role: 'user', content: 'Hello' },
+          { role: 'assistant', content: 'Hi there!' }
+        ],
+        user_message: 'Test message',
+        ai_response: 'Test response'
+      };
+
+      const result = await executeCircuit(current.id!, contextData);
+      setExecutionLogs(result.logs);
+      setExecutionOutputs(result.outputs);
+      setShowExecutionResults(true);
+    } catch (err) {
+      console.error('Failed to execute circuit:', err);
+    }
+  };
+
   return (
     <div className="circuit-editor">
       <div className="toolbar panel">
@@ -634,6 +929,14 @@ export const CircuitEditor2: React.FC = () => {
             title="Save circuit"
           >
             Save Circuit
+          </button>
+          <button
+            className="primary"
+            onClick={handleExecuteCircuit}
+            disabled={!circuitStore.current || isExecuting}
+            title="Execute circuit"
+          >
+            {isExecuting ? '⏳ Executing...' : '🚀 Execute Circuit'}
           </button>
         </div>
       </div>
@@ -684,24 +987,11 @@ export const CircuitEditor2: React.FC = () => {
         <aside className="block-palette panel">
           <h4>Block Palette</h4>
           <div className="palette-items">
-            {/* Original Blocks */}
-            {(['logic', 'content', 'flow', 'integration'] as const).map(type => (
-              <div
-                key={type}
-                className={`palette-item circuit-${type}`}
-                draggable
-                onDragStart={(e) => e.dataTransfer.setData('nodeType', type)}
-              >
-                <span className="block-icon">{getIconForType(type)}</span>
-                <span>{type.charAt(0).toUpperCase() + type.slice(1)} Block</span>
-              </div>
-            ))}
-
-            {/* System Prompt Blocks */}
+            {/* Basic Logic Blocks */}
             <div className="palette-section">
-              <h5>System Prompts</h5>
+              <h5>Basic Blocks</h5>
             </div>
-            {(['system_main', 'system_tool_call', 'system_lore_suggest', 'system_image_summary'] as const).map(type => (
+            {(['basic_text', 'boolean', 'switch'] as const).map(type => (
               <div
                 key={type}
                 className={`palette-item circuit-${type}`}
@@ -713,11 +1003,11 @@ export const CircuitEditor2: React.FC = () => {
               </div>
             ))}
 
-            {/* Format Template Blocks */}
+            {/* Data Source Blocks */}
             <div className="palette-section">
-              <h5>Format Templates</h5>
+              <h5>Data Sources</h5>
             </div>
-            {(['format_persona', 'format_tools', 'format_lore_injection'] as const).map(type => (
+            {(['format_persona', 'character_current', 'character_description', 'chat_history'] as const).map(type => (
               <div
                 key={type}
                 className={`palette-item circuit-${type}`}
@@ -729,11 +1019,11 @@ export const CircuitEditor2: React.FC = () => {
               </div>
             ))}
 
-            {/* Character-based Prompt Blocks */}
+            {/* Variables and Templates */}
             <div className="palette-section">
-              <h5>Character Prompts</h5>
+              <h5>Variables & Templates</h5>
             </div>
-            {(['char_system_prompt', 'char_personality', 'char_scenario', 'char_first_message'] as const).map(type => (
+            {(['variables_substitution', 'template_text_formatter', 'template_system_prompt'] as const).map(type => (
               <div
                 key={type}
                 className={`palette-item circuit-${type}`}
@@ -745,11 +1035,11 @@ export const CircuitEditor2: React.FC = () => {
               </div>
             ))}
 
-            {/* Tool Message Blocks */}
+            {/* Logic Blocks */}
             <div className="palette-section">
-              <h5>Tool Messages</h5>
+              <h5>Logic & Control</h5>
             </div>
-            {(['tool_image_request', 'tool_phone_url', 'tool_lore_suggestions'] as const).map(type => (
+            {(['logic_counter', 'logic_random_number', 'logic_random_choice', 'logic_conditional', 'logic_comparator'] as const).map(type => (
               <div
                 key={type}
                 className={`palette-item circuit-${type}`}
@@ -761,11 +1051,91 @@ export const CircuitEditor2: React.FC = () => {
               </div>
             ))}
 
-            {/* Content Blocks */}
+            {/* Data Manipulation */}
             <div className="palette-section">
-              <h5>Lore & Variables</h5>
+              <h5>Data Manipulation</h5>
             </div>
-            {(['lorebook_content', 'variables_substitution', 'lore_active_display', 'lore_title_injection'] as const).map(type => (
+            {(['data_string_concat', 'data_string_split', 'data_string_replace', 'data_math_operation', 'data_array_filter'] as const).map(type => (
+              <div
+                key={type}
+                className={`palette-item circuit-${type}`}
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('nodeType', type)}
+              >
+                <span className="block-icon">{getIconForType(type)}</span>
+                <span>{blockConfigs[type].label}</span>
+              </div>
+            ))}
+
+            {/* Time and Context */}
+            <div className="palette-section">
+              <h5>Time & Context</h5>
+            </div>
+            {(['time_current', 'time_formatter', 'context_user_message', 'context_ai_response'] as const).map(type => (
+              <div
+                key={type}
+                className={`palette-item circuit-${type}`}
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('nodeType', type)}
+              >
+                <span className="block-icon">{getIconForType(type)}</span>
+                <span>{blockConfigs[type].label}</span>
+              </div>
+            ))}
+
+            {/* Memory Blocks */}
+            <div className="palette-section">
+              <h5>Memory</h5>
+            </div>
+            {(['memory_recent_messages', 'memory_search'] as const).map(type => (
+              <div
+                key={type}
+                className={`palette-item circuit-${type}`}
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('nodeType', type)}
+              >
+                <span className="block-icon">{getIconForType(type)}</span>
+                <span>{blockConfigs[type].label}</span>
+              </div>
+            ))}
+
+            {/* AI Integration */}
+            <div className="palette-section">
+              <h5>AI Integration</h5>
+            </div>
+            {(['ai_command', 'ai_model_selector', 'ai_temperature'] as const).map(type => (
+              <div
+                key={type}
+                className={`palette-item circuit-${type}`}
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('nodeType', type)}
+              >
+                <span className="block-icon">{getIconForType(type)}</span>
+                <span>{blockConfigs[type].label}</span>
+              </div>
+            ))}
+
+            {/* Endpoints */}
+            <div className="palette-section">
+              <h5>Endpoints</h5>
+            </div>
+            {(['endpoint_chat_reply', 'endpoint_image_generator'] as const).map(type => (
+              <div
+                key={type}
+                className={`palette-item circuit-${type}`}
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('nodeType', type)}
+              >
+                <span className="block-icon">{getIconForType(type)}</span>
+                <span>{blockConfigs[type].label}</span>
+              </div>
+            ))}
+
+            {/* Legacy System Blocks */}
+            <div className="palette-section">
+              <h5>Legacy System Blocks</h5>
+            </div>
+            {(['logic', 'content', 'flow', 'integration', 'system_main', 'system_tool_call', 'system_lore_suggest', 'system_image_summary', 'format_tools', 'format_lore_injection', 'char_system_prompt', 'char_personality', 'char_scenario', 'char_first_message', 'tool_image_request', 'tool_phone_url', 'tool_lore_suggestions', 'lorebook_content', 'lore_active_display', 'lore_title_injection'] as const).map(type => (
               <div
                 key={type}
                 className={`palette-item circuit-${type}`}
@@ -783,6 +1153,17 @@ export const CircuitEditor2: React.FC = () => {
           <div className="canvas-header">
             {!current && circuits.length > 0 && <span className="muted">Select a circuit to view/edit</span>}
             {circuits.length === 0 && <span className="muted">No circuits available. Create your first circuit!</span>}
+            {current && (
+              <div className="execution-controls">
+                <button
+                  className="secondary"
+                  onClick={() => setShowExecutionResults(!showExecutionResults)}
+                  title="Toggle execution results"
+                >
+                  {showExecutionResults ? '📊 Hide Results' : '📊 Show Results'}
+                </button>
+              </div>
+            )}
           </div>
 
           {circuits.length > 0 && !current && (
@@ -837,6 +1218,77 @@ export const CircuitEditor2: React.FC = () => {
                     <MiniMap />
                   </ReactFlow>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Execution Results Panel */}
+          {showExecutionResults && current && (
+            <div className="execution-results panel">
+              <h4>🚀 Execution Results</h4>
+              <div className="results-content">
+                {/* Outputs Section */}
+                {Object.keys(executionOutputs).length > 0 && (
+                  <div className="results-section">
+                    <h5>📤 Outputs</h5>
+                    <div className="outputs-list">
+                      {Object.entries(executionOutputs).map(([endpoint, output]) => (
+                        <div key={endpoint} className="output-item">
+                          <strong>{endpoint}:</strong>
+                          <pre className="output-value">
+                            {JSON.stringify(output, null, 2)}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Logs Section */}
+                <div className="results-section">
+                  <h5>📝 Execution Logs</h5>
+                  <div className="logs-container">
+                    {executionLogs.length > 0 ? (
+                      executionLogs.map((log, index) => (
+                        <div key={index} className="log-entry">
+                          <small>{log}</small>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="no-logs">
+                        <small>No execution logs available</small>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Execution Info */}
+                {executionResult && (
+                  <div className="results-section">
+                    <h5>ℹ️ Execution Info</h5>
+                    <div className="execution-info">
+                      <div className="info-item">
+                        <strong>ID:</strong> {executionResult.execution_id}
+                      </div>
+                      <div className="info-item">
+                        <strong>Status:</strong>
+                        <span className={executionResult.success ? 'status-success' : 'status-error'}>
+                          {executionResult.success ? '✅ Success' : '❌ Failed'}
+                        </span>
+                      </div>
+                      {executionResult.errors && executionResult.errors.length > 0 && (
+                        <div className="info-item">
+                          <strong>Errors:</strong>
+                          <div className="error-list">
+                            {executionResult.errors.map((error, index) => (
+                              <div key={index} className="error-item">{error}</div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
