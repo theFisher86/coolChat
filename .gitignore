@@ -15,3 +15,4 @@ public/
 
 backend/.env
 debug.json
+dist/
