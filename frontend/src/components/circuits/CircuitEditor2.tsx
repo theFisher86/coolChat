@@ -54,11 +54,11 @@ const blockConfigs: Record<string, { inputs: string[]; outputs: string[]; label:
   //   outputs: ['name', 'description'],
   //   label: 'Format: Persona'
   // },
-  character_current: {  // Outputs the currently active character's name from character and numerical character id from character_id
-    inputs: [],
-    outputs: ['character', 'character_id'],
-    label: 'Character: Current'
-  },
+  // character_current: {  // Outputs the currently active character's name from character and numerical character id from character_id
+  //   inputs: [],
+  //   outputs: ['character', 'character_id'],
+  //   label: 'Character: Current'
+  // },
   // ARCHIVED: character_description: {    // Will output a JSON object of all character descriptions if there is no input. If character_id receives numerical input description will output the character desciption that corresponds with that character_id
   //   inputs: ['character_id'],
   //   outputs: ['description'],
@@ -70,17 +70,17 @@ const blockConfigs: Record<string, { inputs: string[]; outputs: string[]; label:
     label: 'Chat: History'
   },
 
-  // Variables and templates
-  variables_substitution: {
-    inputs: ['template_text', 'variables_map'],
-    outputs: ['processed_text'],
-    label: 'Variables: Substitution'
-  },
-  template_text_formatter: {
-    inputs: ['input1', 'input2', 'input3', 'input4', 'input5'],
-    outputs: ['formatted_text'],
-    label: 'Template: Text Formatter'
-  },
+  // // Variables and templates
+  // variables_substitution: {
+  //   inputs: ['template_text', 'variables_map'],
+  //   outputs: ['processed_text'],
+  //   label: 'Variables: Substitution'
+  // },
+  // template_text_formatter: {
+  //   inputs: ['input1', 'input2', 'input3', 'input4', 'input5'],
+  //   outputs: ['formatted_text'],
+  //   label: 'Template: Text Formatter'
+  // },
   // ARCHIVED: template_system_prompt: {
   //   inputs: [],
   //   outputs: ['system_prompt'],
@@ -917,9 +917,53 @@ default:
   }
 };
 
-const renderCurrentValues = (node: Node, circuitStore: any, executionResult: any): JSX.Element => {
+const renderCurrentValues = (node: Node, circuitStore: any, executionResult: any, edges: Edge[], nodes: Node[], executionOutputs: Record<string, any>): JSX.Element => {
   const blockType = node.data.type;
   const config = blockConfigs[blockType];
+
+  // Helper function to get source node data for connected inputs
+  const getSourceNodeData = (inputName: string): any => {
+    const connectedEdge = edges.find(edge => edge.target === node.id && edge.targetHandle === `input-${inputName}`);
+    if (!connectedEdge) return null;
+
+    const sourceNode = nodes.find(n => n.id === connectedEdge.source);
+    if (!sourceNode) return null;
+
+    // Return the source node's output data
+    return {
+      nodeId: sourceNode.id,
+      nodeType: sourceNode.data.type,
+      nodeLabel: sourceNode.data.label,
+      // Get actual output data from execution results if available
+      data: executionOutputs[sourceNode.id] || sourceNode.data
+    };
+  };
+
+  // Helper function to get output data for this node
+  const getOutputData = (outputName: string): any => {
+    // First try execution results
+    if (executionOutputs[node.id]) {
+      return executionOutputs[node.id][outputName] || executionOutputs[node.id];
+    }
+
+    // Then try node's configured data
+    if (node.data[outputName]) {
+      return node.data[outputName];
+    }
+
+    // Finally use node's settings
+    return node.data;
+  };
+
+  // Helper function to check if input is connected
+  const isInputConnected = (inputName: string): boolean => {
+    return edges.some(edge => edge.target === node.id && edge.targetHandle === `input-${inputName}`);
+  };
+
+  // Helper function to check if output is connected
+  const isOutputConnected = (outputName: string): boolean => {
+    return edges.some(edge => edge.source === node.id && edge.sourceHandle === `output-${outputName}`);
+  };
 
   return (
     <div className="current-values-content">
@@ -927,15 +971,36 @@ const renderCurrentValues = (node: Node, circuitStore: any, executionResult: any
       {config.inputs.length > 0 && (
         <div className="values-section">
           <h6>📥 Input Values</h6>
-          {config.inputs.map((inputName, index) => (
-            <div key={inputName} className="value-item">
-              <span className="value-label">{inputName}:</span>
-              <span className="value-display">
-                {/* This would show actual input values from connected blocks */}
-                <em>Not connected</em>
-              </span>
-            </div>
-          ))}
+          {config.inputs.map((inputName, index) => {
+            const isConnected = isInputConnected(inputName);
+            const sourceData = getSourceNodeData(inputName);
+
+            return (
+              <div key={inputName} className={`value-item ${isConnected ? 'connected' : 'disconnected'}`}>
+                <span className="value-label">
+                  {inputName}:
+                  {!isConnected && <span className="connection-status disconnected" title="Not connected">●</span>}
+                  {isConnected && <span className="connection-status connected" title="Connected">●</span>}
+                </span>
+                <span className="value-display">
+                  {isConnected && sourceData ? (
+                    <div className="connected-value">
+                      <small className="source-info">From {sourceData.nodeLabel || sourceData.nodeType}</small>
+                      <div className="data-preview">
+                        {typeof sourceData.data === 'object' ? (
+                          <pre className="json-preview">{JSON.stringify(sourceData.data, null, 2)}</pre>
+                        ) : (
+                          <span className="text-value">"{String(sourceData.data)}"</span>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <em className="placeholder">Not connected</em>
+                  )}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -943,15 +1008,56 @@ const renderCurrentValues = (node: Node, circuitStore: any, executionResult: any
       {config.outputs.length > 0 && (
         <div className="values-section">
           <h6>📤 Output Values</h6>
-          {config.outputs.map((outputName, index) => (
-            <div key={outputName} className="value-item">
-              <span className="value-label">{outputName}:</span>
-              <span className="value-display">
-                {/* This would show actual output values from execution */}
-                <em>Not executed</em>
-              </span>
-            </div>
-          ))}
+          {config.outputs.map((outputName, index) => {
+            const isConnected = isOutputConnected(outputName);
+            const outputData = getOutputData(outputName);
+
+            return (
+              <div key={outputName} className={`value-item ${isConnected ? 'connected' : 'disconnected'}`}>
+                <span className="value-label">
+                  {outputName}:
+                  {!isConnected && <span className="connection-status disconnected" title="Not connected">●</span>}
+                  {isConnected && <span className="connection-status connected" title="Connected">●</span>}
+                </span>
+                <span className="value-display">
+                  {outputData ? (
+                    <div className="output-value">
+                      <div className="data-preview">
+                        {typeof outputData === 'object' ? (
+                          <pre className="json-preview">{JSON.stringify(outputData, null, 2)}</pre>
+                        ) : (
+                          <span className="text-value">"{String(outputData)}"</span>
+                        )}
+                      </div>
+                      {executionOutputs[node.id] && (
+                        <small className="execution-info">From execution</small>
+                      )}
+                    </div>
+                  ) : (
+                    <em className="placeholder">Not executed</em>
+                  )}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Node Settings */}
+      {Object.keys(node.data).filter(key => !['label', 'type', 'icon', 'inputs', 'outputs'].includes(key)).length > 0 && (
+        <div className="values-section">
+          <h6>⚙️ Node Settings</h6>
+          {Object.entries(node.data).map(([key, value]) => {
+            if (['label', 'type', 'icon', 'inputs', 'outputs'].includes(key)) return null;
+            return (
+              <div key={key} className="value-item">
+                <span className="value-label">{key}:</span>
+                <span className="value-display">
+                  {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -1803,28 +1909,23 @@ export const CircuitEditor2: React.FC = () => {
              <div className="properties-content">
                {selectedNode ? (
                  <>
-                   {/* Block Settings Section */}
-                   <div className="properties-section block-settings">
-                     <h5>⚙️ Block Settings</h5>
-                     {renderBlockSettings(selectedNode, updateNodeData)}
-                   </div>
-
                    {/* Block Description */}
                    <div className="properties-section block-description">
                      <h5>📋 Block Description</h5>
                      <p className="block-description-text">{getBlockDescription(selectedNode.data.type)}</p>
                    </div>
-
-                   {/* Current Values Section */}
-                   <div className="properties-section current-values">
-                     <h5>🔄 Current Values</h5>
-                     {renderCurrentValues(selectedNode, circuitStore, executionResult)}
+                   
+                   {/* Block Settings Section */}
+                   <div className="properties-section block-settings">
+                     <h5>⚙️ Block Settings</h5>
+                     {renderBlockSettings(selectedNode, updateNodeData)}
                    </div>
                  </>
                ) : null}
 
                {!selectedNode ? (
                 <>
+                {/* ❗None of this section appears to be showing up at all?  */}
                   <div className="property-item">
                     <strong>Name:</strong> {current.name}
                   </div>
@@ -1842,7 +1943,7 @@ export const CircuitEditor2: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <div className="property-item">
+                  {/* <div className="property-item">
                     <strong>Label:</strong> {selectedNode.data.label}
                   </div>
                   <div className="property-item">
@@ -1853,7 +1954,7 @@ export const CircuitEditor2: React.FC = () => {
                   </div>
                   <div className="property-item">
                     <strong>Position:</strong> ({Math.round(selectedNode.position.x)}, {Math.round(selectedNode.position.y)})
-                  </div>
+                  </div> */}
 
                   {/* Enhanced Properties for Content Blocks */}
                   {(() => {
@@ -1863,18 +1964,19 @@ export const CircuitEditor2: React.FC = () => {
                     return (
                       <>
                         {/* Connector Details Section */}
+                        {/* Enhanced: Shows dynamic connection types and live data previews */}
                         {(extendedConfig.connectorTypes?.inputs || extendedConfig.connectorTypes?.outputs) && (
                           <div className="properties-section">
                             <h5>🔗 Connector Details</h5>
                             {extendedConfig.connectorTypes.inputs && Object.keys(extendedConfig.connectorTypes.inputs).length > 0 && (
                               <div className="connector-group">
-                                <div className="connector-header"><strong>Inputs:</strong></div>
+                                <div className="connector-header"><strong>📥 Inputs:</strong></div>
                                 {Object.entries(extendedConfig.connectorTypes.inputs).map(([name, type]) => (
                                   <div key={name} className="connector-item"
                                        title={`Input connector: ${name} (${type}) - Data flows into this connector`}>
                                     <span className="connector-name">{name}</span>
                                     <span className="connector-type">{type}</span>
-                                    <span className="connector-status">●</span>
+                                    {/* <span className="connector-status">●</span> */}
                                   </div>
                                 ))}
                               </div>
@@ -1887,7 +1989,7 @@ export const CircuitEditor2: React.FC = () => {
                                        title={`Output connector: ${name} (${type}) - Data flows out from this connector`}>
                                     <span className="connector-name">{name}</span>
                                     <span className="connector-type">{type}</span>
-                                    <span className="connector-status">●</span>
+                                    {/* <span className="connector-status">●</span> */}
                                   </div>
                                 ))}
                               </div>
@@ -1896,6 +1998,7 @@ export const CircuitEditor2: React.FC = () => {
                         )}
 
                         {/* Block Configuration Section */}
+                        {/* ❗This doesn't seem to be updating or working correctly as it always says Not set. It can probably be replaced by one of the sections mentioned above anyways. */}
                         {extendedConfig.configuration && extendedConfig.configuration.length > 0 && (
                           <div className="properties-section">
                             <h5>⚙️ Configuration</h5>
@@ -1911,6 +2014,7 @@ export const CircuitEditor2: React.FC = () => {
                         )}
 
                         {/* Current Values Section */}
+                        {/* ❗This is currently the only section that is actually showing the values that are set but it seems to only be able to show the values set in block settings and isn't actually showing values being received on inputs or sent on outputs. So it needs some work.*/}
                         {selectedNode.data && Object.keys(selectedNode.data).length > 2 && (
                           <div className="properties-section">
                             <h5>📊 Current Values</h5>
@@ -1927,6 +2031,7 @@ export const CircuitEditor2: React.FC = () => {
                         )}
 
                         {/* Metadata Section */}
+                        {/* ❗ It seems not every block actually has a Metadata Section. Let's update all blocks to have this information  */}
                         {extendedConfig.metadata && extendedConfig.metadata.length > 0 && (
                           <div className="properties-section">
                             <h5>📋 Metadata</h5>
@@ -1940,6 +2045,7 @@ export const CircuitEditor2: React.FC = () => {
                         )}
 
                         {/* Live Data Section */}
+                        {/* ❗ The entire Live Data section does not appear to be working. It just shows "Not loaded" regardless of what I do. If we can fix this it may be useful but it also seems like it's duplicating the data shown in Current Values or Connector Details. */}
                         {(selectedNode.data.type === 'format_persona' ||
                           selectedNode.data.type === 'format_tools' ||
                           selectedNode.data.type === 'format_lore_injection' ||

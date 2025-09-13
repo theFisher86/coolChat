@@ -1,9 +1,9 @@
-[2025-09-13T05:17:50.894Z] INFO: === VERIFYING FILE CHANGES ===
-[2025-09-13T05:17:50.895Z] INFO: ✅ File src/components/circuits/CircuitEditor2.tsx contains expected content: "ReactFlow"
-[2025-09-13T05:17:50.895Z] INFO: ✅ File src/stores/circuitStore.ts contains expected content: "export"
-[2025-09-13T05:17:50.896Z] INFO: ✅ All file changes verified successfully
-[2025-09-13T05:17:50.896Z] INFO: === TEST SUMMARY ===
-[2025-09-13T05:17:50.897Z] INFO: Passed: 1
-[2025-09-13T05:17:50.897Z] INFO: Failed: 0
-[2025-09-13T05:17:50.898Z] INFO: Total Tests: 1
-[2025-09-13T05:17:50.898Z] INFO: Overall Result: ✅ SUCCESS
+[2025-09-13T05:46:13.389Z] INFO: === TESTING IMPORT VALIDATION: CircuitEditor2 ===
+[2025-09-13T05:46:13.396Z] INFO: ✅ FOUND: React import present
+[2025-09-13T05:46:13.397Z] INFO: 📊 IMPORT ANALYSIS: 0 default imports, 4 named imports
+[2025-09-13T05:46:13.398Z] INFO: ✅ Import validation completed for CircuitEditor2
+[2025-09-13T05:46:13.399Z] INFO: === TEST SUMMARY ===
+[2025-09-13T05:46:13.399Z] INFO: Passed: 1
+[2025-09-13T05:46:13.400Z] INFO: Failed: 0
+[2025-09-13T05:46:13.401Z] INFO: Total Tests: 1
+[2025-09-13T05:46:13.402Z] INFO: Overall Result: ✅ SUCCESS
