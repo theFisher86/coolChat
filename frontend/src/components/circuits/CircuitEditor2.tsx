@@ -10,40 +10,60 @@ import 'reactflow/dist/style.css';
 import './CircuitEditor.css';
 
 // Block connector configurations
-const blockConfigs = {
-  // Basic blocks
-  basic_text: {     // Outputs whatever string is entered into this block's settings
+const blockConfigs: Record<string, { inputs: string[]; outputs: string[]; label: string }> = {
+  // Phase 3 Core Blocks - Fresh rebuild
+  text_block: {     // 📄 No inputs, 1 output, settings field for text input, second field for string/numerical output type
     inputs: [],
     outputs: ['output'],
-    label: 'Basic Text'
+    label: 'Text Block'
   },
-  boolean: {        // If input1 = input2 this will output input1 from the true output. Otherwise the false output will output input1
+  variables_placeholders_block: {  // 🔣 No inputs, 1 output, dropdown for variables from Settings -> Prompts -> Variables and available placeholders
+    inputs: [],
+    outputs: ['output'],
+    label: 'Variables/Placeholders Block'
+  },
+  constructor_block: {   // 🏗️ 2 inputs, 1 output, separator text input, combines input1 + separator + input2
     inputs: ['input1', 'input2'],
-    outputs: ['true', 'false'],
-    label: 'Boolean Compare'
-  },
-  switch: {         // If signal input is not null the output will echo the input
-    inputs: ['input', 'signal'],
     outputs: ['output'],
-    label: 'Switch'
+    label: 'Constructor Block'
   },
-
-  // Data source blocks
-  format_persona: { // Outputs the Persona Username from name and Description from description
+  chat_history_block: {   // 📃 No inputs, 1 output, dropdown for User/AI/All messages, numerical input for message count (blank=entire history)
     inputs: [],
-    outputs: ['name', 'description'],
-    label: 'Format: Persona'
+    outputs: ['output'],
+    label: 'Chat History Block'
   },
+  character_card_block: {   // 🎭 No inputs, 1 output, dropdown for characters (default "Current Character"), dropdown for card fields (default "Full Character Card")
+    inputs: [],
+    outputs: ['output'],
+    label: 'Character Card Block'
+  },
+  // ARCHIVED: boolean: {        // If input1 = input2 this will output input1 from the true output. Otherwise the false output will output input1
+  //   inputs: ['input1', 'input2'],
+  //   outputs: ['true', 'false'],
+  //   label: 'Boolean Compare'
+  // },
+  // ARCHIVED: switch: {         // If signal input is not null the output will echo the input
+  //   inputs: ['input', 'signal'],
+  //   outputs: ['output'],
+  //   label: 'Switch'
+  // },
+
+  // ARCHIVED: Data source blocks
+  // ARCHIVED: format_persona: { // Outputs the Persona Username from name and Description from description
+  //   inputs: [],
+  //   outputs: ['name', 'description'],
+  //   label: 'Format: Persona'
+  // },
   character_current: {  // Outputs the currently active character's name from character and numerical character id from character_id
     inputs: [],
     outputs: ['character', 'character_id'],
     label: 'Character: Current'
   },
-  character_description: {    // Will output a JSON object of all character descriptions if there is no input. If character_id receives numerical input description will output the character desciption that corresponds with that character_id
-    inputs: ['character_id'],
-    outputs: ['description'],
-    label: 'Character: Description'
-  },
+  // ARCHIVED: character_description: {    // Will output a JSON object of all character descriptions if there is no input. If character_id receives numerical input description will output the character desciption that corresponds with that character_id
+  //   inputs: ['character_id'],
+  //   outputs: ['description'],
+  //   label: 'Character: Description'
+  // },
   chat_history: {    // Outputs the entire active chat history from chathistory unless messages receives a numerical input then chathistory will output the x most recent messages where x is the numerical input received.
     inputs: ['messages'],
     outputs: ['chathistory'],
@@ -61,241 +81,241 @@ const blockConfigs = {
     outputs: ['formatted_text'],
     label: 'Template: Text Formatter'
   },
-  template_system_prompt: {
-    inputs: [],
-    outputs: ['system_prompt'],
-    label: 'Template: System Prompt'
-  },
+  // ARCHIVED: template_system_prompt: {
+  //   inputs: [],
+  //   outputs: ['system_prompt'],
+  //   label: 'Template: System Prompt'
+  // },
 
-  // Logic blocks
-  logic_counter: {    // Everytime this block receives an input on action it will iterate the number being output on count (starting on 0). When this receives any input on reset it resets the count to 0
-    inputs: ['action', 'reset'],
-    outputs: ['count'],
-    label: 'Logic: Counter'
-  },
-  logic_random_number: {    // Outputs a random number between 0 and 256 unless min and max are each receiving numerical input then will output a random number between those two numbers
-    inputs: ['min', 'max'],
-    outputs: ['random_number'],
-    label: 'Logic: Random Number'
-  },
-  logic_random_choice: {    // Will output one of the 5 choice inputs, while ignoring empty inputs. Will choose a new choice at random whenever it receives any input on reset.
-    inputs: ['choice1', 'choice2', 'choice3', 'choice4', 'choice5', 'reset'],
-    outputs: ['selected_choice'],
-    label: 'Logic: Random Choice'
-  },
-  logic_conditional: {
-    inputs: ['condition', 'true_value', 'false_value'],
-    outputs: ['result'],
-    label: 'Logic: Conditional'
-  },
-  logic_comparator: {       // Logic comparator accepts comparison operators ==, !=, <, >, <=, >= and compares value1 and value2, outputting the boolean result
-    inputs: ['value1', 'value2', 'operation'],
-    outputs: ['result'],
-    label: 'Logic: Comparator'
-  },
+  // ARCHIVED: Logic blocks
+  // ARCHIVED: logic_counter: {    // Everytime this block receives an input on action it will iterate the number being output on count (starting on 0). When this receives any input on reset it resets the count to 0
+  //   inputs: ['action', 'reset'],
+  //   outputs: ['count'],
+  //   label: 'Logic: Counter'
+  // },
+  // ARCHIVED: logic_random_number: {    // Outputs a random number between 0 and 256 unless min and max are each receiving numerical input then will output a random number between those two numbers
+  //   inputs: ['min', 'max'],
+  //   outputs: ['random_number'],
+  //   label: 'Logic: Random Number'
+  // },
+  // ARCHIVED: logic_random_choice: {    // Will output one of the 5 choice inputs, while ignoring empty inputs. Will choose a new choice at random whenever it receives any input on reset.
+  //   inputs: ['choice1', 'choice2', 'choice3', 'choice4', 'choice5', 'reset'],
+  //   outputs: ['selected_choice'],
+  //   label: 'Logic: Random Choice'
+  // },
+  // ARCHIVED: logic_conditional: {
+  //   inputs: ['condition', 'true_value', 'false_value'],
+  //   outputs: ['result'],
+  //   label: 'Logic: Conditional'
+  // },
+  // ARCHIVED: logic_comparator: {       // Logic comparator accepts comparison operators ==, !=, <, >, <=, >= and compares value1 and value2, outputting the boolean result
+  //   inputs: ['value1', 'value2', 'operation'],
+  //   outputs: ['result'],
+  //   label: 'Logic: Comparator'
+  // },
 
-  // Data manipulation
-  data_string_concat: {
-    inputs: ['input1', 'input2', 'input3', 'input4', 'input5', 'separator'],
-    outputs: ['result'],
-    label: 'Data: String Concat'
-  },
-  data_string_split: {
-    inputs: ['input', 'separator'],
-    outputs: ['result'],
-    label: 'Data: String Split'
-  },
-  data_string_replace: {
-    inputs: ['input', 'old', 'new'],
-    outputs: ['result'],
-    label: 'Data: String Replace'
-  },
-  data_math_operation: {
-    inputs: ['value1', 'value2', 'operation'],
-    outputs: ['result'],
-    label: 'Data: Math Operation'
-  },
-  data_array_filter: {
-    inputs: ['input', 'condition'],
-    outputs: ['result'],
-    label: 'Data: Array Filter'
-  },
+  // ARCHIVED: Data manipulation
+  // ARCHIVED: data_string_concat: {
+  //   inputs: ['input1', 'input2', 'input3', 'input4', 'input5', 'separator'],
+  //   outputs: ['result'],
+  //   label: 'Data: String Concat'
+  // },
+  // ARCHIVED: data_string_split: {
+  //   inputs: ['input', 'separator'],
+  //   outputs: ['result'],
+  //   label: 'Data: String Split'
+  // },
+  // ARCHIVED: data_string_replace: {
+  //   inputs: ['input', 'old', 'new'],
+  //   outputs: ['result'],
+  //   label: 'Data: String Replace'
+  // },
+  // ARCHIVED: data_math_operation: {
+  //   inputs: ['value1', 'value2', 'operation'],
+  //   outputs: ['result'],
+  //   label: 'Data: Math Operation'
+  // },
+  // ARCHIVED: data_array_filter: {
+  //   inputs: ['input', 'condition'],
+  //   outputs: ['result'],
+  //   label: 'Data: Array Filter'
+  // },
 
-  // Time and context
-  time_current: {
-    inputs: [],
-    outputs: ['timestamp', 'date', 'time'],
-    label: 'Time: Current'
-  },
-  time_formatter: {
-    inputs: ['timestamp', 'format'],
-    outputs: ['formatted_time'],
-    label: 'Time: Formatter'
-  },
-  context_user_message: {     // Outputs the most recent user message when receiving no input. When receiving numerical input in amount output that many of most recent user messages.
-    inputs: ['amount'],
-    outputs: ['message'],
-    label: 'Context: User Message'
-  },
-  context_ai_response: {      // Outputs the most recent ai reply when receiving no input. When receiving numerical input in amount output that many of most recent ai replies.
-    inputs: [],
-    outputs: ['response'],
-    label: 'Context: AI Response'
-  },
+  // ARCHIVED: Time and context
+  // ARCHIVED: time_current: {
+  //   inputs: [],
+  //   outputs: ['timestamp', 'date', 'time'],
+  //   label: 'Time: Current'
+  // },
+  // ARCHIVED: time_formatter: {
+  //   inputs: ['timestamp', 'format'],
+  //   outputs: ['formatted_time'],
+  //   label: 'Time: Formatter'
+  // },
+  // ARCHIVED: context_user_message: {     // Outputs the most recent user message when receiving no input. When receiving numerical input in amount output that many of most recent user messages.
+  //   inputs: ['amount'],
+  //   outputs: ['message'],
+  //   label: 'Context: User Message'
+  // },
+  // ARCHIVED: context_ai_response: {      // Outputs the most recent ai reply when receiving no input. When receiving numerical input in amount output that many of most recent ai replies.
+  //   inputs: [],
+  //   outputs: ['response'],
+  //   label: 'Context: AI Response'
+  // },
 
-  // Memory blocks
-  memory_recent_messages: {
-    inputs: ['limit', 'role_filter'],
-    outputs: ['messages'],
-    label: 'Memory: Recent Messages'
-  },
-  memory_search: {
-    inputs: ['query'],
-    outputs: ['matching_messages'],
-    label: 'Memory: Search'
-  },
+  // ARCHIVED: Memory blocks
+  // ARCHIVED: memory_recent_messages: {
+  //   inputs: ['limit', 'role_filter'],
+  //   outputs: ['messages'],
+  //   label: 'Memory: Recent Messages'
+  // },
+  // ARCHIVED: memory_search: {
+  //   inputs: ['query'],
+  //   outputs: ['matching_messages'],
+  //   label: 'Memory: Search'
+  // },
 
-  // AI integration
-  ai_command: {       // Accepts a string in textinput and sends that to the AI preceded by promptinput. When the AI replies that is output from output
-    inputs: ['textinput', 'promptinput'],
-    outputs: ['output'],
-    label: 'AI: Command'
-  },
-  ai_model_selector: {    // Outputs the name of the currently selected AI model from selected_model and the provider from provider
-    inputs: [],
-    outputs: ['selected_model', 'provider'],
-    label: 'AI: Model Selector'
-  },
-  ai_temperature: {       // Outputs the currently selected temperature from the Connection tab
-    inputs: [],
-    outputs: ['temperature_setting'],
-    label: 'AI: Temperature'
-  },
-  ai_max_context_tokens: {    // Outputs the currently selected max context tokens from the Connection tab
-    inputs: [],
-    outputs: ['max_context_tokens'],
-    label: 'AI: Max Context Tokens'
-  },
+  // ARCHIVED: AI integration
+  // ARCHIVED: ai_command: {       // Accepts a string in textinput and sends that to the AI preceded by promptinput. When the AI replies that is output from output
+  //   inputs: ['textinput', 'promptinput'],
+  //   outputs: ['output'],
+  //   label: 'AI: Command'
+  // },
+  // ARCHIVED: ai_model_selector: {    // Outputs the name of the currently selected AI model from selected_model and the provider from provider
+  //   inputs: [],
+  //   outputs: ['selected_model', 'provider'],
+  //   label: 'AI: Model Selector'
+  // },
+  // ARCHIVED: ai_temperature: {       // Outputs the currently selected temperature from the Connection tab
+  //   inputs: [],
+  //   outputs: ['temperature_setting'],
+  //   label: 'AI: Temperature'
+  // },
+  // ARCHIVED: ai_max_context_tokens: {    // Outputs the currently selected max context tokens from the Connection tab
+  //   inputs: [],
+  //   outputs: ['max_context_tokens'],
+  //   label: 'AI: Max Context Tokens'
+  // },
 
-  // Endpoints
-  endpoint_chat_reply: {    // This is the primary chat function and is triggered everytime the user sends a message to the AI in the chat. The circuit ending with this endpoint will output the result to the AI to reply in chat.
-    inputs: ['prompt'],
-    outputs: [],
-    label: 'Endpoint: Chat Reply'
-  },
-  endpoint_image_generator: {   // The prompt fed into this endpoint is what will be sent to the AI whenever the image generator tool is called (either via the AI using tool calling or the user clicking the button)
-    inputs: ['prompt'],
-    outputs: [],
-    label: 'Endpoint: Image Generator'
-  },
+  // ARCHIVED: Endpoints
+  // ARCHIVED: endpoint_chat_reply: {    // This is the primary chat function and is triggered everytime the user sends a message to the AI in the chat. The circuit ending with this endpoint will output the result to the AI to reply in chat.
+  //   inputs: ['prompt'],
+  //   outputs: [],
+  //   label: 'Endpoint: Chat Reply'
+  // },
+  // ARCHIVED: endpoint_image_generator: {   // The prompt fed into this endpoint is what will be sent to the AI whenever the image generator tool is called (either via the AI using tool calling or the user clicking the button)
+  //   inputs: ['prompt'],
+  //   outputs: [],
+  //   label: 'Endpoint: Image Generator'
+  // },
 
-  // Legacy blocks (keeping for backward compatibility)
-  logic: {
-    inputs: ['input1'],
-    outputs: ['output'],
-    label: 'Logic Block'
-  },
-  content: {
-    inputs: ['text', 'source'],
-    outputs: ['result'],
-    label: 'Content Block'
-  },
-  flow: {
-    inputs: ['trigger'],
-    outputs: ['next', 'branched'],
-    label: 'Flow Block'
-  },
-  integration: {
-    inputs: ['request', 'params'],
-    outputs: ['response', 'success', 'error'],
-    label: 'Integration Block'
-  },
-  // System Prompt Content Blocks
-  system_main: {
-    inputs: ['character_data'],
-    outputs: ['main_prompt'],
-    label: 'System: Main Template'
-  },
-  system_tool_call: {
-    inputs: ['tools_data', 'character_data'],
-    outputs: ['tool_instructions'],
-    label: 'System: Tool Call'
-  },
-  system_lore_suggest: {
-    inputs: ['lorebook_context'],
-    outputs: ['lore_suggest_prompt'],
-    label: 'System: Lore Suggest'
-  },
-  system_image_summary: {
-    inputs: ['scene_data', 'character_data'],
-    outputs: ['image_summary_prompt'],
-    label: 'System: Image Summary'
-  },
-  // Personalized Format Template Blocks
-  format_tools: {
-    inputs: ['tools_config'],
-    outputs: ['tools_formatted'],
-    label: 'Format: Tool Descriptions'
-  },
-  format_lore_injection: {
-    inputs: ['lore_entries'],
-    outputs: ['lore_formatted'],
-    label: 'Format: Lore Injection'
-  },
-  // Character-based Prompt Blocks
-  char_system_prompt: {
-    inputs: ['character_settings'],
-    outputs: ['system_preprompt'],
-    label: 'Character: System Prompt'
-  },
-  char_personality: {
-    inputs: ['character_data'],
-    outputs: ['personality_text'],
-    label: 'Character: Personality'
-  },
-  char_scenario: {
-    inputs: ['character_data', 'scenario_data'],
-    outputs: ['scenario_text'],
-    label: 'Character: Scenario'
-  },
-  char_first_message: {
-    inputs: ['character_data', 'greetings'],
-    outputs: ['first_message_text'],
-    label: 'Character: First Message'
-  },
-  // Tool Message Blocks
-  tool_image_request: {
-    inputs: ['prompt_text', 'generation_params'],
-    outputs: ['tool_call_json'],
-    label: 'Tool: Image Request'
-  },
-  tool_phone_url: {
-    inputs: ['phone_number', 'url_params'],
-    outputs: ['tool_call_json'],
-    label: 'Tool: Phone URL'
-  },
-  tool_lore_suggestions: {
-    inputs: ['suggestions_array', 'validation_params'],
-    outputs: ['tool_call_json'],
-    label: 'Tool: Lore Suggestions'
-  },
-  // Lorebook Content Blocks
-  lorebook_content: {
-    inputs: ['keywords', 'content_text', 'trigger_logic'],
-    outputs: ['lore_entry'],
-    label: 'Lorebook: Content Block'
-  },
-  // Dynamic Active Lore Blocks
-  lore_active_display: {
-    inputs: ['active_lore_entries'],
-    outputs: ['formatted_lore_display'],
-    label: 'Lore: Active Display'
-  },
-  lore_title_injection: {
-    inputs: ['active_lore_entries', 'title_template'],
-    outputs: ['titled_lore_block'],
-    label: 'Lore: Active Title'
-  }
+  // ARCHIVED: Legacy blocks (keeping for backward compatibility)
+  // ARCHIVED: logic: {
+  //   inputs: ['input1'],
+  //   outputs: ['output'],
+  //   label: 'Logic Block'
+  // },
+  // ARCHIVED: content: {
+  //   inputs: ['text', 'source'],
+  //   outputs: ['result'],
+  //   label: 'Content Block'
+  // },
+  // ARCHIVED: flow: {
+  //   inputs: ['trigger'],
+  //   outputs: ['next', 'branched'],
+  //   label: 'Flow Block'
+  // },
+  // ARCHIVED: integration: {
+  //   inputs: ['request', 'params'],
+  //   outputs: ['response', 'success', 'error'],
+  //   label: 'Integration Block'
+  // },
+  // ARCHIVED: System Prompt Content Blocks
+  // ARCHIVED: system_main: {
+  //   inputs: ['character_data'],
+  //   outputs: ['main_prompt'],
+  //   label: 'System: Main Template'
+  // },
+  // ARCHIVED: system_tool_call: {
+  //   inputs: ['tools_data', 'character_data'],
+  //   outputs: ['tool_instructions'],
+  //   label: 'System: Tool Call'
+  // },
+  // ARCHIVED: system_lore_suggest: {
+  //   inputs: ['lorebook_context'],
+  //   outputs: ['lore_suggest_prompt'],
+  //   label: 'System: Lore Suggest'
+  // },
+  // ARCHIVED: system_image_summary: {
+  //   inputs: ['scene_data', 'character_data'],
+  //   outputs: ['image_summary_prompt'],
+  //   label: 'System: Image Summary'
+  // },
+  // ARCHIVED: Personalized Format Template Blocks
+  // ARCHIVED: format_tools: {
+  //   inputs: ['tools_config'],
+  //   outputs: ['tools_formatted'],
+  //   label: 'Format: Tool Descriptions'
+  // },
+  // ARCHIVED: format_lore_injection: {
+  //   inputs: ['lore_entries'],
+  //   outputs: ['lore_formatted'],
+  //   label: 'Format: Lore Injection'
+  // },
+  // ARCHIVED: Character-based Prompt Blocks
+  // ARCHIVED: char_system_prompt: {
+  //   inputs: ['character_settings'],
+  //   outputs: ['system_preprompt'],
+  //   label: 'Character: System Prompt'
+  // },
+  // ARCHIVED: char_personality: {
+  //   inputs: ['character_data'],
+  //   outputs: ['personality_text'],
+  //   label: 'Character: Personality'
+  // },
+  // ARCHIVED: char_scenario: {
+  //   inputs: ['character_data', 'scenario_data'],
+  //   outputs: ['scenario_text'],
+  //   label: 'Character: Scenario'
+  // },
+  // ARCHIVED: char_first_message: {
+  //   inputs: ['character_data', 'greetings'],
+  //   outputs: ['first_message_text'],
+  //   label: 'Character: First Message'
+  // },
+  // ARCHIVED: Tool Message Blocks
+  // ARCHIVED: tool_image_request: {
+  //   inputs: ['prompt_text', 'generation_params'],
+  //   outputs: ['tool_call_json'],
+  //   label: 'Tool: Image Request'
+  // },
+  // ARCHIVED: tool_phone_url: {
+  //   inputs: ['phone_number', 'url_params'],
+  //   outputs: ['tool_call_json'],
+  //   label: 'Tool: Phone URL'
+  // },
+  // ARCHIVED: tool_lore_suggestions: {
+  //   inputs: ['suggestions_array', 'validation_params'],
+  //   outputs: ['tool_call_json'],
+  //   label: 'Tool: Lore Suggestions'
+  // },
+  // ARCHIVED: Lorebook Content Blocks
+  // ARCHIVED: lorebook_content: {
+  //   inputs: ['keywords', 'content_text', 'trigger_logic'],
+  //   outputs: ['lore_entry'],
+  //   label: 'Lorebook: Content Block'
+  // },
+  // ARCHIVED: Dynamic Active Lore Blocks
+  // ARCHIVED: lore_active_display: {
+  //   inputs: ['active_lore_entries'],
+  //   outputs: ['formatted_lore_display'],
+  //   label: 'Lore: Active Display'
+  // },
+  // ARCHIVED: lore_title_injection: {
+  //   inputs: ['active_lore_entries', 'title_template'],
+  //   outputs: ['titled_lore_block'],
+  //   label: 'Lore: Active Title'
+  // }
 };
 
 // Block extended configurations for properties panel
@@ -304,117 +324,172 @@ const blockExtendedConfigs: Record<string, {
   configuration?: Array<{ name: string; type: string; description?: string }>;
   metadata?: Array<{ label: string; value: string; description?: string }>;
 }> = {
-  // System Prompt Blocks
-  system_main: {
-    connectorTypes: { inputs: { character_data: 'JSON' }, outputs: { main_prompt: 'string' } },
+  // Phase 3 Core Blocks Configurations
+  text_block: {
+    connectorTypes: { inputs: {}, outputs: { output: 'string|number' } },
     configuration: [
-      { name: 'Template Source', type: 'select', description: 'Full character card or summary' },
-      { name: 'System Message Format', type: 'text', description: 'Opening system prompt pattern' }
+      { name: 'Text Content', type: 'text', description: 'The text or number to output' },
+      { name: 'Output Type', type: 'select', description: 'Whether to output as string or number' }
     ],
     metadata: [
-      { label: 'Block Type', value: 'System Prompt Generator', description: 'Generates main system prompt from character data' },
-      { label: 'Input Data', value: 'Character Definition', description: 'Full character configuration' }
+      { label: 'Block Type', value: 'Text Output Block', description: 'Outputs configured text or numerical data' },
+      { label: 'Inputs', value: 'None', description: 'No input connections required' }
     ]
   },
-  system_tool_call: {
-    connectorTypes: { inputs: { tools_data: 'JSON', character_data: 'JSON' }, outputs: { tool_instructions: 'string' } },
-    configuration: [{ name: 'Tool Format Schema', type: 'select', description: 'Expected tool call format' }],
-    metadata: []
-  },
-  system_lore_suggest: {
-    connectorTypes: { inputs: { lorebook_context: 'JSON' }, outputs: { lore_suggest_prompt: 'string' } },
-    configuration: [{ name: 'Lore Selection Strategy', type: 'select', description: 'How to select relevant lore entries' }],
-    metadata: []
-  },
-  system_image_summary: {
-    connectorTypes: { inputs: { scene_data: 'JSON', character_data: 'JSON' }, outputs: { image_summary_prompt: 'string' } },
+  variables_placeholders_block: {
+    connectorTypes: { inputs: {}, outputs: { output: 'string' } },
     configuration: [
-      { name: 'Image Style Preferences', type: 'text', description: 'Artistic style hints' },
-      { name: 'Level of Detail', type: 'select', description: 'Summary depth' }
+      { name: 'Variable/Placeholder Selection', type: 'select', description: 'Choose from available variables and placeholders' }
     ],
-    metadata: []
+    metadata: [
+      { label: 'Block Type', value: 'Variables/Placeholders Block', description: 'Outputs selected variable or placeholder value' },
+      { label: 'Data Source', value: 'Settings → Prompts → Variables + Placeholders', description: 'Dynamic dropdown populated from application settings' }
+    ]
   },
-  // Format Template Blocks
-  format_persona: {
-    connectorTypes: { inputs: { user_persona: 'string' }, outputs: { persona_formatted: 'string' } },
+  constructor_block: {
+    connectorTypes: { inputs: { input1: 'string', input2: 'string' }, outputs: { output: 'string' } },
     configuration: [
-      { name: 'Format Template', type: 'text', description: 'Variable substitution pattern' },
-      { name: 'Variable Delimiters', type: 'select', description: '{{ }} or << >> style' }
+      { name: 'Separator Text', type: 'text', description: 'Text to place between input1 and input2' }
     ],
-    metadata: []
+    metadata: [
+      { label: 'Block Type', value: 'Constructor Block', description: 'Combines two inputs with a separator' },
+      { label: 'Operation', value: 'input1 + separator + input2', description: 'Concatenation with configurable separator' }
+    ]
   },
-  format_tools: {
-    connectorTypes: { inputs: { tools_config: 'JSON' }, outputs: { tools_formatted: 'string' } },
-    configuration: [{ name: 'Tool Documentation Format', type: 'text', description: 'How to format tool descriptions' }],
-    metadata: []
-  },
-  format_lore_injection: {
-    connectorTypes: { inputs: { lore_entries: 'array' }, outputs: { lore_formatted: 'string' } },
+  chat_history_block: {
+    connectorTypes: { inputs: {}, outputs: { output: 'string' } },
     configuration: [
-      { name: 'Injection Pattern', type: 'text', description: 'How to merge lore entries' },
-      { name: 'Separator Style', type: 'select', description: 'Newlines, bullets, or paragraphs' }
+      { name: 'Message Type Filter', type: 'select', description: 'Filter by User messages, AI messages, or All messages' },
+      { name: 'Message Count', type: 'number', description: 'Number of messages to include (blank = entire history)' }
     ],
-    metadata: []
+    metadata: [
+      { label: 'Block Type', value: 'Chat History Block', description: 'Outputs filtered chat history' },
+      { label: 'Data Source', value: 'Active Chat History', description: 'Accesses current conversation messages' }
+    ]
   },
-  // Character-based Prompt Blocks
-  char_system_prompt: {
-    connectorTypes: { inputs: { character_settings: 'JSON' }, outputs: { system_preprompt: 'string' } },
-    configuration: [{ name: 'System Prompt Structure', type: 'text', description: 'Character role and behavior' }],
-    metadata: []
-  },
-  char_personality: {
-    connectorTypes: { inputs: { character_data: 'JSON' }, outputs: { personality_text: 'string' } },
-    configuration: [{ name: 'Personality Format', type: 'select', description: 'Narrative or list style' }],
-    metadata: []
-  },
-  char_scenario: {
-    connectorTypes: { inputs: { character_data: 'JSON', scenario_data: 'string' }, outputs: { scenario_text: 'string' } },
+  character_card_block: {
+    connectorTypes: { inputs: {}, outputs: { output: 'string' } },
     configuration: [
-      { name: 'Scenario Enhancement', type: 'text', description: 'Additional context to add' },
-      { name: 'Time Period', type: 'select', description: 'Story setting time' }
+      { name: 'Character Selection', type: 'select', description: 'Choose a character (defaults to "Current Character")' },
+      { name: 'Card Field', type: 'select', description: 'Select which part of the character card to output' }
     ],
-    metadata: []
+    metadata: [
+      { label: 'Block Type', value: 'Character Card Block', description: 'Outputs selected character card data' },
+      { label: 'Data Source', value: 'Character Database', description: 'Accesses loaded character configurations' }
+    ]
   },
-  char_first_message: {
-    connectorTypes: { inputs: { character_data: 'JSON', greetings: 'string' }, outputs: { first_message_text: 'string' } },
-    configuration: [
-      { name: 'Greeting Style', type: 'select', description: 'Formal, casual, or character-specific' },
-      { name: 'Message Length', type: 'select', description: 'Short, medium, or detailed opening' }
-    ],
-    metadata: []
-  },
-  // Tool Message Blocks
-  tool_image_request: {
-    connectorTypes: { inputs: { prompt_text: 'string', generation_params: 'JSON' }, outputs: { tool_call_json: 'JSON' } },
-    configuration: [
-      { name: 'Image Model', type: 'select', description: 'AI image generation model' },
-      { name: 'Output Format', type: 'select', description: 'JSON structure for tool call' }
-    ],
-    metadata: []
-  },
-  tool_phone_url: {
-    connectorTypes: { inputs: { phone_number: 'string', url_params: 'JSON' }, outputs: { tool_call_json: 'JSON' } },
-    configuration: [{ name: 'URL Pattern', type: 'text', description: 'Format for URL construction' }],
-    metadata: []
-  },
-  tool_lore_suggestions: {
-    connectorTypes: { inputs: { suggestions_array: 'array', validation_params: 'JSON' }, outputs: { tool_call_json: 'JSON' } },
-    configuration: [
-      { name: 'Suggestion Limits', type: 'number', description: 'Maximum suggestions to include' },
-      { name: 'Validation Rules', type: 'text', description: 'Criteria for valid suggestions' }
-    ],
-    metadata: []
-  },
-  // Lorebook Content Blocks
-  lorebook_content: {
-    connectorTypes: { inputs: { keywords: 'string', content_text: 'string', trigger_logic: 'string' }, outputs: { lore_entry: 'JSON' } },
-    configuration: [
-      { name: 'Entry Priority', type: 'select', description: 'How to rank this entry' },
-      { name: 'Trigger Sensitivity', type: 'select', description: 'Keyword matching strictness' }
-    ],
-    metadata: []
-  },
-  // Variables Block
+
+  // ARCHIVED: System Prompt Blocks
+  // ARCHIVED: system_main: {
+  //   connectorTypes: { inputs: { character_data: 'JSON' }, outputs: { main_prompt: 'string' } },
+  //   configuration: [
+  //     { name: 'Template Source', type: 'select', description: 'Full character card or summary' },
+  //     { name: 'System Message Format', type: 'text', description: 'Opening system prompt pattern' }
+  //   ],
+  //   metadata: [
+  //     { label: 'Block Type', value: 'System Prompt Generator', description: 'Generates main system prompt from character data' },
+  //     { label: 'Input Data', value: 'Character Definition', description: 'Full character configuration' }
+  //   ]
+  // },
+  // ARCHIVED: system_tool_call: {
+  //   connectorTypes: { inputs: { tools_data: 'JSON', character_data: 'JSON' }, outputs: { tool_instructions: 'string' } },
+  //   configuration: [{ name: 'Tool Format Schema', type: 'select', description: 'Expected tool call format' }],
+  //   metadata: []
+  // },
+  // ARCHIVED: system_lore_suggest: {
+  //   connectorTypes: { inputs: { lorebook_context: 'JSON' }, outputs: { lore_suggest_prompt: 'string' } },
+  //   configuration: [{ name: 'Lore Selection Strategy', type: 'select', description: 'How to select relevant lore entries' }],
+  //   metadata: []
+  // },
+  // ARCHIVED: system_image_summary: {
+  //   connectorTypes: { inputs: { scene_data: 'JSON', character_data: 'JSON' }, outputs: { image_summary_prompt: 'string' } },
+  //   configuration: [
+  //     { name: 'Image Style Preferences', type: 'text', description: 'Artistic style hints' },
+  //     { name: 'Level of Detail', type: 'select', description: 'Summary depth' }
+  //   ],
+  //   metadata: []
+  // },
+  // ARCHIVED: Format Template Blocks
+  // ARCHIVED: format_persona: {
+  //   connectorTypes: { inputs: { user_persona: 'string' }, outputs: { persona_formatted: 'string' } },
+  //   configuration: [
+  //     { name: 'Format Template', type: 'text', description: 'Variable substitution pattern' },
+  //     { name: 'Variable Delimiters', type: 'select', description: '{{ }} or << >> style' }
+  //   ],
+  //   metadata: []
+  // },
+  // ARCHIVED: format_tools: {
+  //   connectorTypes: { inputs: { tools_config: 'JSON' }, outputs: { tools_formatted: 'string' } },
+  //   configuration: [{ name: 'Tool Documentation Format', type: 'text', description: 'How to format tool descriptions' }],
+  //   metadata: []
+  // },
+  // ARCHIVED: format_lore_injection: {
+  //   connectorTypes: { inputs: { lore_entries: 'array' }, outputs: { lore_formatted: 'string' } },
+  //   configuration: [
+  //     { name: 'Injection Pattern', type: 'text', description: 'How to merge lore entries' },
+  //     { name: 'Separator Style', type: 'select', description: 'Newlines, bullets, or paragraphs' }
+  //   ],
+  //   metadata: []
+  // },
+  // ARCHIVED: Character-based Prompt Blocks
+  // ARCHIVED: char_system_prompt: {
+  //   connectorTypes: { inputs: { character_settings: 'JSON' }, outputs: { system_preprompt: 'string' } },
+  //   configuration: [{ name: 'System Prompt Structure', type: 'text', description: 'Character role and behavior' }],
+  //   metadata: []
+  // },
+  // ARCHIVED: char_personality: {
+  //   connectorTypes: { inputs: { character_data: 'JSON' }, outputs: { personality_text: 'string' } },
+  //   configuration: [{ name: 'Personality Format', type: 'select', description: 'Narrative or list style' }],
+  //   metadata: []
+  // },
+  // ARCHIVED: char_scenario: {
+  //   connectorTypes: { inputs: { character_data: 'JSON', scenario_data: 'string' }, outputs: { scenario_text: 'string' } },
+  //   configuration: [
+  //     { name: 'Scenario Enhancement', type: 'text', description: 'Additional context to add' },
+  //     { name: 'Time Period', type: 'select', description: 'Story setting time' }
+  //   ],
+  //   metadata: []
+  // },
+  // ARCHIVED: char_first_message: {
+  //   connectorTypes: { inputs: { character_data: 'JSON', greetings: 'string' }, outputs: { first_message_text: 'string' } },
+  //   configuration: [
+  //     { name: 'Greeting Style', type: 'select', description: 'Formal, casual, or character-specific' },
+  //     { name: 'Message Length', type: 'select', description: 'Short, medium, or detailed opening' }
+  //   ],
+  //   metadata: []
+  // },
+  // ARCHIVED: Tool Message Blocks
+  // ARCHIVED: tool_image_request: {
+  //   connectorTypes: { inputs: { prompt_text: 'string', generation_params: 'JSON' }, outputs: { tool_call_json: 'JSON' } },
+  //   configuration: [
+  //     { name: 'Image Model', type: 'select', description: 'AI image generation model' },
+  //     { name: 'Output Format', type: 'select', description: 'JSON structure for tool call' }
+  //   ],
+  //   metadata: []
+  // },
+  // ARCHIVED: tool_phone_url: {
+  //   connectorTypes: { inputs: { phone_number: 'string', url_params: 'JSON' }, outputs: { tool_call_json: 'JSON' } },
+  //   configuration: [{ name: 'URL Pattern', type: 'text', description: 'Format for URL construction' }],
+  //   metadata: []
+  // },
+  // ARCHIVED: tool_lore_suggestions: {
+  //   connectorTypes: { inputs: { suggestions_array: 'array', validation_params: 'JSON' }, outputs: { tool_call_json: 'JSON' } },
+  //   configuration: [
+  //     { name: 'Suggestion Limits', type: 'number', description: 'Maximum suggestions to include' },
+  //     { name: 'Validation Rules', type: 'text', description: 'Criteria for valid suggestions' }
+  //   ],
+  //   metadata: []
+  // },
+  // ARCHIVED: Lorebook Content Blocks
+  // ARCHIVED: lorebook_content: {
+  //   connectorTypes: { inputs: { keywords: 'string', content_text: 'string', trigger_logic: 'string' }, outputs: { lore_entry: 'JSON' } },
+  //   configuration: [
+  //     { name: 'Entry Priority', type: 'select', description: 'How to rank this entry' },
+  //     { name: 'Trigger Sensitivity', type: 'select', description: 'Keyword matching strictness' }
+  //   ],
+  //   metadata: []
+  // },
+  // ARCHIVED: Variables Block
   variables_substitution: {
     connectorTypes: { inputs: { template_text: 'string', variables_map: 'JSON' }, outputs: { processed_text: 'string' } },
     configuration: [
@@ -426,23 +501,23 @@ const blockExtendedConfigs: Record<string, {
       { label: 'Supported Formats', value: 'JSON Map/Object', description: 'Variables input structure' }
     ]
   },
-  // Dynamic Active Lore Blocks
-  lore_active_display: {
-    connectorTypes: { inputs: { active_lore_entries: 'array' }, outputs: { formatted_lore_display: 'string' } },
-    configuration: [
-      { name: 'Display Format', type: 'select', description: 'How to present active lore' },
-      { name: 'Max Length', type: 'number', description: 'Character limit for display' }
-    ],
-    metadata: []
-  },
-  lore_title_injection: {
-    connectorTypes: { inputs: { active_lore_entries: 'array', title_template: 'string' }, outputs: { titled_lore_block: 'string' } },
-    configuration: [
-      { name: 'Title Format', type: 'text', description: 'Prefix pattern for lore entries' },
-      { name: 'Sorting Order', type: 'select', description: 'How to order entries' }
-    ],
-    metadata: []
-  }
+  // ARCHIVED: Dynamic Active Lore Blocks
+  // ARCHIVED: lore_active_display: {
+  //   connectorTypes: { inputs: { active_lore_entries: 'array' }, outputs: { formatted_lore_display: 'string' } },
+  //   configuration: [
+  //     { name: 'Display Format', type: 'select', description: 'How to present active lore' },
+  //     { name: 'Max Length', type: 'number', description: 'Character limit for display' }
+  //   ],
+  //   metadata: []
+  // },
+  // ARCHIVED: lore_title_injection: {
+  //   connectorTypes: { inputs: { active_lore_entries: 'array', title_template: 'string' }, outputs: { titled_lore_block: 'string' } },
+  //   configuration: [
+  //     { name: 'Title Format', type: 'text', description: 'Prefix pattern for lore entries' },
+  //     { name: 'Sorting Order', type: 'select', description: 'How to order entries' }
+  //   ],
+  //   metadata: []
+  // }
 };
 
 // Block components with dynamic connectors
@@ -512,55 +587,62 @@ const BlockNode = ({ data }: any) => {
 // Helper functions for properties pane
 const getBlockDescription = (blockType: string): string => {
   const descriptions: Record<string, string> = {
-    // Basic blocks
+    // Core blocks (active)
     basic_text: "Outputs whatever string or number is entered into this block's settings. Can be configured to accept text or numbers only.",
-    boolean: "Compares two inputs and outputs to 'true' if they match, otherwise outputs to 'false'.",
-    switch: "If signal input is not null the output will echo the input, otherwise outputs nothing.",
-
-    // Data source blocks
-    format_persona: "Outputs the currently active user's name and description from their persona settings.",
+    text_block: "Outputs configured text or numerical data. Can be configured to output as string or number.",
+    variables_placeholders_block: "Outputs selected variable or placeholder value from application settings.",
+    constructor_block: "Combines two inputs with a configurable separator text.",
+    chat_history_block: "Outputs filtered chat history with configurable message type and count.",
+    character_card_block: "Outputs selected character card data with configurable field selection.",
     character_current: "Outputs the currently active character's name and numerical character ID.",
-    character_description: "Outputs character description. If no character_id input provided, returns all character descriptions.",
     chat_history: "Outputs chat history. With messages input, returns the x most recent messages where x is the input value.",
-
-    // Variables and templates
     variables_substitution: "Replaces {{variable}} placeholders in template_text with values from variables_map.",
     template_text_formatter: "Combines up to 5 input strings using a custom template format.",
-    template_system_prompt: "Outputs the currently configured system prompt template.",
 
-    // Logic blocks
-    logic_counter: "Increments count each time action input is triggered. Resets when reset input is triggered.",
-    logic_random_number: "Outputs a random number between min and max inputs (or 0-100 if not specified).",
-    logic_random_choice: "Outputs one randomly selected choice from the configured number of available choices.",
-    logic_conditional: "Outputs true_value if condition is truthy, otherwise outputs false_value.",
-    logic_comparator: "Compares value1 and value2 using the selected comparison operator (==, !=, <, >, >=, <=).",
+    // ARCHIVED: Basic blocks
+    // boolean: "Compares two inputs and outputs to 'true' if they match, otherwise outputs to 'false'.",
+    // switch: "If signal input is not null the output will echo the input, otherwise outputs nothing.",
 
-    // Data manipulation
-    data_string_concat: "Concatenates up to 5 input strings with an optional separator.",
-    data_string_split: "Splits input string by separator and returns array of parts.",
-    data_string_replace: "Replaces occurrences of 'old' substring with 'new' substring in input string.",
-    data_math_operation: "Performs mathematical operations (+, -, *, /, ^, %) on value1 and value2.",
-    data_array_filter: "Filters array input based on condition ('not_empty' or 'unique').",
+    // ARCHIVED: Data source blocks
+    // format_persona: "Outputs the currently active user's name and description from their persona settings.",
+    // character_description: "Outputs character description. If no character_id input provided, returns all character descriptions.",
 
-    // Time and context
-    time_current: "Outputs current timestamp, date, and time information.",
-    time_formatter: "Formats timestamp input using specified format pattern.",
-    context_user_message: "Outputs the most recent user message, or the last x messages if amount specified.",
-    context_ai_response: "Outputs the most recent AI response.",
+    // ARCHIVED: Variables and templates
+    // template_system_prompt: "Outputs the currently configured system prompt template.",
 
-    // Memory blocks
-    memory_recent_messages: "Outputs recent messages from chat history, filtered by role if specified.",
-    memory_search: "Searches chat history for messages containing the query string.",
+    // ARCHIVED: Logic blocks
+    // logic_counter: "Increments count each time action input is triggered. Resets when reset input is triggered.",
+    // logic_random_number: "Outputs a random number between min and max inputs (or 0-100 if not specified).",
+    // logic_random_choice: "Outputs one randomly selected choice from the configured number of available choices.",
+    // logic_conditional: "Outputs true_value if condition is truthy, otherwise outputs false_value.",
+    // logic_comparator: "Compares value1 and value2 using the selected comparison operator (==, !=, <, >, >=, <=).",
 
-    // AI integration
-    ai_command: "Sends textinput to AI with promptinput as system prompt, outputs AI response.",
-    ai_model_selector: "Outputs the currently selected AI model name and provider.",
-    ai_temperature: "Outputs the currently configured AI temperature setting.",
-    ai_max_context_tokens: "Outputs the currently configured maximum context tokens for AI.",
+    // ARCHIVED: Data manipulation
+    // data_string_concat: "Concatenates up to 5 input strings with an optional separator.",
+    // data_string_split: "Splits input string by separator and returns array of parts.",
+    // data_string_replace: "Replaces occurrences of 'old' substring with 'new' substring in input string.",
+    // data_math_operation: "Performs mathematical operations (+, -, *, /, ^, %) on value1 and value2.",
+    // data_array_filter: "Filters array input based on condition ('not_empty' or 'unique').",
 
-    // Endpoints
-    endpoint_chat_reply: "Circuit endpoint that sends prompt to AI for chat response. End-of-line block with no outputs.",
-    endpoint_image_generator: "Circuit endpoint that triggers AI image generation from prompt. End-of-line block with no outputs."
+    // ARCHIVED: Time and context
+    // time_current: "Outputs current timestamp, date, and time information.",
+    // time_formatter: "Formats timestamp input using specified format pattern.",
+    // context_user_message: "Outputs the most recent user message, or the last x messages if amount specified.",
+    // context_ai_response: "Outputs the most recent AI response.",
+
+    // ARCHIVED: Memory blocks
+    // memory_recent_messages: "Outputs recent messages from chat history, filtered by role if specified.",
+    // memory_search: "Searches chat history for messages containing the query string.",
+
+    // ARCHIVED: AI integration
+    // ai_command: "Sends textinput to AI with promptinput as system prompt, outputs AI response.",
+    // ai_model_selector: "Outputs the currently selected AI model name and provider.",
+    // ai_temperature: "Outputs the currently configured AI temperature setting.",
+    // ai_max_context_tokens: "Outputs the currently configured maximum context tokens for AI.",
+
+    // ARCHIVED: Endpoints
+    // endpoint_chat_reply: "Circuit endpoint that sends prompt to AI for chat response. End-of-line block with no outputs.",
+    // endpoint_image_generator: "Circuit endpoint that triggers AI image generation from prompt. End-of-line block with no outputs."
   };
   return descriptions[blockType] || "No description available.";
 };
@@ -571,6 +653,129 @@ const renderBlockSettings = (node: Node, onUpdateNode: (nodeId: string, updates:
   console.log('renderBlockSettings called for node:', node.id, 'data:', blockData);
 
   switch (blockType) {
+    case 'text_block':
+      return (
+        <div className="block-settings-content">
+          <div className="setting-item">
+            <label htmlFor="text-block-input">Text Content:</label>
+            <input
+              id="text-block-input"
+              type="text"
+              value={blockData.text || ''}
+              onChange={(e) => {
+                console.log('Text input changed:', e.target.value);
+                onUpdateNode(node.id, { text: e.target.value });
+              }}
+              placeholder="Enter text to output..."
+            />
+          </div>
+          <div className="setting-item">
+            <label htmlFor="text-block-mode">Output Type:</label>
+            <select
+              id="text-block-mode"
+              value={blockData.outputMode || 'string'}
+              onChange={(e) => {
+                onUpdateNode(node.id, { outputMode: e.target.value });
+              }}
+            >
+              <option value="string">String (Text)</option>
+              <option value="number">Number Only</option>
+            </select>
+          </div>
+        </div>
+      );
+
+    case 'constructor_block':
+      return (
+        <div className="block-settings-content">
+          <div className="setting-item">
+            <label htmlFor="constructor-separator">Separator Text:</label>
+            <input
+              id="constructor-separator"
+              type="text"
+              value={blockData.separator || ''}
+              onChange={(e) => {
+                onUpdateNode(node.id, { separator: e.target.value });
+              }}
+              placeholder="Enter separator (e.g., ' - ', ', ', etc.)"
+            />
+          </div>
+        </div>
+      );
+
+    case 'chat_history_block':
+      return (
+        <div className="block-settings-content">
+          <div className="setting-item">
+            <label htmlFor="chat-filter">Message Type:</label>
+            <select
+              id="chat-filter"
+              value={blockData.messageFilter || 'all'}
+              onChange={(e) => {
+                onUpdateNode(node.id, { messageFilter: e.target.value });
+              }}
+            >
+              <option value="all">All Messages</option>
+              <option value="user">User Messages Only</option>
+              <option value="ai">AI Messages Only</option>
+            </select>
+          </div>
+          <div className="setting-item">
+            <label htmlFor="chat-count">Message Count:</label>
+            <input
+              id="chat-count"
+              type="number"
+              min="1"
+              value={blockData.messageCount || ''}
+              onChange={(e) => {
+                onUpdateNode(node.id, { messageCount: e.target.value });
+              }}
+              placeholder="Leave blank for entire history"
+            />
+          </div>
+        </div>
+      );
+
+    case 'character_card_block':
+      const { characters } = useDataStore.getState();
+      return (
+        <div className="block-settings-content">
+          <div className="setting-item">
+            <label htmlFor="character-select">Character:</label>
+            <select
+              id="character-select"
+              value={blockData.selectedCharacter || 'current'}
+              onChange={(e) => {
+                onUpdateNode(node.id, { selectedCharacter: e.target.value });
+              }}
+            >
+              <option value="current">Current Character</option>
+              {characters.map((char: any) => (
+                <option key={char.id} value={char.id}>
+                  {char.name || `Character ${char.id}`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="setting-item">
+            <label htmlFor="card-field">Card Field:</label>
+            <select
+              id="card-field"
+              value={blockData.cardField || 'full'}
+              onChange={(e) => {
+                onUpdateNode(node.id, { cardField: e.target.value });
+              }}
+            >
+              <option value="full">Full Character Card</option>
+              <option value="name">Name Only</option>
+              <option value="description">Description Only</option>
+              <option value="personality">Personality Only</option>
+              <option value="scenario">Scenario Only</option>
+            </select>
+          </div>
+        </div>
+      );
+
     case 'basic_text':
       return (
         <div className="block-settings-content">
@@ -603,54 +808,116 @@ const renderBlockSettings = (node: Node, onUpdateNode: (nodeId: string, updates:
         </div>
       );
 
-    case 'logic_comparator':
-      return (
-        <div className="block-settings-content">
-          <div className="setting-item">
-            <label htmlFor="comparator-op">Comparison Operator:</label>
-            <select
-              id="comparator-op"
-              value={blockData.operation || '=='}
-              onChange={(e) => {
-                onUpdateNode(node.id, { operation: e.target.value });
-              }}
-            >
-              <option value="==">Equal</option>
-              <option value="!=">Not Equal</option>
-              <option value="<">Less Than</option>
-              <option value=">">Greater Than</option>
-              <option value="<=">Less Than or Equal</option>
-              <option value=">=">Greater Than or Equal</option>
-            </select>
-          </div>
-        </div>
-      );
+    // ARCHIVED: case 'logic_comparator':
+    //   return (
+    //     <div className="block-settings-content">
+    //       <div className="setting-item">
+    //         <label htmlFor="comparator-op">Comparison Operator:</label>
+    //         <select
+    //           id="comparator-op"
+    //           value={blockData.operation || '=='}
+    //           onChange={(e) => {
+    //             onUpdateNode(node.id, { operation: e.target.value });
+    //           }}
+    //         >
+    //           <option value="==">Equal</option>
+    //           <option value="!=">Not Equal</option>
+    //           <option value="<">Less Than</option>
+    //           <option value=">">Greater Than</option>
+    //           <option value="<=">Less Than or Equal</option>
+    //           <option value=">=">Greater Than or Equal</option>
+    //         </select>
+    //       </div>
+    //     </div>
+    //   );
 
-    case 'logic_random_choice':
-      return (
-        <div className="block-settings-content">
-          <div className="setting-item">
-            <label htmlFor="choice-count">Number of Choices: {blockData.choiceCount || 3}</label>
-            <input
-              id="choice-count"
-              type="range"
-              min="2"
-              max="10"
-              value={blockData.choiceCount || 3}
-              onChange={(e) => {
-                onUpdateNode(node.id, { choiceCount: parseInt(e.target.value) });
-              }}
-            />
-          </div>
-        </div>
-      );
+    // ARCHIVED: case 'logic_random_choice':
+    //   return (
+    //     <div className="block-settings-content">
+    //       <div className="setting-item">
+    //         <label htmlFor="choice-count">Number of Choices: {blockData.choiceCount || 3}</label>
+    //         <input
+    //           id="choice-count"
+    //           type="range"
+    //           min="2"
+    //           max="10"
+    //           value={blockData.choiceCount || 3}
+    //           onChange={(e) => {
+    //             onUpdateNode(node.id, { choiceCount: parseInt(e.target.value) });
+    //           }}
+    //         />
+    //       </div>
+    //     </div>
+    //   );
+     case 'variables_substitution':
+       return (
+         <div className="block-settings-content">
+           <div className="setting-item">
+             <label htmlFor="variable-syntax">Variable Syntax:</label>
+             <select
+               id="variable-syntax"
+               value={blockData.variableSyntax || '{{var}}'}
+               onChange={(e) => {
+                 onUpdateNode(node.id, { variableSyntax: e.target.value });
+               }}
+             >
+               <option value="{{var}}">{"{{var}}"} style</option>
+               <option value="${var}">{"${var}"} style</option>
+             </select>
+           </div>
+           <div className="setting-item">
+             <label htmlFor="error-handling">Error Handling:</label>
+             <select
+               id="error-handling"
+               value={blockData.errorHandling || 'keep_placeholder'}
+               onChange={(e) => {
+                 onUpdateNode(node.id, { errorHandling: e.target.value });
+               }}
+             >
+               <option value="keep_placeholder">Keep placeholder</option>
+               <option value="replace_empty">Replace with empty string</option>
+               <option value="throw_error">Throw error</option>
+             </select>
+           </div>
+         </div>
+       );
 
-    default:
+     case 'template_text_formatter':
+       return (
+         <div className="block-settings-content">
+           <div className="setting-item">
+             <label htmlFor="template-format">Template Format:</label>
+             <textarea
+               id="template-format"
+               value={blockData.templateFormat || ''}
+               onChange={(e) => {
+                 onUpdateNode(node.id, { templateFormat: e.target.value });
+               }}
+               placeholder="Use {input1}, {input2}, etc. for placeholders"
+               rows={4}
+             />
+           </div>
+           <div className="setting-item">
+             <label htmlFor="case-sensitivity">Case Sensitivity:</label>
+             <select
+               id="case-sensitivity"
+               value={blockData.caseSensitive || 'false'}
+               onChange={(e) => {
+                 onUpdateNode(node.id, { caseSensitive: e.target.value });
+               }}
+             >
+               <option value="false">Case Insensitive</option>
+               <option value="true">Case Sensitive</option>
+             </select>
+           </div>
+         </div>
+       );
+default:
       return <div className="no-settings">No settings available for this block type.</div>;
   }
 };
 
-const renderCurrentValues = (node: Node): JSX.Element => {
+const renderCurrentValues = (node: Node, circuitStore: any, executionResult: any): JSX.Element => {
   const blockType = node.data.type;
   const config = blockConfigs[blockType];
 
@@ -696,83 +963,90 @@ const renderCurrentValues = (node: Node): JSX.Element => {
 };
 
 const nodeTypes = {
-  // Basic blocks
+  // Core blocks (active)
   basic_text: BlockNode,
-  boolean: BlockNode,
-  switch: BlockNode,
-
-  // Data source blocks
-  format_persona: BlockNode,
+  text_block: BlockNode,
+  variables_placeholders_block: BlockNode,
+  constructor_block: BlockNode,
+  chat_history_block: BlockNode,
   character_current: BlockNode,
-  character_description: BlockNode,
-  chat_history: BlockNode,
-
-  // Variables and templates
+  character_card_block: BlockNode,
+  // chat_history: BlockNode, // ARCHIVED: Use chat_history_block instead
   variables_substitution: BlockNode,
   template_text_formatter: BlockNode,
-  template_system_prompt: BlockNode,
 
-  // Logic blocks
-  logic_counter: BlockNode,
-  logic_random_number: BlockNode,
-  logic_random_choice: BlockNode,
-  logic_conditional: BlockNode,
-  logic_comparator: BlockNode,
+  // ARCHIVED: Basic blocks
+  // boolean: BlockNode,
+  // switch: BlockNode,
 
-  // Data manipulation
-  data_string_concat: BlockNode,
-  data_string_split: BlockNode,
-  data_string_replace: BlockNode,
-  data_math_operation: BlockNode,
-  data_array_filter: BlockNode,
+  // ARCHIVED: Data source blocks
+  // format_persona: BlockNode,
+  // character_description: BlockNode,
 
-  // Time and context
-  time_current: BlockNode,
-  time_formatter: BlockNode,
-  context_user_message: BlockNode,
-  context_ai_response: BlockNode,
+  // ARCHIVED: Variables and templates
+  // template_system_prompt: BlockNode,
 
-  // Memory blocks
-  memory_recent_messages: BlockNode,
-  memory_search: BlockNode,
+  // ARCHIVED: Logic blocks
+  // logic_counter: BlockNode,
+  // logic_random_number: BlockNode,
+  // logic_random_choice: BlockNode,
+  // logic_conditional: BlockNode,
+  // logic_comparator: BlockNode,
 
-  // AI integration
-  ai_command: BlockNode,
-  ai_model_selector: BlockNode,
-  ai_temperature: BlockNode,
-  ai_max_context_tokens: BlockNode,
+  // ARCHIVED: Data manipulation
+  // data_string_concat: BlockNode,
+  // data_string_split: BlockNode,
+  // data_string_replace: BlockNode,
+  // data_math_operation: BlockNode,
+  // data_array_filter: BlockNode,
 
-  // Endpoints
-  endpoint_chat_reply: BlockNode,
-  endpoint_image_generator: BlockNode,
+  // ARCHIVED: Time and context
+  // time_current: BlockNode,
+  // time_formatter: BlockNode,
+  // context_user_message: BlockNode,
+  // context_ai_response: BlockNode,
 
-  // Legacy blocks (keeping for backward compatibility)
-  logic: BlockNode,
-  content: BlockNode,
-  flow: BlockNode,
-  integration: BlockNode,
+  // ARCHIVED: Memory blocks
+  // memory_recent_messages: BlockNode,
+  // memory_search: BlockNode,
+
+  // ARCHIVED: AI integration
+  // ai_command: BlockNode,
+  // ai_model_selector: BlockNode,
+  // ai_temperature: BlockNode,
+  // ai_max_context_tokens: BlockNode,
+
+  // ARCHIVED: Endpoints
+  // endpoint_chat_reply: BlockNode,
+  // endpoint_image_generator: BlockNode,
+
+  // ARCHIVED: Legacy blocks (keeping for backward compatibility)
+  // logic: BlockNode,
+  // content: BlockNode,
+  // flow: BlockNode,
+  // integration: BlockNode,
   // System Prompt Blocks
-  system_main: BlockNode,
-  system_tool_call: BlockNode,
-  system_lore_suggest: BlockNode,
-  system_image_summary: BlockNode,
+  // system_main: BlockNode,
+  // system_tool_call: BlockNode,
+  // system_lore_suggest: BlockNode,
+  // system_image_summary: BlockNode,
   // Format Template Blocks
-  format_tools: BlockNode,
-  format_lore_injection: BlockNode,
+  // format_tools: BlockNode,
+  // format_lore_injection: BlockNode,
   // Character-based Blocks
-  char_system_prompt: BlockNode,
-  char_personality: BlockNode,
-  char_scenario: BlockNode,
-  char_first_message: BlockNode,
+  // char_system_prompt: BlockNode,
+  // char_personality: BlockNode,
+  // char_scenario: BlockNode,
+  // char_first_message: BlockNode,
   // Tool Message Blocks
-  tool_image_request: BlockNode,
-  tool_phone_url: BlockNode,
-  tool_lore_suggestions: BlockNode,
+  // tool_image_request: BlockNode,
+  // tool_phone_url: BlockNode,
+  // tool_lore_suggestions: BlockNode,
   // Lorebook Content Blocks
-  lorebook_content: BlockNode,
+  // lorebook_content: BlockNode,
   // Dynamic Active Lore Blocks
-  lore_active_display: BlockNode,
-  lore_title_injection: BlockNode,
+  // lore_active_display: BlockNode,
+  // lore_title_injection: BlockNode,
 };
 
 export const CircuitEditor2: React.FC = () => {
@@ -1023,61 +1297,68 @@ export const CircuitEditor2: React.FC = () => {
 
   const getIconForType = (type: string) => {
     const icons: Record<string, string> = {
-      // Basic blocks
+      // Core blocks (active)
       basic_text: '📝',
-      boolean: '⚖️',
-      switch: '🔀',
-
-      // Data source blocks
-      format_persona: '👤',
+      text_block: '📄',
+      variables_placeholders_block: '🔣',
+      constructor_block: '🏗️',
+      chat_history_block: '📃',
+      character_card_block: '🎭',
       character_current: '🎭',
-      character_description: '📋',
       chat_history: '💬',
-
-      // Variables and templates
       variables_substitution: '🔧',
       template_text_formatter: '📄',
-      template_system_prompt: '⚙️',
 
-      // Logic blocks
-      logic_counter: '🔢',
-      logic_random_number: '🎲',
-      logic_random_choice: '🎯',
-      logic_conditional: '🤔',
-      logic_comparator: '⚖️',
+      // ARCHIVED: Basic blocks
+      // boolean: '⚖️',
+      // switch: '🔀',
 
-      // Data manipulation
-      data_string_concat: '🔗',
-      data_string_split: '✂️',
-      data_string_replace: '🔄',
-      data_math_operation: '🧮',
-      data_array_filter: '🔍',
+      // ARCHIVED: Data source blocks
+      // format_persona: '👤',
+      // character_description: '📋',
 
-      // Time and context
-      time_current: '🕐',
-      time_formatter: '📅',
-      context_user_message: '💭',
-      context_ai_response: '🤖',
+      // ARCHIVED: Variables and templates
+      // template_system_prompt: '⚙️',
 
-      // Memory blocks
-      memory_recent_messages: '🧠',
-      memory_search: '🔎',
+      // ARCHIVED: Logic blocks
+      // logic_counter: '🔢',
+      // logic_random_number: '🎲',
+      // logic_random_choice: '🎯',
+      // logic_conditional: '🤔',
+      // logic_comparator: '⚖️',
 
-      // AI integration
-      ai_command: '🧠',
-      ai_model_selector: '🎭',
-      ai_temperature: '🌡️',
-      ai_max_context_tokens: '📏',
+      // ARCHIVED: Data manipulation
+      // data_string_concat: '🔗',
+      // data_string_split: '✂️',
+      // data_string_replace: '🔄',
+      // data_math_operation: '🧮',
+      // data_array_filter: '🔍',
 
-      // Endpoints
-      endpoint_chat_reply: '💬',
-      endpoint_image_generator: '🎨',
+      // ARCHIVED: Time and context
+      // time_current: '🕐',
+      // time_formatter: '📅',
+      // context_user_message: '💭',
+      // context_ai_response: '🤖',
 
-      // Legacy blocks
-      logic: '',
-      content: '📖',
-      flow: '↗️',
-      integration: '🔗',
+      // ARCHIVED: Memory blocks
+      // memory_recent_messages: '🧠',
+      // memory_search: '🔎',
+
+      // ARCHIVED: AI integration
+      // ai_command: '🧠',
+      // ai_model_selector: '🎭',
+      // ai_temperature: '🌡️',
+      // ai_max_context_tokens: '📏',
+
+      // ARCHIVED: Endpoints
+      // endpoint_chat_reply: '💬',
+      // endpoint_image_generator: '🎨',
+
+      // ARCHIVED: Legacy blocks
+      // logic: '',
+      // content: '📖',
+      // flow: '↗️',
+      // integration: '🔗',
     };
     return icons[type] || '⚡';
   };
@@ -1213,7 +1494,7 @@ export const CircuitEditor2: React.FC = () => {
             <div className="palette-section">
               <h5>Basic Blocks</h5>
             </div>
-            {(['basic_text', 'boolean', 'switch'] as const).map(type => (
+            {(['text_block', 'constructor_block'] as const).map(type => (
               <div
                 key={type}
                 className={`palette-item circuit-${type}`}
@@ -1229,7 +1510,7 @@ export const CircuitEditor2: React.FC = () => {
             <div className="palette-section">
               <h5>Data Sources</h5>
             </div>
-            {(['format_persona', 'character_current', 'character_description', 'chat_history'] as const).map(type => (
+            {(['character_current', 'chat_history_block', 'character_card_block'] as const).map(type => (
               <div
                 key={type}
                 className={`palette-item circuit-${type}`}
@@ -1245,7 +1526,7 @@ export const CircuitEditor2: React.FC = () => {
             <div className="palette-section">
               <h5>Variables & Templates</h5>
             </div>
-            {(['variables_substitution', 'template_text_formatter', 'template_system_prompt'] as const).map(type => (
+            {(['variables_placeholders_block', 'variables_substitution', 'template_text_formatter'] as const).map(type => (
               <div
                 key={type}
                 className={`palette-item circuit-${type}`}
@@ -1257,11 +1538,11 @@ export const CircuitEditor2: React.FC = () => {
               </div>
             ))}
 
-            {/* Logic Blocks */}
-            <div className="palette-section">
+            {/* ARCHIVED: Logic Blocks */}
+            {/* <div className="palette-section">
               <h5>Logic & Control</h5>
             </div>
-            {(['logic_counter', 'logic_random_number', 'logic_random_choice', 'logic_conditional', 'logic_comparator'] as const).map(type => (
+            {([] as const).map(type => (
               <div
                 key={type}
                 className={`palette-item circuit-${type}`}
@@ -1271,13 +1552,13 @@ export const CircuitEditor2: React.FC = () => {
                 <span className="block-icon">{getIconForType(type)}</span>
                 <span>{blockConfigs[type].label}</span>
               </div>
-            ))}
+            ))} */}
 
-            {/* Data Manipulation */}
-            <div className="palette-section">
+            {/* ARCHIVED: Data Manipulation */}
+            {/* <div className="palette-section">
               <h5>Data Manipulation</h5>
             </div>
-            {(['data_string_concat', 'data_string_split', 'data_string_replace', 'data_math_operation', 'data_array_filter'] as const).map(type => (
+            {([] as const).map(type => (
               <div
                 key={type}
                 className={`palette-item circuit-${type}`}
@@ -1287,13 +1568,13 @@ export const CircuitEditor2: React.FC = () => {
                 <span className="block-icon">{getIconForType(type)}</span>
                 <span>{blockConfigs[type].label}</span>
               </div>
-            ))}
+            ))} */}
 
-            {/* Time and Context */}
-            <div className="palette-section">
+            {/* ARCHIVED: Time and Context */}
+            {/* <div className="palette-section">
               <h5>Time & Context</h5>
             </div>
-            {(['time_current', 'time_formatter', 'context_user_message', 'context_ai_response'] as const).map(type => (
+            {([] as const).map(type => (
               <div
                 key={type}
                 className={`palette-item circuit-${type}`}
@@ -1303,13 +1584,13 @@ export const CircuitEditor2: React.FC = () => {
                 <span className="block-icon">{getIconForType(type)}</span>
                 <span>{blockConfigs[type].label}</span>
               </div>
-            ))}
+            ))} */}
 
-            {/* Memory Blocks */}
-            <div className="palette-section">
+            {/* ARCHIVED: Memory Blocks */}
+            {/* <div className="palette-section">
               <h5>Memory</h5>
             </div>
-            {(['memory_recent_messages', 'memory_search'] as const).map(type => (
+            {([] as const).map(type => (
               <div
                 key={type}
                 className={`palette-item circuit-${type}`}
@@ -1319,13 +1600,13 @@ export const CircuitEditor2: React.FC = () => {
                 <span className="block-icon">{getIconForType(type)}</span>
                 <span>{blockConfigs[type].label}</span>
               </div>
-            ))}
+            ))} */}
 
-            {/* AI Integration */}
-            <div className="palette-section">
+            {/* ARCHIVED: AI Integration */}
+            {/* <div className="palette-section">
               <h5>AI Integration</h5>
             </div>
-            {(['ai_command', 'ai_model_selector', 'ai_temperature', 'ai_max_context_tokens'] as const).map(type => (
+            {([] as const).map(type => (
               <div
                 key={type}
                 className={`palette-item circuit-${type}`}
@@ -1335,13 +1616,13 @@ export const CircuitEditor2: React.FC = () => {
                 <span className="block-icon">{getIconForType(type)}</span>
                 <span>{blockConfigs[type].label}</span>
               </div>
-            ))}
+            ))} */}
 
-            {/* Endpoints */}
-            <div className="palette-section">
+            {/* ARCHIVED: Endpoints */}
+            {/* <div className="palette-section">
               <h5>Endpoints</h5>
             </div>
-            {(['endpoint_chat_reply', 'endpoint_image_generator'] as const).map(type => (
+            {([] as const).map(type => (
               <div
                 key={type}
                 className={`palette-item circuit-${type}`}
@@ -1351,13 +1632,13 @@ export const CircuitEditor2: React.FC = () => {
                 <span className="block-icon">{getIconForType(type)}</span>
                 <span>{blockConfigs[type].label}</span>
               </div>
-            ))}
+            ))} */}
 
-            {/* Legacy System Blocks */}
-            <div className="palette-section">
+            {/* ARCHIVED: Legacy System Blocks */}
+            {/* <div className="palette-section">
               <h5>Legacy System Blocks</h5>
             </div>
-            {(['logic', 'content', 'flow', 'integration', 'system_main', 'system_tool_call', 'system_lore_suggest', 'system_image_summary', 'format_tools', 'format_lore_injection', 'char_system_prompt', 'char_personality', 'char_scenario', 'char_first_message', 'tool_image_request', 'tool_phone_url', 'tool_lore_suggestions', 'lorebook_content', 'lore_active_display', 'lore_title_injection'] as const).map(type => (
+            {([] as const).map(type => (
               <div
                 key={type}
                 className={`palette-item circuit-${type}`}
@@ -1367,7 +1648,7 @@ export const CircuitEditor2: React.FC = () => {
                 <span className="block-icon">{getIconForType(type)}</span>
                 <span>{blockConfigs[type].label}</span>
               </div>
-            ))}
+            ))} */}
           </div>
         </aside>
 
@@ -1537,7 +1818,7 @@ export const CircuitEditor2: React.FC = () => {
                    {/* Current Values Section */}
                    <div className="properties-section current-values">
                      <h5>🔄 Current Values</h5>
-                     {renderCurrentValues(selectedNode)}
+                     {renderCurrentValues(selectedNode, circuitStore, executionResult)}
                    </div>
                  </>
                ) : null}

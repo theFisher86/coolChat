@@ -103,6 +103,8 @@ import { useLorebookStore } from './stores/lorebookStore';
 // Circuit editor imports
 import { CircuitEditor } from './components/circuits/CircuitEditor';
 import { CircuitEditor2 } from './components/circuits/CircuitEditor2';
+import { CircuitModal } from './components/circuits/CircuitModal';
+import { useCircuitStore } from './stores/circuitStore';
 
 function App() {
   // Zustand store connections
@@ -1580,6 +1582,7 @@ function ImagesTab() {
 }
 
 function PromptsTab() {
+  const circuitStore = useCircuitStore();
   const [all, setAll] = useState([]);
   const [active, setActive] = useState([]);
   const [newText, setNewText] = useState('');
@@ -1588,6 +1591,17 @@ function PromptsTab() {
   const [newVarName, setNewVarName] = useState('');
   const [newVarValue, setNewVarValue] = useState('');
   const [showPH, setShowPH] = useState(false);
+
+  // Helper function to get circuit name for prompt type
+  const getCircuitName = (promptType) => {
+    const association = circuitStore.getPromptCircuitAssociation(promptType);
+    if (association && association.circuitId) {
+      const circuit = circuitStore.circuits.find(c => c.id === association.circuitId);
+      return association.circuitName || (circuit ? circuit.name : `Circuit ${association.circuitId}`);
+    }
+    return null;
+  };
+
   useEffect(() => { (async () => { try { const d = await getPrompts(); setAll(d.all || []); setActive(d.active || []); setSystem(d.system || { lore_suggest: '', image_summary: '' }); setVars(d.variables || {});} catch (e) { console.error(e);} })(); }, []);
   const save = async (na = all, aa = active, sys = system, vs = vars) => { try { await savePrompts({ all: na, active: aa, system: sys, variables: vs }); setAll(na); setActive(aa); setSystem(sys); setVars(vs);} catch (e) { console.error(e); alert(e.message);} };
   const toggleActive = (txt) => { const aa = active.includes(txt) ? active.filter(x=>x!==txt) : [...active, txt]; save(all, aa); };
@@ -1602,19 +1616,87 @@ function PromptsTab() {
       </div>
       <label>
         <span>Main System Prompt</span>
-        <textarea rows={4} value={system.main || ''} onChange={(e)=> setSystem(s => ({ ...s, main: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="{{tool_call_prompt}}, {{user_persona}}, {{character_description}}, {{tool_list}}, {{conversation}}" />
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <button
+            className="secondary"
+            onClick={() => circuitStore.openCircuitModal('main')}
+            style={{ flex: 1, textAlign: 'left' }}
+          >
+            {getCircuitName('main') ? `Edit in Circuit: ${getCircuitName('main')}` : 'Edit in Circuit'}
+          </button>
+          {getCircuitName('main') && (
+            <button
+              className="secondary"
+              onClick={() => circuitStore.setPromptCircuitAssociation('main', null)}
+              title="Clear circuit association"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </label>
       <label>
         <span>Tool Call Prompt</span>
-        <textarea rows={4} value={system.tool_call || ''} onChange={(e)=> setSystem(s => ({ ...s, tool_call: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="Describe structured output JSON with toolCalls array." />
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <button
+            className="secondary"
+            onClick={() => circuitStore.openCircuitModal('tool_call')}
+            style={{ flex: 1, textAlign: 'left' }}
+          >
+            {getCircuitName('tool_call') ? `Edit in Circuit: ${getCircuitName('tool_call')}` : 'Edit in Circuit'}
+          </button>
+          {getCircuitName('tool_call') && (
+            <button
+              className="secondary"
+              onClick={() => circuitStore.setPromptCircuitAssociation('tool_call', null)}
+              title="Clear circuit association"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </label>
       <label>
         <span>Lorebook suggestion prompt</span>
-        <textarea rows={4} value={system.lore_suggest} onChange={(e)=> setSystem(s => ({ ...s, lore_suggest: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="Use {{conversation}} and {{existing_keywords}}" />
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <button
+            className="secondary"
+            onClick={() => circuitStore.openCircuitModal('lore_suggest')}
+            style={{ flex: 1, textAlign: 'left' }}
+          >
+            {getCircuitName('lore_suggest') ? `Edit in Circuit: ${getCircuitName('lore_suggest')}` : 'Edit in Circuit'}
+          </button>
+          {getCircuitName('lore_suggest') && (
+            <button
+              className="secondary"
+              onClick={() => circuitStore.setPromptCircuitAssociation('lore_suggest', null)}
+              title="Clear circuit association"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </label>
       <label>
         <span>Image generation prompt</span>
-        <textarea rows={4} value={system.image_summary} onChange={(e)=> setSystem(s => ({ ...s, image_summary: e.target.value }))} onBlur={()=> save(all, active, { ...system }, vars)} placeholder="Use {{conversation}}" />
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <button
+            className="secondary"
+            onClick={() => circuitStore.openCircuitModal('image_summary')}
+            style={{ flex: 1, textAlign: 'left' }}
+          >
+            {getCircuitName('image_summary') ? `Edit in Circuit: ${getCircuitName('image_summary')}` : 'Edit in Circuit'}
+          </button>
+          {getCircuitName('image_summary') && (
+            <button
+              className="secondary"
+              onClick={() => circuitStore.setPromptCircuitAssociation('image_summary', null)}
+              title="Clear circuit association"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </label>
       <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
         <h3>Variables</h3>
@@ -1674,6 +1756,12 @@ function PromptsTab() {
         </div>
       </section>
     )}
+    {circuitStore.modalState.isOpen && <CircuitModal
+      isOpen={circuitStore.modalState.isOpen}
+      promptType={circuitStore.modalState.promptType}
+      onClose={circuitStore.closeCircuitModal}
+      onSave={(circuitId, circuitName) => circuitStore.setPromptCircuitAssociation(circuitStore.modalState.promptType, circuitId, circuitName)}
+    />}
     </>
   );
 }

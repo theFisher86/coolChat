@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any
 import asyncio
 import httpx
 import json
@@ -18,11 +18,12 @@ import time
 from datetime import datetime, timedelta
 from fastapi.responses import StreamingResponse
 from .config import AppConfig, ProviderConfig, load_config, save_config, mask_secret, Provider, ImagesConfig, ImageProvider
-from .models import Lorebook, LoreEntry, Character as CharacterModel
+from .models import Lorebook, LoreEntry, Character as CharacterModel, Circuit
 from .storage import load_json, save_json, public_dir
 from .database import SessionLocal, get_db
 from sqlalchemy.orm import Session
 from .routers import lore, circuits
+from .circuit_executor import execute_circuit
 import os
 
 app = FastAPI(title="CoolChat")
@@ -573,6 +574,7 @@ async def _llm_reply(
     recent_text: str | None = None,
     system_override: str | None = None,
     disable_system: bool = False,
+    recent_history: List[Dict[str, str]] | None = None,
 ) -> str:
     # In test environments, avoid external calls unless explicitly allowed.
     def _external_enabled() -> bool:
@@ -594,14 +596,31 @@ async def _llm_reply(
     # Provider: openai (or compatible)
     # Build optional system message from active character and user persona, respecting token limit
     char = _get_character(cfg.active_character_id) if getattr(cfg, "active_character_id", None) else None
-    system_msg = None if disable_system else (
-        system_override if system_override is not None else _build_system_from_character(
-            char,
-            getattr(cfg, 'user_persona', None),
-            (getattr(cfg.providers.get(provider, ProviderConfig()), 'max_context_tokens', None) or getattr(cfg, 'max_context_tokens', 2048)),
-            recent_text or "",
+    # Get db session for circuit execution
+    db = next(get_db())
+    try:
+        # Build context data for circuits
+        context_data = {
+            'user_message': message,
+            'chat_history': recent_history or [],
+            'current_character_id': cfg.active_character_id,
+            'user_persona': getattr(cfg, 'user_persona', None),
+            'max_context_tokens': (getattr(cfg.providers.get(provider, ProviderConfig()), 'max_context_tokens', None) or getattr(cfg, 'max_context_tokens', 2048)),
+            'recent_text': recent_text or "",
+        }
+
+        system_msg = None if disable_system else (
+            system_override if system_override is not None else await _build_system_from_character(
+                db,
+                char,
+                getattr(cfg, 'user_persona', None),
+                (getattr(cfg.providers.get(provider, ProviderConfig()), 'max_context_tokens', None) or getattr(cfg, 'max_context_tokens', 2048)),
+                recent_text or "",
+                context_data,
+            )
         )
-    )
+    finally:
+        db.close()
 
     # Replace tokens in messages
     def _replace(text: str) -> str:
@@ -809,7 +828,7 @@ async def chat_endpoint(payload: ChatRequest) -> ChatResponse:
     # Build recent text window for lore triggers
     recent_text = "\n".join([m.get("content", "") for m in history[-6:]] + [payload.message])
     try:
-        reply = await _llm_reply(payload.message, cfg, recent_text=recent_text)
+        reply = await _llm_reply(payload.message, cfg, recent_text=recent_text, recent_history=history)
     except HTTPException:
         raise
     except Exception as exc:  # pragma: no cover - safety net
@@ -843,11 +862,13 @@ def _truncate_to_tokens(text: str, max_tokens: int) -> str:
     return text[:target_chars] + "\n..."
 
 
-def _build_system_from_character(
+async def _build_system_from_character(
+    db: Session,
     char: Optional[Character],
     user_persona: Optional[object] = None,
     max_tokens: int = 2048,
     recent_text: str = "",
+    context_data: Optional[Dict[str, Any]] = None,
 ) -> Optional[str]:
     segments: List[str] = []
     # Include active global prompts if any
@@ -855,6 +876,34 @@ def _build_system_from_character(
         from .storage import load_json as _lj
         prompts = _lj("prompts.json", {"active": [], "all": [], "system": {}})
         system_prompts = prompts.get("system", {}) if isinstance(prompts, dict) else {}
+        circuit_associations = prompts.get("circuits", {}) if isinstance(prompts, dict) else {}
+
+        # Resolve prompt texts - use circuit outputs if available
+        resolved_prompts = {}
+        prompt_types = ['main', 'tool_call', 'lore_suggest', 'image_summary']
+        for prompt_type in prompt_types:
+            if prompt_type in circuit_associations and circuit_associations[prompt_type]:
+                circuit_id = circuit_associations[prompt_type]
+                circuit = db.query(Circuit).get(circuit_id)
+                if circuit:
+                    try:
+                        result = await execute_circuit(circuit.data, context_data or {})
+                        if result['success']:
+                            # Use circuit output as prompt text
+                            prompt_text = (result['outputs'].get('prompt') or
+                                         result['outputs'].get('endpoint_chat_reply', {}).get('prompt') or
+                                         system_prompts.get(prompt_type, ''))
+                            resolved_prompts[prompt_type] = prompt_text
+                        else:
+                            resolved_prompts[prompt_type] = system_prompts.get(prompt_type, '')
+                    except Exception as e:
+                        # Log error but use fallback
+                        resolved_prompts[prompt_type] = system_prompts.get(prompt_type, '')
+                else:
+                    resolved_prompts[prompt_type] = system_prompts.get(prompt_type, '')
+            else:
+                resolved_prompts[prompt_type] = system_prompts.get(prompt_type, '')
+
         for p in prompts.get("active", []) or []:
             if isinstance(p, str) and p.strip():
                 segments.append(p.strip())
@@ -889,8 +938,9 @@ def _build_system_from_character(
     tool_list_text = "\n".join(tools_lines)
     # tool_call prompt from user settings or default
     tool_call_prompt = None
-    if isinstance(system_prompts, dict) and system_prompts.get("tool_call"):
-        tool_call_prompt = str(system_prompts.get("tool_call"))
+    resolved_tool_call = resolved_prompts["tool_call"]
+    if resolved_tool_call:
+        tool_call_prompt = str(resolved_tool_call)
     else:
         try:
             if getattr(load_config(), 'structured_output', False):
@@ -903,8 +953,8 @@ def _build_system_from_character(
             pass
 
     # Tool call prompt from user settings or default based on provider capabilities
-    if not tool_call_prompt and isinstance(system_prompts, dict):
-        tool_call_prompt = system_prompts.get("tool_call")
+    if not tool_call_prompt:
+        tool_call_prompt = resolved_tool_call
 
     if not tool_call_prompt and tool_list_text:
         # Use structured format for Gemini when structured_output is enabled
@@ -931,7 +981,7 @@ When generating tool calls, use this structured JSON format:
 Include optional caption text before the JSON when appropriate.'''
 
     # If main template provided, use it
-    main_tpl = system_prompts.get("main") if isinstance(system_prompts, dict) else None
+    main_tpl = resolved_prompts["main"] if resolved_prompts["main"] else None
     if main_tpl and isinstance(main_tpl, str) and main_tpl.strip():
         tpl = main_tpl
         tpl = tpl.replace("{{tool_call_prompt}}", tool_call_prompt or "")
@@ -2887,13 +2937,13 @@ async def get_theme(name: str):
 
 @app.get("/prompts")
 async def get_prompts():
-    data = load_json("prompts.json", {"active": [], "all": [], "system": {"lore_suggest": "", "image_summary": ""}, "variables": {} })
+    data = load_json("prompts.json", {"active": [], "all": [], "system": {"lore_suggest": "", "image_summary": ""}, "variables": {}, "circuits": {}})
     return data
 
 
 @app.post("/prompts")
 async def save_prompts(payload: Dict[str, object]):
-    # Expect shape { active: list, all: list, system: { ... }, variables: { name: value } }
+    # Expect shape { active: list, all: list, system: { ... }, variables: { name: value }, circuits: { prompt_type: circuit_id } }
     try:
         if not isinstance(payload, dict):
             raise ValueError("invalid payload")
@@ -2901,11 +2951,12 @@ async def save_prompts(payload: Dict[str, object]):
         allp = payload.get("all") or []
         system = payload.get("system") or {}
         variables = payload.get("variables") or {}
+        circuits = payload.get("circuits") or {}
         if not isinstance(active, list) or not isinstance(allp, list):
             raise ValueError("invalid prompts arrays")
-        if not isinstance(system, dict) or not isinstance(variables, dict):
-            raise ValueError("invalid system/variables")
-        data = {"active": active, "all": allp, "system": system, "variables": variables}
+        if not isinstance(system, dict) or not isinstance(variables, dict) or not isinstance(circuits, dict):
+            raise ValueError("invalid system/variables/circuits")
+        data = {"active": active, "all": allp, "system": system, "variables": variables, "circuits": circuits}
         save_json("prompts.json", data)
         return {"status": "ok"}
     except Exception as e:

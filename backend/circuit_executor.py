@@ -93,6 +93,11 @@ class CircuitExecutor:
     def __init__(self):
         self.block_processors = {
             # Basic blocks
+            'text_block': self._process_text_block,
+            'variables_placeholders_block': self._process_variables_placeholders_block,
+            'constructor_block': self._process_constructor_block,
+            'chat_history_block': self._process_chat_history_block,
+            'character_card_block': self._process_character_card_block,
             'basic_text': self._process_basic_text,
             'boolean': self._process_boolean,
             'switch': self._process_switch,
@@ -287,6 +292,138 @@ class CircuitExecutor:
         """Process basic text block"""
         text_value = ctx.get_input_value(block_id, 'text') or block_data.get('data', {}).get('text', '')
         ctx.set_block_output(block_id, 'output', text_value)
+    async def _process_text_block(self, ctx: BlockExecutionContext, block_id: str, block_data: Dict[str, Any]):
+        """Process text block - outputs configured text as string or number"""
+        text_content = ctx.get_input_value(block_id, 'text') or block_data.get('data', {}).get('text', '')
+        output_mode = ctx.get_input_value(block_id, 'outputMode') or block_data.get('data', {}).get('outputMode', 'string')
+
+        if output_mode == 'number':
+            try:
+                # Try to convert to number
+                if '.' in str(text_content):
+                    value = float(text_content)
+                else:
+                    value = int(text_content)
+            except (ValueError, TypeError):
+                # If conversion fails, keep as string
+                value = text_content
+        else:
+            value = text_content
+    
+        ctx.set_block_output(block_id, 'output', value)
+    async def _process_variables_placeholders_block(self, ctx: BlockExecutionContext, block_id: str, block_data: Dict[str, Any]):
+        """Process variables/placeholders block - outputs selected variable or placeholder value"""
+        selected_variable = ctx.get_input_value(block_id, 'selectedVariable') or block_data.get('data', {}).get('selectedVariable', '')
+
+        # Get variables from context (from Settings → Prompts → Variables)
+        variables = ctx.context_data.get('variables', {})
+
+        # Get common placeholders
+        placeholders = ctx.context_data.get('placeholders', {
+            'user_name': ctx.context_data.get('user_name', ''),
+            'character_name': ctx.context_data.get('current_character_name', ''),
+            'current_time': datetime.now().strftime('%H:%M:%S'),
+            'conversation': '',  # Would need to be populated from chat history
+            'existing_keywords': '',  # Would need to be populated from lore
+            'tool_call_prompt': ctx.context_data.get('tool_call_prompt', ''),
+            'user_persona': ctx.context_data.get('user_persona', {}).get('name', ''),
+            'character_description': ctx.context_data.get('current_character_description', ''),
+            'tool_list': ctx.context_data.get('tool_list', '')
+        })
+
+        # Try variables first, then placeholders
+        value = variables.get(selected_variable) or placeholders.get(selected_variable, '')
+
+        ctx.set_block_output(block_id, 'output', value)
+    async def _process_constructor_block(self, ctx: BlockExecutionContext, block_id: str, block_data: Dict[str, Any]):
+        """Process constructor block - combines input1 + separator + input2"""
+        input1 = ctx.get_input_value(block_id, 'input1') or ''
+        input2 = ctx.get_input_value(block_id, 'input2') or ''
+        separator = ctx.get_input_value(block_id, 'separator') or block_data.get('data', {}).get('separator', '')
+
+        result = f"{str(input1)}{separator}{str(input2)}"
+        ctx.set_block_output(block_id, 'output', result)
+
+    async def _process_chat_history_block(self, ctx: BlockExecutionContext, block_id: str, block_data: Dict[str, Any]):
+        """Process chat history block - outputs filtered chat messages with count limit"""
+        message_filter = ctx.get_input_value(block_id, 'messageFilter') or block_data.get('data', {}).get('messageFilter', 'all')
+        message_count = ctx.get_input_value(block_id, 'messageCount') or block_data.get('data', {}).get('messageCount')
+
+        chat_history = ctx.context_data.get('chat_history', [])
+
+        # Filter messages by type
+        if message_filter == 'user':
+            filtered_history = [msg for msg in chat_history if msg.get('role') == 'user']
+        elif message_filter == 'ai':
+            filtered_history = [msg for msg in chat_history if msg.get('role') == 'assistant']
+        else:  # 'all'
+            filtered_history = chat_history
+
+        # Apply count limit
+        if message_count and str(message_count).isdigit():
+            count = int(message_count)
+            if count > 0:
+                filtered_history = filtered_history[-count:]
+
+        # Format as string
+        formatted_history = '\n'.join([
+            f"{msg.get('role', 'unknown')}: {msg.get('content', '')}"
+            for msg in filtered_history
+        ])
+
+        ctx.set_block_output(block_id, 'output', formatted_history)
+
+    async def _process_character_card_block(self, ctx: BlockExecutionContext, block_id: str, block_data: Dict[str, Any]):
+        """Process character card block - outputs selected character card field"""
+        selected_character = ctx.get_input_value(block_id, 'selectedCharacter') or block_data.get('data', {}).get('selectedCharacter', 'current')
+        card_field = ctx.get_input_value(block_id, 'cardField') or block_data.get('data', {}).get('cardField', 'full')
+
+        # Get character data
+        character_id = None
+        character = None
+
+        if selected_character == 'current':
+            character_id = ctx.context_data.get('current_character_id')
+        elif selected_character and selected_character != 'current':
+            character_id = selected_character
+
+        if character_id:
+            character = ctx.db.query(Character).filter(Character.id == character_id).first()
+
+        if not character and selected_character == 'current':
+            # Fallback to context data
+            character_data = {
+                'name': ctx.context_data.get('current_character_name', ''),
+                'description': ctx.context_data.get('current_character_description', ''),
+                'personality': ctx.context_data.get('current_character_personality', ''),
+                'scenario': ctx.context_data.get('current_character_scenario', ''),
+                'first_message': ctx.context_data.get('current_character_first_message', '')
+            }
+            character = type('Character', (), character_data)()
+
+        if character:
+            if card_field == 'full':
+                # Combine all fields
+                full_card = f"Name: {character.name or ''}\n"
+                full_card += f"Description: {character.description or ''}\n"
+                full_card += f"Personality: {getattr(character, 'personality', '') or ''}\n"
+                full_card += f"Scenario: {getattr(character, 'scenario', '') or ''}\n"
+                full_card += f"First Message: {getattr(character, 'first_message', '') or ''}"
+                value = full_card
+            elif card_field == 'name':
+                value = character.name or ''
+            elif card_field == 'description':
+                value = character.description or ''
+            elif card_field == 'personality':
+                value = getattr(character, 'personality', '') or ''
+            elif card_field == 'scenario':
+                value = getattr(character, 'scenario', '') or ''
+            else:
+                value = ''
+        else:
+            value = ''
+
+        ctx.set_block_output(block_id, 'output', value)
 
     async def _process_boolean(self, ctx: BlockExecutionContext, block_id: str, block_data: Dict[str, Any]):
         """Process boolean comparison block"""
