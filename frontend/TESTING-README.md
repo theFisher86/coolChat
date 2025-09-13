@@ -232,6 +232,133 @@ try {
 ✅ **Easy Integration** - Works with existing React/Vite setup
 ✅ **Clear Documentation** - Extensive examples and troubleshooting
 ✅ **Debug Support** - Console logging strategies for runtime verification
+## Automated Testing Workflow
+
+The testing methodology now includes automation options to run tests after frontend changes, ensuring continuous verification during development.
+
+### Available Scripts
+
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Manual testing
+npm run test:methodology     # Run full test suite
+npm run test:verify-files    # Check file changes only
+npm run test:ui              # Test component rendering only
+
+# Automated testing
+npm run test:watch           # Watch src/ directory and run tests on changes
+```
+
+### Integration Options
+
+#### 1. File Watcher (Recommended for Development)
+The `test:watch` script monitors the `src/` directory for changes and automatically runs the full test suite whenever files are modified, added, or removed.
+
+```bash
+npm run test:watch
+```
+
+**Features:**
+- Real-time monitoring of frontend source files
+- Automatic test execution on file changes
+- Prevents overlapping test runs (queues pending tests)
+- Clear console feedback for file changes and test results
+
+#### 2. Pre-commit Git Hook (Optional)
+A pre-commit hook is configured to run tests before each commit, ensuring only verified code is committed.
+
+**Setup:**
+- Hook file: `.husky/pre-commit`
+- Automatically runs `npm run test:methodology`
+- Prevents commits if tests fail
+
+**To enable the hook:**
+```bash
+# Ensure husky is set up (automatically configured)
+# The hook will run automatically on git commit
+```
+
+#### 3. Manual Integration
+Developers can manually run tests at any time:
+
+```bash
+# After making changes
+npm run test:methodology
+
+# Quick verification
+npm run test:verify-files
+
+# UI component check
+npm run test:ui
+```
+
+### Development Workflow with Automation
+
+#### Continuous Testing During Development
+1. **Start the watcher**: `npm run test:watch`
+2. **Make changes** to components in `src/`
+3. **Automatic verification** - Tests run immediately after saves
+4. **Review results** in console and `test-results.log`
+
+#### Pre-commit Verification
+1. **Make changes** and stage files
+2. **Attempt commit**: `git commit -m "message"`
+3. **Automatic testing** - Hook runs full test suite
+4. **Commit succeeds** only if tests pass
+
+#### Manual Verification
+1. **After major changes**: Run `npm run test:methodology`
+2. **Before pull requests**: Ensure all tests pass
+3. **CI/CD integration**: Use npm scripts in build pipelines
+
+### Configuration and Customization
+
+#### Modifying Watched Files
+Edit `test-watcher.js` to change the watched directory:
+```javascript
+const SRC_DIR = path.join(__dirname, 'src'); // Change this path
+```
+
+#### Customizing Test Types
+The watcher runs `full-test` by default. Modify `test-watcher.js` to run different test types:
+```javascript
+const testProcess = spawn('node', [TEST_SCRIPT, 'verify-files'], ...);
+```
+
+#### Disabling Hooks
+To temporarily disable the pre-commit hook:
+```bash
+# Remove or rename .husky/pre-commit
+mv .husky/pre-commit .husky/pre-commit.disabled
+```
+
+### Benefits of Automation
+
+✅ **Immediate Feedback** - Catch issues as soon as changes are made
+✅ **Consistent Verification** - Same tests run automatically every time
+✅ **Developer Choice** - Multiple integration options available
+✅ **Non-disruptive** - Doesn't interfere with development flow
+✅ **Configurable** - Easy to customize for different workflows
+
+### Troubleshooting Automation
+
+#### Watcher Issues
+- **Tests not running**: Check that `src/` directory exists and has files
+- **Permission errors**: Ensure node_modules are installed with correct permissions
+- **Overlapping runs**: The script queues tests; wait for current run to complete
+
+#### Hook Issues
+- **Hook not running**: Verify `.husky/pre-commit` is executable and contains correct content
+- **Tests failing unexpectedly**: Run tests manually to debug
+- **Windows compatibility**: Git hooks work with Git Bash; ensure paths are correct
+
+#### Performance Considerations
+- **Frequent saves**: Watcher debounces runs to prevent excessive testing
+- **Large codebases**: Consider running specific test types instead of full suite
+- **CI/CD**: Use manual scripts in automated pipelines for better control
+
 
 ## File Structure
 ```
